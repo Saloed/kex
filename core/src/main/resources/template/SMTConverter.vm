@@ -35,7 +35,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
 
 
     fun convert(ps: PredicateState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ = when (ps) {
-#set($states = ["Basic", "Chain", "Choice"])
+#set($states = ["Basic", "Chain", "Choice", "Negation"])
 #foreach($state in $states)
         is ${state}State -> convert(ps, ef, ctx, extractPath)
 #end
@@ -64,6 +64,9 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         ctx.switchOn("choice", contexts)
         return res
     }
+
+    fun convert(negation: NegationState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ =
+        convert(negation.predicateState, ef, ctx).not()
 
 #set($predicates = ["ArrayStore", "BoundStore", "Call", "Catch", "DefaultSwitch", "Inequality", "Equality", "FieldStore", "NewArray", "New", "Throw"])
     fun convert(predicate: Predicate, ef: $factory, ctx: ${solver}Context): Bool_ = when (predicate) {
