@@ -111,7 +111,7 @@ class ModelReanimator(val method: Method, val model: SMTModel, val loader: Class
 
                 val memspace = fieldTerm.memspace
                 val fieldAddress = model.assignments[fieldTerm]
-                val fieldValue = model.memories[memspace]!!.finalMemory[fieldAddress]
+                val fieldValue = model.memories[memspace]!!.initialMemory[fieldAddress]
 
                 val reanimatedValue = reanimateTerm(fieldTerm, fieldValue)
 
@@ -149,7 +149,7 @@ class ModelReanimator(val method: Method, val model: SMTModel, val loader: Class
         val memspace = arrayType.memspace
         val instance = run {
             val bounds = model.bounds[memspace] ?: return@run null
-            val bound = (bounds.finalMemory[value] as? ConstIntTerm)?.value ?: return@run null
+            val bound = (bounds.initialMemory[value] as? ConstIntTerm)?.value ?: return@run null
 
             val elementSize = arrayType.element.bitsize
             val elements = bound / elementSize
@@ -167,7 +167,7 @@ class ModelReanimator(val method: Method, val model: SMTModel, val loader: Class
                 val indexAddress = model.assignments[index] as? ConstIntTerm
                         ?: unreachable { log.error("Non-int address") }
 
-                val element = model.memories[indexMemspace]?.finalMemory!![indexAddress]
+                val element = model.memories[indexMemspace]?.initialMemory!![indexAddress]
 
                 val `object` = reanimateTerm(index, element)
                 val actualIndex = (indexAddress.value - address) / elementSize
@@ -240,7 +240,7 @@ class ObjectReanimator(val method: Method,
         val memspace = arrayType.memspace
         val instance = run {
             // if model does not contain any information about bounds of current array, we can create array of any length
-            val bound = (model.bounds[memspace]?.finalMemory?.get(addr) as? ConstIntTerm)?.value ?: 0
+            val bound = (model.bounds[memspace]?.initialMemory?.get(addr) as? ConstIntTerm)?.value ?: 0
             val elementSize = arrayType.element.bitsize
             val elements = bound / elementSize
 
@@ -259,7 +259,7 @@ class ObjectReanimator(val method: Method,
 
     private fun reanimateReference(term: Term, jType: Type, addr: Term?): Any? {
         val memspace = term.memspace
-        val refValue = model.memories[memspace]?.finalMemory!![addr]
+        val refValue = model.memories[memspace]?.initialMemory!![addr]
         return when (term) {
             is ArrayIndexTerm -> {
                 val arrayRef = term.arrayRef
@@ -294,7 +294,7 @@ class ObjectReanimator(val method: Method,
                     }
                 }
                 val fieldAddress = model.assignments[term]
-                val fieldValue = model.memories.getValue(memspace).finalMemory[fieldAddress]
+                val fieldValue = model.memories.getValue(memspace).initialMemory[fieldAddress]
 
                 val fieldReflect = klass.getActualField((term.fieldName as ConstStringTerm).value)
                 if (!klass.isAssignableFrom(instance?.javaClass ?: Any::class.java)) {
@@ -356,7 +356,7 @@ class ObjectReanimator(val method: Method,
                 val memspace = term.memspace//referencedType.memspace
                 val instance = run {
                     val bounds = model.bounds[memspace] ?: return@run null
-                    val bound = (bounds.finalMemory[addr] as? ConstIntTerm)?.value ?: return@run null
+                    val bound = (bounds.initialMemory[addr] as? ConstIntTerm)?.value ?: return@run null
 
                     val elementSize = referencedType.element.bitsize
                     val elements = bound / elementSize
