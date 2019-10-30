@@ -1,6 +1,8 @@
 package org.jetbrains.research.kex.asm.analysis
 
+import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
+import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.smt.AbstractSMTSolver
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.SMTProxySolver
@@ -12,8 +14,11 @@ import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.TermCollector
 import org.jetbrains.research.kex.util.info
 import org.jetbrains.research.kex.util.log
+import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
+import org.jetbrains.research.kfg.ir.OuterClass
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
+import org.jetbrains.research.kfg.type.*
 
 object MethodRefinements {
     val refinements = HashMap<Method, List<Refinement>>()
@@ -56,7 +61,7 @@ object MethodRefinements {
     }
 
 
-    class PredicateAbstractionState(val variables: List<Term>) {
+    class PredicateAbstractionState(val variables: List<Term>, val cm: ClassManager) {
 
         private fun getTruePs() = BasicState()
 
@@ -89,10 +94,37 @@ object MethodRefinements {
                 if (term.opcode !is CmpOpcode.Eq && term.opcode !is CmpOpcode.Neq) {
                     return false
                 }
-                // todo: check subtyping somehow
-                return true
+                val lType = term.lhv.type.getKfgType(cm.type)
+                val rType = term.rhv.type.getKfgType(cm.type)
+                return checkReferenceTypes(lType, rType)
             }
             return true
+        }
+
+        private fun checkReferenceTypes(lType: Type, rType: Type) = when {
+            lType !is Reference || rType !is Reference -> false
+            lType == rType -> true
+            lType is NullType || rType is NullType -> true
+            lType is ArrayType && rType is ArrayType -> checkArraySubtyping(lType, rType)
+            lType is ClassType && rType is ClassType -> checkClassSubtyping(lType, rType)
+            // todo: maybe more checks
+            else -> false
+        }
+
+        private fun checkClassSubtyping(lType: ClassType, rType: ClassType) = when {
+            // fixme: tricky hack with OuterClass
+            lType.`class` is OuterClass && rType.`class` is OuterClass -> true
+            lType.`class` is OuterClass -> rType.`class`.isAncestor(lType.`class`)
+            rType.`class` is OuterClass -> lType.`class`.isAncestor(rType.`class`)
+            else -> lType.`class`.isAncestor(rType.`class`) || rType.`class`.isAncestor(lType.`class`)
+        }
+
+        private fun checkArraySubtyping(lType: ArrayType, rType: ArrayType): Boolean = when {
+            lType.component == rType.component -> true
+            lType.component.isReference && rType.component.isReference -> {
+                checkReferenceTypes(lType.component, rType.component)
+            }
+            else -> false
         }
 
         fun predicateIsApplicable(predicates: Set<Predicate>, predicate: Predicate): Boolean {
@@ -127,6 +159,20 @@ object MethodRefinements {
             }
         }
 
+        private fun PredicateBuilder.possibleFields(variable: Term, positive: PredicateState, negative: PredicateState): List<Term> {
+            if (variable.type !is KexPointer) return emptyList()
+            val variableType = variable.type.getKfgType(cm.type)
+            val fieldCollector = TermCollector {
+                it is FieldTerm && checkReferenceTypes(variableType, it.owner.type.getKfgType(cm.type))
+            }
+            fieldCollector.transform(positive)
+            fieldCollector.transform(negative)
+            return fieldCollector.terms
+                    .filterIsInstance<FieldTerm>()
+                    .map { FieldTerm(it.type, variable, it.fieldName) }
+                    .map { it.load() }
+        }
+
         private fun generateCandidatePredicates(solver: AbstractSMTSolver, positive: PredicateState, negative: PredicateState) =
                 variables.flatMap { variable ->
                     val collector = TermCollector { it.isConst || it is ArgumentTerm && it != variable }
@@ -134,10 +180,20 @@ object MethodRefinements {
                     collector.transform(negative)
                     val argumentTerms = collector.terms + setOf(
                             TermFactory.getConstant(0), TermFactory.getNull())
-                    argumentTerms
+                    val candidates = argumentTerms
                             .flatMap { stateBuilder.generateCandidates(variable, it) }
                             .filter { predicateIsPossible(solver, it) }
+                    val possibleFields = stateBuilder.possibleFields(variable, positive, negative)
+                    val fieldCandidates = possibleFields.allCombinationsWith(argumentTerms)
+                            .flatMap { (field, argument) ->
+                                stateBuilder.generateCandidates(field, argument)
+                            }
+                            .filter { predicateIsPossible(solver, it) }
+                    (candidates + fieldCandidates).toSet()
                 }
+
+        private fun <T1, T2> Iterable<T1>.allCombinationsWith(other: Iterable<T2>) =
+                flatMap { first -> other.map { first to it } }
 
         fun makeAbstraction(solver: AbstractSMTSolver, positive: PredicateState, negative: PredicateState): PredicateState? {
             val candidates = generateCandidatePredicates(solver, positive, negative)
@@ -192,7 +248,7 @@ object MethodRefinements {
         val solver = SMTProxySolver(method.cm.type).solver
         log.info("Start abstraction: ${method.name}")
         log.info("$refinement")
-        val abstraction = PredicateAbstractionState(arguments.toList())
+        val abstraction = PredicateAbstractionState(arguments.toList(), method.cm)
         val result = abstraction.makeAbstraction(solver, refinement.noException, refinement.exception)
         when {
             result != null -> log.info("Find abstraction: $result")
