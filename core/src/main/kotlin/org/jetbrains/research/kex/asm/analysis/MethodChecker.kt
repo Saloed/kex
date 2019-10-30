@@ -18,6 +18,7 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.transformer.executeModel
 import org.jetbrains.research.kex.trace.TraceManager
 import org.jetbrains.research.kex.trace.`object`.Trace
+import org.jetbrains.research.kex.trace.runner.InvocationResult
 import org.jetbrains.research.kex.trace.runner.ObjectTracingRunner
 import org.jetbrains.research.kex.trace.runner.TimeoutException
 import org.jetbrains.research.kex.util.debug
@@ -167,7 +168,8 @@ class MethodChecker(
                 }
 
                 try {
-                    collectTrace(method, instance, args)
+                    val invocationResult = collectTrace(method, instance, args)
+                    MethodRefinements.add(method, checker.state, invocationResult.exception)
                 } catch (e: TimeoutException) {
                     throw e
                 } catch (e: Exception) {
@@ -199,9 +201,10 @@ class MethodChecker(
         return instance to reanimated.arguments.toTypedArray()
     }
 
-    private fun collectTrace(method: Method, instance: Any?, args: Array<Any?>) {
+    private fun collectTrace(method: Method, instance: Any?, args: Array<Any?>): InvocationResult {
         val runner = ObjectTracingRunner(method, loader)
         val trace = runner.collectTrace(instance, args)
         tm[method] = trace
+        return runner.lastInvocationResult
     }
 }

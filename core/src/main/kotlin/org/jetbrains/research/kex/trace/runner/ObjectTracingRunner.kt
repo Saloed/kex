@@ -6,9 +6,12 @@ import org.jetbrains.research.kfg.ir.Method
 
 class ObjectTracingRunner(method: Method, loader: ClassLoader)
     : TracingAbstractRunner<Trace>(method, loader) {
+
+    lateinit var lastInvocationResult: InvocationResult
+
     override fun collectTrace(instance: Any?, args: Array<Any?>): Trace {
         val collector = TraceCollectorProxy.enableCollector(method.cm)
-        invoke(instance, args)
+        lastInvocationResult = invoke(instance, args)
         TraceCollectorProxy.disableCollector()
         return Trace(collector.trace)
     }

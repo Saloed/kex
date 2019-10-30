@@ -3,6 +3,7 @@ package org.jetbrains.research.kex
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.asm.analysis.Failure
 import org.jetbrains.research.kex.asm.analysis.MethodChecker
+import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.RandomChecker
 import org.jetbrains.research.kex.asm.manager.CoverageCounter
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
@@ -69,13 +70,13 @@ class Kex(args: Array<String>) {
 
         log.debug("Running with jar ${jar.name} and package $`package`")
         val target = File("instrumented/")
+        // write all classes to target, so they will be seen by ClassLoader
+        writeClassesToTarget(classManager, jar, target, `package`, true)
         val classLoader = URLClassLoader(arrayOf(target.toURI().toURL()))
 
         val traceManager = ObjectTraceManager()
         val psa = PredicateStateAnalysis(classManager)
         val cm = CoverageCounter(origManager, traceManager)
-        // write all classes to target, so they will be seen by ClassLoader
-        writeClassesToTarget(classManager, jar, target, `package`, true)
         executePipeline(origManager, `package`) {
             +RuntimeTraceCollector(origManager)
             +ClassWriter(origManager, jar.classLoader, target)
@@ -96,6 +97,8 @@ class Kex(args: Array<String>) {
         log.info("Overall summary for ${cm.methodInfos.size} methods:\n" +
                 "body coverage: ${String.format("%.2f", coverage.bodyCoverage)}%\n" +
                 "full coverage: ${String.format("%.2f", coverage.fullCoverage)}%")
+
+        val refinements = MethodRefinements.getRefinements()
     }
 
     @ImplicitReflectionSerializer
