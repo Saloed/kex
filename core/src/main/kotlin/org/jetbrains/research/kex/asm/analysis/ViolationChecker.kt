@@ -120,7 +120,7 @@ class ViolationChecker(override val cm: ClassManager,
     private fun checkNullity(state: PredicateState, `object`: Term): Boolean {
         val refQuery = require { `object` inequality null }.wrap()
         return when {
-            check(state, refQuery) == Result.UnsatResult -> {
+            check(state, refQuery) is Result.UnsatResult -> {
                 failingBlocks += currentBlock
                 false
             }
@@ -133,7 +133,7 @@ class ViolationChecker(override val cm: ClassManager,
         indexQuery += require { (index lt length) equality true }
 
         return when {
-            check(state, indexQuery) == Result.UnsatResult -> {
+            check(state, indexQuery) is Result.UnsatResult -> {
                 failingBlocks += currentBlock
                 false
             }

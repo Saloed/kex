@@ -20,7 +20,7 @@ sealed class Result {
         override fun match(other: Result) = other is SatResult
     }
 
-    object UnsatResult : Result() {
+    class UnsatResult(val unsatCore: Any) : Result() {
         override fun toString() = "unsat"
 
         override fun match(other: Result) = other is UnsatResult
@@ -39,7 +39,7 @@ sealed class Result {
 interface AbstractSMTSolver {
     fun isReachable(state: PredicateState): Result
     fun isPathPossible(state: PredicateState, path: PredicateState): Result
-    fun isViolated(state: PredicateState, query: PredicateState): Result
+    fun isViolated(state: PredicateState, query: PredicateState, negateQuery: Boolean = false): Result
 
     fun cleanup()
 }

@@ -30,7 +30,7 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
 
     override fun isPathPossible(state: PredicateState, path: PredicateState) = isViolated(state, path)
 
-    override fun isViolated(state: PredicateState, query: PredicateState): Result {
+    override fun isViolated(state: PredicateState, query: PredicateState, negateQuery: Boolean): Result {
         if (logQuery) {
             log.run {
                 debug("Z3 solver check")
@@ -43,13 +43,14 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
 
         val converter = Z3Converter(tf)
         val z3State = converter.convert(state, ef, ctx)
-        val z3query = converter.convert(query, ef, ctx)
+        val z3queryPrepared = converter.convert(query, ef, ctx)
+        val z3query = if(negateQuery) z3queryPrepared.not() else z3queryPrepared
 
         log.debug("Check started")
         val result = check(z3State, z3query)
         log.debug("Check finished")
         return when (result.first) {
-            Status.UNSATISFIABLE -> Result.UnsatResult
+            Status.UNSATISFIABLE -> Result.UnsatResult(result.second)
             Status.UNKNOWN -> Result.UnknownResult(result.second as String)
             Status.SATISFIABLE -> Result.SatResult(collectModel(ctx, result.second as Model, state))
         }

@@ -30,7 +30,7 @@ class BoolectorSolver(val tf: TypeFactory) : AbstractSMTSolver {
 
     override fun isPathPossible(state: PredicateState, path: PredicateState) = isViolated(state, path)
 
-    override fun isViolated(state: PredicateState, query: PredicateState): Result {
+    override fun isViolated(state: PredicateState, query: PredicateState, negateQuery: Boolean): Result {
         if (logQuery) {
             log.run {
                 debug("Boolector solver check")
@@ -43,13 +43,14 @@ class BoolectorSolver(val tf: TypeFactory) : AbstractSMTSolver {
 
         val converter = BoolectorConverter(tf)
         val boolectorState = converter.convert(state, ef, ctx)
-        val boolectorQuery = converter.convert(query, ef, ctx)
+        val boolectorQueryPrepared = converter.convert(query, ef, ctx)
+        val boolectorQuery = if(negateQuery) boolectorQueryPrepared.not() else boolectorQueryPrepared
 
         log.debug("Check started")
         val result = check(boolectorState, boolectorQuery)
         log.debug("Check finished")
         return when (result) {
-            BoolectorSat.Status.UNSAT -> Result.UnsatResult
+            BoolectorSat.Status.UNSAT -> Result.UnsatResult("Unsat core unavaliable")
             BoolectorSat.Status.UNKNOWN -> Result.UnknownResult("should not happen")
             BoolectorSat.Status.SAT -> Result.SatResult(collectModel(ctx, state))
         }
