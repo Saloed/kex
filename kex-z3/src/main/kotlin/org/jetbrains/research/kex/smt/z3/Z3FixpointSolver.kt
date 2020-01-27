@@ -1,7 +1,6 @@
-package org.jetbrains.research.kex.asm.analysis
+package org.jetbrains.research.kex.smt.z3
 
 import com.microsoft.z3.*
-import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kfg.type.TypeFactory
 

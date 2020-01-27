@@ -3,11 +3,11 @@ package org.jetbrains.research.kex.asm.analysis
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.smt.AbstractSMTSolver
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.SMTProxySolver
+import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -41,8 +41,8 @@ object MethodRefinements {
     ) {
         val methodPath = MethodPath(state, path)
         val refinement = when (exception) {
-            null -> MethodRefinements.Refinement.RefinementNoException(methodPath)
-            else -> MethodRefinements.Refinement.RefinementException(methodPath, exception)
+            null -> Refinement.RefinementNoException(methodPath)
+            else -> Refinement.RefinementException(methodPath, exception)
         }
         refinements[method] = refinements.getOrDefault(method, emptyList()) + refinement
     }
@@ -163,8 +163,8 @@ object MethodRefinements {
         val cmpTerms = predicates.filterIsInstance<EqualityPredicate>()
                 .flatMap { listOf(it.lhv, it.rhv) }
                 .filterIsInstance<CmpTerm>()
-        if (predicate.lhv is CmpTerm && !cmpTermIsApplicable(cmpTerms, predicate.lhv)) return false
-        if (predicate.rhv is CmpTerm && !cmpTermIsApplicable(cmpTerms, predicate.rhv)) return false
+        if (predicate.lhv is CmpTerm && !cmpTermIsApplicable(cmpTerms, predicate.lhv as CmpTerm)) return false
+        if (predicate.rhv is CmpTerm && !cmpTermIsApplicable(cmpTerms, predicate.rhv as CmpTerm)) return false
         return true
     }
 
