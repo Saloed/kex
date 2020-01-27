@@ -1,6 +1,8 @@
 package org.jetbrains.research.kex.state
 
 import kotlinx.serialization.Serializable
+import org.jetbrains.research.kex.BaseType
+import org.jetbrains.research.kex.InheritanceInfo
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.PredicateType
@@ -58,31 +60,31 @@ class StateBuilder() : PredicateBuilder() {
     fun apply() = current
 
     inline fun assume(body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Assume().body()
+        this += Assume().body()
     }
     inline fun assume(location: Location, body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Assume(location).body()
+        this += Assume(location).body()
     }
 
     inline fun state(body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.State().body()
+        this += State().body()
     }
     inline fun state(location: Location, body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.State(location).body()
+        this += State(location).body()
     }
 
     inline fun path(body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Path().body()
+        this += Path().body()
     }
     inline fun path(location: Location, body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Path(location).body()
+        this += Path(location).body()
     }
 
     inline fun require(body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Require().body()
+        this += Require().body()
     }
     inline fun require(location: Location, body: PredicateBuilder.() -> Predicate) {
-        this += PredicateBuilder.Require(location).body()
+        this += Require(location).body()
     }
 
     inline fun predicate(type: PredicateType, body: PredicateBuilder.() -> Predicate) = when (type) {
@@ -149,6 +151,8 @@ abstract class PredicateState : TypeInfo {
     val isNotEmpty: Boolean
         get() = !isEmpty
 
+    val path by lazy { filterByType(PredicateType.Path()) }
+
     override val inheritors get() = states
     override val reverseMapping get() = reverse
 
@@ -163,6 +167,54 @@ abstract class PredicateState : TypeInfo {
     fun any(predicate: (Predicate) -> Boolean): Boolean = filter(predicate).size > 0
     fun filterNot(predicate: (Predicate) -> Boolean) = filter { !predicate(it) }
     fun filterByType(type: PredicateType) = filter { it.type == type }
+
+    fun take(n: Int): PredicateState {
+        var counter = 0
+        return this.filter { counter++ < n  }
+    }
+
+    fun takeLast(n: Int): PredicateState = reverse().take(n).reverse()
+
+    fun drop(n: Int): PredicateState {
+        var counter = 0
+        return this.filter { counter++ > n }
+    }
+
+    fun dropLast(n: Int): PredicateState = reverse().drop(n).reverse()
+
+    fun takeWhile(predicate: (Predicate) -> Boolean): PredicateState {
+        var found = false
+        return filter {
+            when {
+                found -> false
+                predicate(it) -> {
+                    found = true
+                    false
+                }
+                else -> true
+            }
+        }
+    }
+
+    fun takeLastWhile(predicate: (Predicate) -> Boolean): PredicateState = reverse().takeWhile(predicate).reverse()
+
+    fun dropWhile(predicate: (Predicate) -> Boolean): PredicateState {
+        var found = false
+        return filter {
+            when {
+                found -> true
+                predicate(it) -> {
+                    found = true
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    fun dropLastWhile(predicate: (Predicate) -> Boolean): PredicateState = reverse().dropWhile(predicate).reverse()
+
+    fun startsWith(ps: PredicateState): Boolean = sliceOn(ps) != null
 
     abstract fun fmap(transform: (PredicateState) -> PredicateState): PredicateState
     abstract fun reverse(): PredicateState

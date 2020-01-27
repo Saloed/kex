@@ -2,10 +2,11 @@ package org.jetbrains.research.kex.state.predicate
 
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
-import org.jetbrains.research.kex.state.BaseType
-import org.jetbrains.research.kex.state.InheritanceInfo
+import org.jetbrains.research.kex.BaseType
+import org.jetbrains.research.kex.InheritanceInfo
 import org.jetbrains.research.kex.state.TypeInfo
 import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.util.defaultHashCode
 import org.jetbrains.research.kex.util.fail
@@ -96,7 +97,17 @@ val Predicate.hasReceiver
         is NewPredicate -> true
         is ArrayStorePredicate -> true
         is FieldStorePredicate -> true
+        is CallPredicate -> this.hasLhv
         else -> false
     }
 
 val Predicate.receiver get() = if (hasReceiver) operands[0] else null
+
+fun Predicate.inverse(): Predicate = when (this) {
+    is EqualityPredicate -> when (rhv) {
+        term { const(true) } -> predicate(type, location) { lhv equality false }
+        term { const(false) } -> predicate(type, location) { lhv equality true }
+        else -> this
+    }
+    else -> this
+}
