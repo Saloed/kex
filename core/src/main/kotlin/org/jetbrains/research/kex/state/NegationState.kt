@@ -20,7 +20,7 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
     }
 
     override fun map(transform: (Predicate) -> Predicate) = NegationState(predicateState.map(transform))
-    override fun fmap(transform: (PredicateState) -> PredicateState) = transform(this)
+    override fun fmap(transform: (PredicateState) -> PredicateState) = NegationState(predicateState.fmap(transform))
     override fun mapNotNull(transform: (Predicate) -> Predicate?) = NegationState(predicateState.mapNotNull(transform))
     override fun filter(predicate: (Predicate) -> Boolean) = NegationState(predicateState.filter(predicate))
     override fun reverse(): PredicateState = NegationState(predicateState.reverse())

@@ -15,7 +15,7 @@ typealias Double_ = $Double
 typealias Memory_ = $Memory< Ptr_ >
 typealias Dynamic_ = $valexpr
 
-class $factory : ${solver}SMTExprFactory() {
+open class $factory : ${solver}SMTExprFactory() {
     companion object {
         class OffsetMap {
             private val inner = mutableMapOf< Class.FieldKey, Int >()
@@ -42,7 +42,7 @@ class $factory : ${solver}SMTExprFactory() {
         }
     }
 
-    val ctx = $context()
+    open val ctx = $context()
 
 #macro(generateMakes $type $basetype)
     #set($underlined = "${type}_")

@@ -11,18 +11,25 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
 
     override fun getSort(ctx: Context, expr: Expr): Sort = expr.sort
     override fun getBoolSort(ctx: Context): Sort = ctx.boolSort
-    override fun getBVSort(ctx: Context, size: Int): Sort = ctx.mkBitVecSort(size)
+    override fun getBVSort(ctx: Context, size: Int): Sort = when (size) {
+        32 -> ctx.mkIntSort()
+        else -> ctx.mkBitVecSort(size)
+    }
     override fun getFloatSort(ctx: Context): Sort = ctx.mkFPSortSingle()
     override fun getDoubleSort(ctx: Context): Sort = ctx.mkFPSortDouble()
     override fun getArraySort(ctx: Context, domain: Sort, range: Sort): Sort = ctx.mkArraySort(domain, range)
 
     override fun isBoolSort(ctx: Context, sort: Sort): Boolean = sort is BoolSort
-    override fun isBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort
+    override fun isBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort || sort is IntSort
     override fun isArraySort(ctx: Context, sort: Sort): Boolean = sort is ArraySort
     override fun isFloatSort(ctx: Context, sort: Sort): Boolean = sort is FPSort && sort == ctx.mkFPSortSingle()
     override fun isDoubleSort(ctx: Context, sort: Sort): Boolean = sort is FPSort && sort == ctx.mkFPSortDouble()
 
-    override fun bvBitsize(ctx: Context, sort: Sort): Int = (sort as BitVecSort).size
+    override fun bvBitsize(ctx: Context, sort: Sort): Int = when (sort) {
+        is IntSort -> 32
+        is BitVecSort -> sort.size
+        else -> throw IllegalStateException("Unexpected sort $sort")
+    }
     override fun floatEBitsize(ctx: Context, sort: Sort): Int = (sort as FPSort).eBits
     override fun floatSBitsize(ctx: Context, sort: Sort): Int = (sort as FPSort).sBits
 
@@ -33,8 +40,8 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
             binary(ctx, Opcode.NEQ, expr, makeNumericConst(ctx, getSort(ctx, expr), 0))
 
     override fun bv2bv(ctx: Context, expr: Expr, sort: Sort): Expr {
-        val curSize = (getSort(ctx, expr) as BitVecSort).size
-        val castSize = (sort as BitVecSort).size
+        val curSize = bvBitsize(ctx, getSort(ctx, expr))
+        val castSize = bvBitsize(ctx, sort)
         return when {
             curSize == castSize -> expr
             curSize < castSize -> sext(ctx, castSize, expr)
@@ -90,46 +97,55 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         Opcode.NEQ -> neq(ctx, lhv, rhv)
         Opcode.ADD -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> add(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> add(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> add(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.SUB -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> sub(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> sub(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> sub(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.MUL -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> mul(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> mul(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> mul(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.DIVIDE -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> sdiv(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> sdiv(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> sdiv(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.MOD -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> smod(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> fmod(ctx, lhv, rhv)
+            lhv is IntExpr && rhv is IntExpr -> smod(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected mod arguments: $lhv and $rhv") }
         }
         Opcode.GT -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> gt(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> gt(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> gt(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.GE -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> ge(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> ge(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> ge(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.LT -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> lt(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> lt(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> lt(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.LE -> when {
             lhv is BitVecExpr && rhv is BitVecExpr -> le(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> le(ctx, lhv, rhv)
             lhv is FPExpr && rhv is FPExpr -> le(ctx, lhv, rhv)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
@@ -139,16 +155,19 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         Opcode.AND -> when {
             lhv is BoolExpr && rhv is BoolExpr -> and(ctx, lhv, rhv)
             lhv is BitVecExpr && rhv is BitVecExpr -> and(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> and(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
             else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
         }
         Opcode.OR -> when {
             lhv is BoolExpr && rhv is BoolExpr -> or(ctx, lhv, rhv)
             lhv is BitVecExpr && rhv is BitVecExpr -> or(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> or(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
             else -> unreachable { log.error("Unexpected or arguments: $lhv or $rhv") }
         }
         Opcode.XOR -> when {
             lhv is BoolExpr && rhv is BoolExpr -> xor(ctx, lhv, rhv)
             lhv is BitVecExpr && rhv is BitVecExpr -> xor(ctx, lhv, rhv)
+            lhv is ArithExpr && rhv is ArithExpr -> xor(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
             else -> unreachable { log.error("Unexpected xor arguments: $lhv xor $rhv") }
         }
         Opcode.IMPLIES -> implies(ctx, lhv as BoolExpr, rhv as BoolExpr)
@@ -160,33 +179,42 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     private fun neq(ctx: Context, lhv: Expr, rhv: Expr) = ctx.mkNot(eq(ctx, lhv, rhv))
 
     private fun add(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVAdd(lhv, rhv)
+    private fun add(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkAdd(lhv, rhv)
     private fun add(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPAdd(ctx.mkFPRNA(), lhv, rhv)
 
     private fun sub(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSub(lhv, rhv)
+    private fun sub(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkSub(lhv, rhv)
     private fun sub(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPSub(ctx.mkFPRNA(), lhv, rhv)
 
     private fun mul(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVMul(lhv, rhv)
     private fun mul(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPMul(ctx.mkFPRNA(), lhv, rhv)
+    private fun mul(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkMul(lhv, rhv)
 
     private fun sdiv(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSDiv(lhv, rhv)
+    private fun sdiv(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkDiv(lhv, rhv)
     private fun sdiv(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPDiv(ctx.mkFPRNA(), lhv, rhv)
 
     private fun udiv(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVUDiv(lhv, rhv)
     private fun smod(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSMod(lhv, rhv)
+    private fun smod(ctx: Context, lhv: IntExpr, rhv: IntExpr) = ctx.mkMod(lhv, rhv)
     private fun umod(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVURem(lhv, rhv)
     private fun fmod(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPRem(lhv, rhv)
 
     private fun gt(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSGT(lhv, rhv)
     private fun gt(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPGt(lhv, rhv)
+    private fun gt(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkGt(lhv, rhv)
 
     private fun ge(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSGE(lhv, rhv)
+    private fun ge(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkGe(lhv, rhv)
     private fun ge(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPGEq(lhv, rhv)
 
     private fun lt(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSLT(lhv, rhv)
     private fun lt(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPLt(lhv, rhv)
+    private fun lt(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkLt(lhv, rhv)
 
     private fun le(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSLE(lhv, rhv)
     private fun le(ctx: Context, lhv: FPExpr, rhv: FPExpr) = ctx.mkFPLEq(lhv, rhv)
+    private fun le(ctx: Context, lhv: ArithExpr, rhv: ArithExpr) = ctx.mkLe(lhv, rhv)
 
     private fun shl(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVSHL(lhv, rhv)
     private fun lshr(ctx: Context, lhv: BitVecExpr, rhv: BitVecExpr) = ctx.mkBVLSHR(lhv, rhv)

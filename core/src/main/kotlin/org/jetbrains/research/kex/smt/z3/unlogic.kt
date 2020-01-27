@@ -13,6 +13,7 @@ object Z3Unlogic {
     fun undo(expr: Expr): Term = when (expr) {
         is BoolExpr -> undoBool(expr)
         is BitVecNum -> undoBV(expr)
+        is IntNum -> undoInt(expr)
         is FPNum -> undoFloat(expr)
         else -> unreachable { log.error("Unexpected expr in unlogic: $expr") }
     }
@@ -22,6 +23,8 @@ object Z3Unlogic {
         Z3_lbool.Z3_L_FALSE -> term { const(false) }
         else -> unreachable { log.error("Trying to undo unknown") }
     }
+
+    private fun undoInt(expr: IntNum) = term { const(expr.int) }
 
     private fun undoBV(expr: BitVecNum) = when (expr.sortSize) {
         SMTEngine.WORD -> term { const(expr.long.toInt()) }

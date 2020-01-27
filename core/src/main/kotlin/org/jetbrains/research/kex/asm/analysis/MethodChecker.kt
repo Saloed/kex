@@ -169,7 +169,7 @@ class MethodChecker(
 
                 try {
                     val invocationResult = collectTrace(method, instance, args)
-                    MethodRefinements.add(method, checker.state, invocationResult.exception)
+                    MethodRefinements.add(method, checker.state, checker.query, invocationResult.exception)
                 } catch (e: TimeoutException) {
                     throw e
                 } catch (e: Exception) {

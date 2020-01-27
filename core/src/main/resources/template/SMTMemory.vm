@@ -54,10 +54,16 @@ class $self< in Index : $Bitvector >(val inner: $Array< Byte_, Index >) : ${solv
         val elementSize = element.getBitsize()
         var start = 0
         val cases = arrayListOf< Pair< Index, Byte_ >>()
-        while (start < elementSize) {
-            val hi = min(start + byteSize - 1, elementSize - 1)
-            cases.add(((index + start) as Index) to (element.extract(hi, start).toBV(Byte_.getStaticSort(ctx)) as Byte_))
-            start += byteSize
+
+        //fixme: hack to avoid bitvec extract
+        if(elementSize == byteSize){
+            cases.add(((index + start) as Index) to (element.toBV(Byte_.getStaticSort(ctx)) as Byte_))
+        } else {
+            while (start < elementSize) {
+                val hi = min(start + byteSize - 1, elementSize - 1)
+                cases.add(((index + start) as Index) to (element.extract(hi, start).toBV(Byte_.getStaticSort(ctx)) as Byte_))
+                start += byteSize
+            }
         }
         return $self(inner.store(cases))
     }

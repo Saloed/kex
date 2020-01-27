@@ -98,7 +98,7 @@ class Kex(args: Array<String>) {
                 "body coverage: ${String.format("%.2f", coverage.bodyCoverage)}%\n" +
                 "full coverage: ${String.format("%.2f", coverage.fullCoverage)}%")
 
-        val refinements = MethodRefinements.getRefinements()
+        val refinements = MethodRefinements.getRefinements(psa)
     }
 
     @ImplicitReflectionSerializer

@@ -62,10 +62,12 @@ interface Transformer<T : Transformer<T>> {
     fun transformBasic(ps: BasicState): PredicateState = ps.map { p -> transformBase(p) }.filterNot { it is Stub }
     fun transformChain(ps: ChainState): PredicateState = ps.fmap { e -> transformBase(e) }
     fun transformChoice(ps: ChoiceState): PredicateState = ps.fmap { e -> transformBase(e) }
+    fun transformNegation(ps: NegationState): PredicateState = ps.fmap { e -> transformBase(e) }
 
     fun transformBasicState(ps: BasicState): PredicateState = ps
     fun transformChainState(ps: ChainState): PredicateState = ps
     fun transformChoiceState(ps: ChoiceState): PredicateState = ps
+    fun transformNegationState(ps: NegationState): PredicateState = ps
 
     fun transform(predicate: Predicate) = transformBase(predicate)
     fun transformBase(predicate: Predicate): Predicate {
