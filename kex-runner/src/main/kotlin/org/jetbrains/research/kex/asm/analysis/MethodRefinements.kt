@@ -303,11 +303,11 @@ object MethodRefinements {
 
             val positivePath = when {
                 positive.isNotEmpty() -> positivePaths
-                else -> negativePaths.negate()
+                else -> !negativePaths
             }
             val negativePath = when {
                 negative.isNotEmpty() -> negativePaths
-                else -> positivePaths.negate()
+                else -> !positivePaths
             }
 
             log.info("State\n{}", state)
@@ -358,7 +358,7 @@ object MethodRefinements {
 
     fun chainWithNegation(base: PredicateState, curr: PredicateState) = when {
         curr.isEmpty -> base
-        else -> ChainState(base, curr.negate())
+        else -> ChainState(base, !curr)
     }.simplify()
 
     fun coveredBasicBlocks(inst: Instruction): Set<BasicBlock> {

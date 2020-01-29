@@ -122,7 +122,7 @@ inline fun choice(left: StateBuilder.() -> Unit, right: StateBuilder.() -> Unit)
     return StateBuilder().apply { this += listOf(lhv, rhv) }.apply()
 }
 
-fun PredicateState.negate() = NegationState(this)
+operator fun PredicateState.not() = NegationState(this)
 
 @BaseType("State")
 @Serializable
