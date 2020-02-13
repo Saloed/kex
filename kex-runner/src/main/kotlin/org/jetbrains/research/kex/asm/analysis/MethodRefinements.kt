@@ -447,7 +447,7 @@ object MethodRefinements {
     }
 
     fun analyzeMethod(refinement: MethodRefinement, psa: PredicateStateAnalysis) {
-        if (refinement.method.name.endsWith("foo").not()) {
+        if (refinement.method.name.endsWith("dummy2").not()) {
             return
         }
 

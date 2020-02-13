@@ -12,7 +12,7 @@ typealias Int_ = $Bitvector32
 typealias Long_ = $Bitvector64
 typealias Float_ = $Float
 typealias Double_ = $Double
-typealias Memory_ = $Memory< Ptr_ >
+typealias Memory_ = Z3MemoryProxy< Ptr_ >
 typealias Dynamic_ = $valexpr
 
 open class $factory : ${solver}SMTExprFactory() {
