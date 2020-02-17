@@ -13,7 +13,7 @@ import java.io.File
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
-    private class DeclarationTrackingContext : Context() {
+    class DeclarationTrackingContext : Context() {
         data class Declaration(val name: String, val sort: Sort, val expr: Expr)
 
         val declarations = hashSetOf<Declaration>()
