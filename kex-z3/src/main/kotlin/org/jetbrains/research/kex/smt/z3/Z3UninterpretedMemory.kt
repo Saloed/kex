@@ -2,9 +2,6 @@ package org.jetbrains.research.kex.smt.z3
 
 
 import com.microsoft.z3.Context
-import com.microsoft.z3.Expr
-import com.microsoft.z3.FuncDecl
-import org.jetbrains.research.kex.smt.SMTEngine
 
 private val engine = Z3Engine
 
@@ -100,29 +97,28 @@ class Z3UninterpretedMemory<in Index : Z3BV>(
         val stores: StoreTree<Z3BV>
 ) : Z3SMTMemory() {
 
-    private fun createVar() = ctx.mkFreshFuncDecl(name, arrayOf(Byte_.getStaticSort(ctx)), Byte_.getStaticSort(ctx)).also {
-        if(ctx is Z3FixpointSolver.DeclarationTrackingContext){
-            val a = 3
-//            val declaration = Z3FixpointSolver.DeclarationTrackingContext.Declaration("$it", )
-//            ctx.declarations.add(declaration)
-        }
-    }
-
-    class StoreTree<Index : Z3BV>(val ctx: Context, val stores: List<Pair<Index, Z3BV>>, val children: List<Pair<Z3Bool, StoreTree<Index>>>) {
-        fun storeExpression(funcDecl: FuncDecl): Expr {
-            val nestedStore = children.fold(ctx.mkTrue() as Expr) { acc, (cond, memory) ->
-                engine.ite(ctx, cond.expr, acc, memory.storeExpression(funcDecl))
+    class StoreTree<Index : Z3BV>(val ctx: Context, val default: Z3BV?, val stores: List<Pair<Index, Z3BV>>, val children: List<Pair<Z3Bool, StoreTree<Index>>>) {
+        fun storeExpression(index: Index, resultVar: Z3BV): Z3ValueExpr {
+            val foldInitial: Z3ValueExpr = default?.let { resultVar eq it } ?: Z3Bool.makeConst(ctx, false)
+            val nestedStore = children.foldRight(foldInitial) { (cond, memory), acc  ->
+                `if`(cond, memory.storeExpression(index, resultVar), acc)
             }
-            return stores.fold(nestedStore) { acc, (idx, value) ->
-                engine.binary(ctx, SMTEngine.Opcode.EQ, funcDecl.apply(idx.expr), value.expr)
+            return stores.foldRight(nestedStore) { (idx, value), acc  ->
+                `if`(index eq idx, resultVar eq value, acc)
             }
         }
 
-        operator fun plus(store: Pair<Index, Z3BV>) = StoreTree(ctx, stores + store, children)
-        fun merge(cases: List<Pair<Z3Bool, StoreTree<Index>>>) = StoreTree(ctx, stores, children + cases)
+        private fun `if`(cond: Z3ValueExpr, `true`: Z3ValueExpr, `false`: Z3ValueExpr): Z3ValueExpr{
+            val axioms = spliceAxioms(ctx, `true`.axiom, `false`.axiom)
+            val result = engine.ite(ctx, cond.expr, `true`.expr, `false`.expr)
+            return Z3ValueExpr(ctx, result, axioms)
+        }
+
+        operator fun plus(store: Pair<Index, Z3BV>) = StoreTree(ctx, default, stores + store, children)
+        fun merge(cases: List<Pair<Z3Bool, StoreTree<Index>>>) = StoreTree(ctx, default, stores, children + cases)
 
         companion object {
-            fun <Index : Z3BV> empty(ctx: Context) = StoreTree<Index>(ctx, emptyList(), emptyList())
+            fun <Index : Z3BV> empty(ctx: Context) = StoreTree<Index>(ctx, null, emptyList(), emptyList())
         }
     }
 
@@ -145,9 +141,9 @@ class Z3UninterpretedMemory<in Index : Z3BV>(
 
     fun load(index: Index, elementSize: Int): Z3BV {
         require(elementSize == byteSize) { "Element size $elementSize is not supported" }
-        val memoryVar = createVar()
-        val axiom = stores.storeExpression(memoryVar)
-        return Z3BV(ctx, memoryVar.apply(index.expr), axiom)
+        val result = Byte_.makeFreshVar(ctx, "${name}_load")
+        val memoryStores = stores.storeExpression(index, result)
+        return Z3BV(ctx, result.expr, memoryStores.asAxiom())
     }
 
     fun store(index: Index, element: Z3BV): Z3UninterpretedMemory<Index> {
