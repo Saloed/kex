@@ -49,7 +49,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                     }
                     ?: throw IllegalStateException("Unable to build solver")
 
-        fun convert(ps: PredicateState): Bool_ = converter.convert(ps, ef, z3Context).simplify()
+        fun convert(ps: PredicateState): Bool_ = converter.convert(ps, ef, z3Context)
 
         private fun buildTactics(): Tactic {
             Z3Params.load().forEach { (name, value) ->
@@ -97,21 +97,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
         inline fun <reified T : Expr> T.withContext() = translate(context) as T
 
-    }
-
-    fun statementIsPossible(state: PredicateState, query: PredicateState): Boolean {
-        val ctx = CallCtx(tf)
-        val z3State = ctx.convert(state).asAxiom() as BoolExpr
-        val z3query = ctx.convert(query).expr as BoolExpr
-
-        val queryPossibility = ctx.build {
-            z3State and z3query
-        }
-        val status = ctx.withSolver {
-            add(queryPossibility)
-            check()
-        }
-        return Status.SATISFIABLE == status
     }
 
     private inline fun <reified T : Expr> T.typedSimplify(): T = simplify() as T
@@ -171,8 +156,8 @@ $this
         val negativeStatement = ctx.build {
             ((z3State and z3negative) and predicateApplication) implies context.mkFalse()
         }
-        val positiveQuery = ctx.context.mkForall(declarationExprs, positiveStatement, 0, arrayOf(), null, null, null)//.typedSimplify()
-        val negativeQuery = ctx.context.mkForall(declarationExprs, negativeStatement, 0, arrayOf(), null, null, null)//.typedSimplify()
+        val positiveQuery = ctx.context.mkForall(declarationExprs, positiveStatement, 0, arrayOf(), null, null, null).typedSimplify()
+        val negativeQuery = ctx.context.mkForall(declarationExprs, negativeStatement, 0, arrayOf(), null, null, null).typedSimplify()
 
         val trickyHackStatement = ctx.build {
             var obfuscatedArg = argumentDeclarations.last().expr as IntExpr
@@ -181,7 +166,7 @@ $this
             val anotherPredicateApplication = context.mkApp(predicate, *anotherArguments) as BoolExpr
             ((z3State and z3positive and equality) and predicateApplication) implies anotherPredicateApplication
         }
-        val trickyHackQuery = ctx.context.mkForall(declarationExprs, trickyHackStatement, 0, arrayOf(), null, null, null)//.typedSimplify()
+        val trickyHackQuery = ctx.context.mkForall(declarationExprs, trickyHackStatement, 0, arrayOf(), null, null, null).typedSimplify()
 
 
         File("last_fixpoint_query_rules.smtlib").writeText(
@@ -211,9 +196,12 @@ $this
         val ctx = CallCtx(tf)
         fun BoolExpr.check(expected: Status) = ctx.withSolver {
             add(this@check)
-            println("$this")
+            val query = "$this"
             val status = check()
-            if (status == expected) status else null
+            if (status == expected) status else {
+                File("last_check_error.smtlib").writeText(query)
+                null
+            }
         }
 
         ctx.build {
