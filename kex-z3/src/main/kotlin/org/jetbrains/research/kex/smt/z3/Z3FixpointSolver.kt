@@ -14,6 +14,12 @@ import java.io.File
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
+    sealed class FixpointResult {
+        data class Unknown(val reason: String): FixpointResult()
+        data class Unsat(val core: Array<BoolExpr>): FixpointResult()
+        data class Sat(val result: FuncInterp): FixpointResult()
+    }
+
     class DeclarationTrackingContext : Context() {
         data class Declaration(val name: String, val sort: Sort, val expr: Expr)
 
@@ -157,8 +163,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val arguments = argumentDeclarations.map { it.expr }.toTypedArray()
             context.mkApp(predicate, *arguments) as BoolExpr
         }
-        val anotherArguments = argumentDeclarations.dropLast(1).map { it.expr }.toTypedArray() + ctx.context.mkIntConst("tmp_arg")
-        val declarationExprs = allDeclarations.map { it.expr }.toTypedArray() + anotherArguments
+        val declarationExprs = allDeclarations.map { it.expr }.toTypedArray()
         val positiveStatement = ctx.build {
             (z3State and z3positive) implies predicateApplication
         }
@@ -168,19 +173,26 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val positiveQuery = ctx.context.mkForall(declarationExprs, positiveStatement, 0, arrayOf(), null, null, null).typedSimplify()
         val negativeQuery = ctx.context.mkForall(declarationExprs, negativeStatement, 0, arrayOf(), null, null, null).typedSimplify()
 
-        ctx.withSolver(fixpoint = true) {
+        val result = ctx.withSolver(fixpoint = true) {
             add(positiveQuery)
             add(negativeQuery)
 
             File("last_fixpoint_query.smtlib").writeText(ctx.debugFixpointSmtLib(this))
 
             val status = check()
-
-            val result = model.getFuncInterp(model.funcDecls[0]).`else`
-            val a = 3
+            when(status){
+               Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
+                Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
+                Status.SATISFIABLE -> {
+                    val solutionModel = model
+                    val predicate = solutionModel.funcDecls[0]
+                    val predicateInterpretation = solutionModel.getFuncInterp(predicate)
+                    FixpointResult.Sat(predicateInterpretation)
+                }
+            }
         }
         val a = 3
-
+        //todo: model recovery
 
     }
 
