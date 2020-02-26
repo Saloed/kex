@@ -313,7 +313,7 @@ class $self< Element : $valexpr, in Index : $valexpr > : $valexpr {
 
         inline fun < reified Element : $valexpr, reified Index : $valexpr > makeFree(ctx: $context, name: String): $self< Element, Index > {
             val sort = ${solver}Engine.getArraySort(ctx, ${valexpr}.getStaticSort< Element >(ctx), ${valexpr}.getStaticSort< Index >(ctx))
-            return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, true))
+            return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, false))
         }
 
         inline fun < reified Element : $valexpr, reified Index : $valexpr > makeVar(ctx: $context, name: String): $self< Element, Index > {

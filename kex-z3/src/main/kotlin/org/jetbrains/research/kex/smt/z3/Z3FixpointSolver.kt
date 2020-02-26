@@ -11,6 +11,7 @@ import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
 
+
 class Z3FixpointSolver(val tf: TypeFactory) {
 
     class DeclarationTrackingContext : Context() {
@@ -37,14 +38,33 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val context = ef.ctx
         val z3Context = Z3Context(ef, (1 shl 8) + 1, (1 shl 24) + 1)
         val converter = Z3Converter(tf)
+
+        val options = Z3OptionBuilder()
+//                .produceUnsatCores(true)
+                .fp.engine("spacer")
+                .fp.generateProofTrace(true)
+
+                .fp.xform.inlineEager(false)
+                .fp.xform.inlineLinear(false)
+                .fp.xform.compressUnbound(false)
+
+                .fp.datalog.generateExplanations(true)
+                .fp.datalog.similarityCompressor(false)
+                .fp.datalog.unboundCompressor(false)
+                .fp.datalog.subsumption(false)
+
+                .fp.spacer.iuc.debugProof(true)
+                .fp.spacer.q3(false)
+                .fp.spacer.simplifyPob(true)
+
+
         val solver: Solver
             get() = buildTactics().solver
                     ?: throw IllegalStateException("Unable to build solver")
         val fixpointSolver: Solver
             get() = context.mkSolver("HORN")
                     .apply {
-                        val params = context.mkParams()
-                        params.add("fp.engine", "spacer")
+                        val params = options.addToParams(context.mkParams())
                         setParameters(params)
                     }
                     ?: throw IllegalStateException("Unable to build solver")
@@ -101,16 +121,14 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private inline fun <reified T : Expr> T.typedSimplify(): T = simplify() as T
 
-    private fun Solver.printSmtLib() = """
+    private fun CallCtx.printSmtLib(solver: Solver) = """
 (set-logic HORN)
-(set-option :fp.engine spacer)
-(set-option :produce-unsat-cores true)    
+${options.smtLib()}
 
-$this
+$solver
 
 (check-sat)
 (get-model)
-(get-unsat-core)
 (get-info :reason-unknown)
 
 """.trimIndent()
@@ -131,14 +149,14 @@ $this
 
 
     fun mkFixpointStatement(state: PredicateState, positive: PredicateState, negative: PredicateState)
-            = Z3MemoryProxy.withMemoryType(Z3MemoryProxy.Companion.MemoryType.UF) {
+            = Z3MemoryProxy.withMemoryType(Z3MemoryProxy.Companion.MemoryType.ARRAY) {
         val state = DummyCallTransformer().transform(state)
         val ctx = CallCtx(tf)
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
         val z3positive = ctx.convert(positive).expr as BoolExpr
         val z3negative = ctx.convert(negative).expr as BoolExpr
         val allDeclarations = ctx.knownDeclarations
-        val argumentDeclarations = allDeclarations.filter { it.name.startsWith("arg$") }
+        val argumentDeclarations = allDeclarations.filter { it.name.startsWith("arg$") || it.name.matches(Regex("__memory__\\d+")) }
         val argumentsSorts = argumentDeclarations.map { it.sort }.toTypedArray()
         val predicate = ctx.context.mkFuncDecl("function_argument_predicate", argumentsSorts, ctx.context.mkBoolSort())
 
@@ -158,33 +176,36 @@ $this
         }
         val positiveQuery = ctx.context.mkForall(declarationExprs, positiveStatement, 0, arrayOf(), null, null, null).typedSimplify()
         val negativeQuery = ctx.context.mkForall(declarationExprs, negativeStatement, 0, arrayOf(), null, null, null).typedSimplify()
-
-        val trickyHackStatement = ctx.build {
-            var obfuscatedArg = argumentDeclarations.last().expr as IntExpr
-            obfuscatedArg = `if`(obfuscatedArg % intConst(2) eq intConst(0), obfuscatedArg + intConst(1), obfuscatedArg - intConst(1))
-            val equality = context.mkEq(obfuscatedArg, anotherArguments.last())
-            val anotherPredicateApplication = context.mkApp(predicate, *anotherArguments) as BoolExpr
-            ((z3State and z3positive and equality) and predicateApplication) implies anotherPredicateApplication
-        }
-        val trickyHackQuery = ctx.context.mkForall(declarationExprs, trickyHackStatement, 0, arrayOf(), null, null, null).typedSimplify()
+//
+//        val trickyHackStatement = ctx.build {
+//            var obfuscatedArg = argumentDeclarations.last().expr as IntExpr
+//            obfuscatedArg = `if`(obfuscatedArg % intConst(2) eq intConst(0), obfuscatedArg + intConst(1), obfuscatedArg - intConst(1))
+//            val equality = context.mkEq(obfuscatedArg, anotherArguments.last())
+//            val anotherPredicateApplication = context.mkApp(predicate, *anotherArguments) as BoolExpr
+//            ((z3State and z3positive and equality) and predicateApplication) implies anotherPredicateApplication
+//        }
+//        val trickyHackQuery = ctx.context.mkForall(declarationExprs, trickyHackStatement, 0, arrayOf(), null, null, null).typedSimplify()
 
 
         File("last_fixpoint_query_rules.smtlib").writeText(
                 printFixpointRules(
                         predicate = predicate,
-                        allDeclarations = allDeclarations + DeclarationTrackingContext.Declaration("tmp_arg", ctx.context.intSort, anotherArguments.last()),
-                        rules = listOf(positiveStatement, trickyHackStatement, negativeStatement)
+                        allDeclarations = allDeclarations ,//+ DeclarationTrackingContext.Declaration("tmp_arg", ctx.context.intSort, anotherArguments.last()),
+                        rules = listOf(positiveStatement,
+                                //trickyHackStatement,
+                                negativeStatement)
                 )
         )
 
         ctx.withSolver(fixpoint = true) {
             add(positiveQuery)
-            add(trickyHackQuery)
+//            add(trickyHackQuery)
             add(negativeQuery)
 
-            File("last_fixpoint_query.smtlib").writeText(printSmtLib())
+            File("last_fixpoint_query.smtlib").writeText(ctx.printSmtLib(this))
 
             val status = check()
+            model.getFuncInterp(model.funcDecls[0]).`else`
             val a = 3
         }
         val a = 3
@@ -194,35 +215,35 @@ $this
 
     private fun possibilityChecks(state: BoolExpr, positive: BoolExpr, negative: BoolExpr) {
         val ctx = CallCtx(tf)
-        fun BoolExpr.check(expected: Status) = ctx.withSolver {
+        fun logQuery(query: String, name: String) {
+            val queryName = name.toLowerCase().replace(" ", "_")
+            File("check_$queryName.smtlib").writeText(query)
+        }
+
+        fun BoolExpr.check(expected: Status, name: String) = ctx.withSolver {
             add(this@check)
-            val query = "$this"
+            logQuery("$this", name)
             val status = check()
-            if (status == expected) status else {
-                File("last_check_error.smtlib").writeText(query)
-                null
+            if (status != expected) {
+                throw IllegalArgumentException("$name is not possible")
             }
         }
 
         ctx.build {
             state.withContext()
-        }.check(Status.SATISFIABLE)
-                ?: throw IllegalArgumentException("State is not possible")
+        }.check(Status.SATISFIABLE, "State")
 
         ctx.build {
             state.withContext() and positive.withContext()
-        }.check(Status.SATISFIABLE)
-                ?: throw IllegalArgumentException("Positive path is not possible")
+        }.check(Status.SATISFIABLE, "Positive path")
 
         ctx.build {
             state.withContext() and negative.withContext()
-        }.check(Status.SATISFIABLE)
-                ?: throw IllegalArgumentException("Negative path is not possible")
+        }.check(Status.SATISFIABLE, "Negative path")
 
         ctx.build {
             state.withContext() and positive.withContext() and negative.withContext()
-        }.check(Status.UNSATISFIABLE)
-                ?: throw IllegalArgumentException("Paths are not exclusive")
+        }.check(Status.UNSATISFIABLE, "Path exclusiveness")
 
     }
 
@@ -274,7 +295,7 @@ $this
             add(positiveQuery)
             add(negativeQuery)
 
-            File("last_fixpoint_query.smtlib").writeText(printSmtLib())
+            File("last_fixpoint_query.smtlib").writeText(ctx.printSmtLib(this))
 
             val status = check()
             val a = 3

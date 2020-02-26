@@ -434,20 +434,21 @@ object MethodRefinements {
         val arguments = methodArguments(refinement)
         if (arguments.isEmpty()) return
         log.info("Start fixpoint: ${refinement.method.name}")
-        log.info("$refinement")
-
+//        log.info("$refinement")
 
         val allExceptions = ChoiceState(exceptionPaths)
         val allNormal = ChoiceState(normalPaths)
 
+        log.info("State:\n$state\nPositive:\n$allNormal\nNegative:\n$allExceptions")
+
         val slv = Z3FixpointSolver(refinement.method.cm.type)
-        slv.mkFixpointStatement(state, allExceptions, allNormal)
+        slv.mkFixpointStatement(state, allNormal, allExceptions)
         val a = 3
 
     }
 
     fun analyzeMethod(refinement: MethodRefinement, psa: PredicateStateAnalysis) {
-        if (refinement.method.name.endsWith("dummy2").not()) {
+        if (refinement.method.name.endsWith("dummy").not()) {
             return
         }
 
