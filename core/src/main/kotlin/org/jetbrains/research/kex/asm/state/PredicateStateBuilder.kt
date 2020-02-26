@@ -4,6 +4,7 @@ import com.abdullin.kthelper.algorithm.DominatorTree
 import com.abdullin.kthelper.algorithm.DominatorTreeBuilder
 import com.abdullin.kthelper.algorithm.GraphTraversal
 import com.abdullin.kthelper.collection.queueOf
+import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kfg.ir.BasicBlock
@@ -11,6 +12,8 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.PhiInst
 import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
+import org.jetbrains.research.kfg.ir.value.instruction.UnreachableInst
+import java.util.*
 
 class InvalidPredicateStateError(msg: String) : Exception(msg)
 
@@ -107,5 +110,46 @@ class PredicateStateBuilder(val method: Method) {
             choices.size == 1 -> base + choices.first()
             else -> base + choices
         }
+    }
+
+    private fun coveredBasicBlocks(inst: Instruction): Set<BasicBlock> {
+        val active = hashSetOf<BasicBlock>()
+        val queue = ArrayDeque<BasicBlock>()
+        queue.push(inst.parent)
+        while (queue.isNotEmpty()) {
+            val current = queue.first
+            if (current !in active) {
+                active.add(current)
+                queue.addAll(current.predecessors)
+            }
+            queue.pop()
+        }
+        return active
+    }
+
+    private fun uncoveredBasicBlocks(blocks: List<BasicBlock>, inst: Instruction): List<BasicBlock> {
+        val covered = coveredBasicBlocks(inst)
+        return blocks.filterNot { it in covered }
+    }
+
+    fun methodExitInstructions(): List<Instruction> {
+        val instructions = arrayListOf<Instruction>()
+        var blocks = method.toList()
+        while (blocks.isNotEmpty()) {
+            val inst = blocks.flatten()
+                    .dropLastWhile { it is UnreachableInst }
+                    .lastOrNull()
+                    ?: return emptyList()
+            instructions.add(inst)
+            blocks = uncoveredBasicBlocks(blocks, inst)
+        }
+        return instructions
+    }
+
+
+    fun getMethodFullState(): PredicateState {
+        val instructions = methodExitInstructions()
+        val states = instructions.mapNotNull { getInstructionState(it) }
+        return ChoiceState(states)
     }
 }

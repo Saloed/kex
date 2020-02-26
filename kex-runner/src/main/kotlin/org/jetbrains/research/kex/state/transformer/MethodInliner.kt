@@ -8,11 +8,7 @@ import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.util.log
-import org.jetbrains.research.kex.util.unreachable
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
-import org.jetbrains.research.kfg.ir.value.instruction.UnreachableInst
 import java.util.*
 
 class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : RecollectingTransformer<MethodInliner> {
@@ -27,7 +23,7 @@ class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : Recol
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
         val call = predicate.call as CallTerm
         val calledMethod = call.method
-        if (!im.isInlinable(calledMethod) && !calledMethod.isConstructor) return predicate
+        if (!im.isInlinable(calledMethod)) return predicate
 
         val mappings = hashMapOf<Term, Term>()
         if (!call.isStatic) {
@@ -53,19 +49,7 @@ class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : Recol
     private fun prepareInlinedState(method: Method, mappings: Map<Term, Term>): PredicateState? {
         if (method.isEmpty()) return null
         val builder = psa.builder(method)
-        val endState = if (method.isConstructor) {
-            val lastInstruction = method.flatten()
-                    .dropLastWhile { it is UnreachableInst }
-                    .lastOrNull()
-                    ?: return null
-            val lastInstructionState = builder.getInstructionState(lastInstruction)
-                    ?: return null
-            MethodInliner(method, psa).apply(lastInstructionState)
-        } else {
-            val returnInst = method.flatten().firstOrNull { it is ReturnInst }
-                    ?: unreachable { log.error("Cannot inline method with no return") }
-            builder.getInstructionState(returnInst) ?: return null
-        }
+        val endState = builder.getMethodFullState()
         return TermRenamer("inlined${inlineIndex++}", mappings).apply(endState)
     }
 }

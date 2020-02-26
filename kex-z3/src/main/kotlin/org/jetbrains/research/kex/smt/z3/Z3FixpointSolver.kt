@@ -1,5 +1,7 @@
 package org.jetbrains.research.kex.smt.z3
 
+import com.abdullin.kthelper.logging.info
+import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -191,6 +193,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 }
             }
         }
+
+        log.info("Fixpoint result:\n$result")
         val a = 3
         //todo: model recovery
 

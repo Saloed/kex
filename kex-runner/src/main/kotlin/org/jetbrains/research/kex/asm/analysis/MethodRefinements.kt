@@ -2,29 +2,29 @@ package org.jetbrains.research.kex.asm.analysis
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
+import com.abdullin.kthelper.logging.info
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.smt.AbstractSMTSolver
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.SMTProxySolver
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.BasicState
+import org.jetbrains.research.kex.state.ChoiceState
+import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kex.util.info
-import org.jetbrains.research.kex.util.log
 import org.jetbrains.research.kfg.ClassManager
-import org.jetbrains.research.kfg.ir.BasicBlock
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.OuterClass
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
-import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.ThrowInst
-import org.jetbrains.research.kfg.ir.value.instruction.UnreachableInst
 import org.jetbrains.research.kfg.type.*
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -145,9 +145,9 @@ object MethodRefinements {
     private fun checkClassSubtyping(lType: ClassType, rType: ClassType) = when {
         // fixme: tricky hack with OuterClass
         lType.`class` is OuterClass && rType.`class` is OuterClass -> true
-        lType.`class` is OuterClass -> rType.`class`.isAncestor(lType.`class`)
-        rType.`class` is OuterClass -> lType.`class`.isAncestor(rType.`class`)
-        else -> lType.`class`.isAncestor(rType.`class`) || rType.`class`.isAncestor(lType.`class`)
+        lType.`class` is OuterClass -> rType.`class`.isAncestorOf(lType.`class`)
+        rType.`class` is OuterClass -> lType.`class`.isAncestorOf(rType.`class`)
+        else -> lType.`class`.isAncestorOf(rType.`class`) || rType.`class`.isAncestorOf(lType.`class`)
     }
 
     private fun checkArraySubtyping(lType: ArrayType, rType: ArrayType): Boolean = when {
@@ -356,50 +356,9 @@ object MethodRefinements {
         return argumentsCollector.terms
     }
 
-    fun chainWithNegation(base: PredicateState, curr: PredicateState) = when {
-        curr.isEmpty -> base
-        else -> ChainState(base, !curr)
-    }.simplify()
-
-    fun coveredBasicBlocks(inst: Instruction): Set<BasicBlock> {
-        val active = hashSetOf<BasicBlock>()
-        val queue = ArrayDeque<BasicBlock>()
-        queue.push(inst.parent!!)
-        while (queue.isNotEmpty()) {
-            val current = queue.first
-            if (current !in active) {
-                active.add(current)
-                queue.addAll(current.predecessors)
-            }
-            queue.pop()
-        }
-        return active
-    }
-
-    fun uncoveredBasicBlocks(blocks: List<BasicBlock>, inst: Instruction): List<BasicBlock> {
-        val covered = coveredBasicBlocks(inst)
-        return blocks.filterNot { it in covered }
-    }
-
-    fun methodExitInstructions(method: Method): List<Instruction> {
-        val instructions = arrayListOf<Instruction>()
-        var blocks = method.toList()
-        while (blocks.isNotEmpty()) {
-            val inst = blocks.flatten()
-                    .dropLastWhile { it is UnreachableInst }
-                    .lastOrNull()
-                    ?: return emptyList()
-            instructions.add(inst)
-            blocks = uncoveredBasicBlocks(blocks, inst)
-        }
-        return instructions
-    }
-
     fun methodFullState(method: Method, psa: PredicateStateAnalysis): PredicateState {
         val builder = psa.builder(method)
-        val instructions = methodExitInstructions(method)
-        val states = instructions.mapNotNull { builder.getInstructionState(it) }
-        var state: PredicateState = ChoiceState(states)
+        var state: PredicateState = builder.getMethodFullState()
         state = MethodInliner(method, psa).apply(state)
         state = IntrinsicAdapter.apply(state)
         state = Optimizer().apply(state)
@@ -412,9 +371,10 @@ object MethodRefinements {
         return state
     }
 
+
     fun findExceptionRelatedPaths(method: Method, psa: PredicateStateAnalysis): Pair<List<PredicateState>, List<PredicateState>> {
         val builder = psa.builder(method)
-        val instructions = methodExitInstructions(method)
+        val instructions = builder.methodExitInstructions()
         val throws = instructions.filterIsInstance<ThrowInst>()
                 .mapNotNull { builder.getInstructionState(it) }
                 .map { it.filterByType(PredicateType.Path()) }
@@ -448,7 +408,7 @@ object MethodRefinements {
     }
 
     fun analyzeMethod(refinement: MethodRefinement, psa: PredicateStateAnalysis) {
-        if (refinement.method.name.endsWith("dummy").not()) {
+        if (refinement.method.name !in listOf("dummy", "dummy3", "fooWithoutStdlib", "foo", "test")) {
             return
         }
 
