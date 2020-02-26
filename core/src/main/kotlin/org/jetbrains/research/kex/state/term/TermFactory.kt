@@ -1,9 +1,8 @@
 package org.jetbrains.research.kex.state.term
 
+import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.*
-import org.jetbrains.research.kex.util.fail
-import org.jetbrains.research.kex.util.log
-import org.jetbrains.research.kex.util.unreachable
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.*
@@ -173,6 +172,7 @@ abstract class TermBuilder {
     fun Term.length() = tf.getUnaryTerm(this, UnaryOpcode.LENGTH)
 
     operator fun Term.get(index: Term) = tf.getArrayIndex(this, index)
+    operator fun Term.get(index: Int) = tf.getArrayIndex(this, const(index))
 
     fun Term.load() = when (this) {
         is ArrayIndexTerm -> tf.getArrayLoad(this)
@@ -180,7 +180,7 @@ abstract class TermBuilder {
             val type = (this.type as KexReference).reference
             tf.getFieldLoad(type, this)
         }
-        else -> fail { log.error("Unknown term type in load: $this") }
+        else -> unreachable { log.error("Unknown term type in load: $this") }
     }
 
     infix fun Term.add(rhv: Term) = tf.getBinary(type, BinaryOpcode.Add(), this, rhv)
@@ -205,6 +205,9 @@ abstract class TermBuilder {
     infix fun Term.or(bool: Boolean) = tf.getBinary(type, BinaryOpcode.Or(), this, const(bool))
     infix fun Term.xor(rhv: Term) = tf.getBinary(type, BinaryOpcode.Xor(), this, rhv)
     infix fun Term.xor(bool: Boolean) = tf.getBinary(type, BinaryOpcode.Xor(), this, const(bool))
+
+    infix fun Term.implies(rhv: Term) = !this or rhv
+    infix fun Term.implies(rhv: Boolean) = !this or rhv
 
     fun Term.apply(types: TypeFactory, opcode: BinaryOpcode, rhv: Term) = tf.getBinary(types, opcode, this, rhv)
     fun Term.apply(type: KexType, opcode: BinaryOpcode, rhv: Term) = tf.getBinary(type, opcode, this, rhv)

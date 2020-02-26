@@ -66,11 +66,11 @@ class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : Recol
                     ?: unreachable { log.error("Cannot inline method with no return") }
             builder.getInstructionState(returnInst) ?: return null
         }
-        return TermRemapper("inlined${inlineIndex++}", mappings).apply(endState)
+        return TermRenamer("inlined${inlineIndex++}", mappings).apply(endState)
     }
 }
 
-private class TermRemapper(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRemapper> {
+private class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
     override fun transformTerm(term: Term): Term = remapping[term] ?: when (term) {
         is ValueTerm, is ArgumentTerm, is ReturnValueTerm -> term { value(term.type, "${term.name}.$suffix") }
         else -> term

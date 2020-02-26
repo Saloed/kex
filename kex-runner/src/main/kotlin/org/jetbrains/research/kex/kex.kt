@@ -1,5 +1,7 @@
 package org.jetbrains.research.kex
 
+import com.abdullin.kthelper.logging.debug
+import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.asm.analysis.Failure
 import org.jetbrains.research.kex.asm.analysis.MethodChecker
@@ -21,21 +23,24 @@ import org.jetbrains.research.kex.smt.Checker
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.state.transformer.executeModel
 import org.jetbrains.research.kex.trace.`object`.ObjectTraceManager
-import org.jetbrains.research.kex.util.debug
-import org.jetbrains.research.kex.util.log
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.KfgConfig
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
+import org.jetbrains.research.kfg.ir.Class
+import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.util.Flags
 import org.jetbrains.research.kfg.util.classLoader
 import org.jetbrains.research.kfg.util.unpack
+import org.jetbrains.research.kfg.visitor.Pipeline
 import org.jetbrains.research.kfg.visitor.executePipeline
 import java.io.File
 import java.net.URLClassLoader
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.jar.JarFile
+import kotlin.system.exitProcess
 
 class Kex(args: Array<String>) {
     val cmd = CmdConfig(args)
@@ -46,8 +51,14 @@ class Kex(args: Array<String>) {
     val mode = Mode.bmc
 
     val jar: JarFile
+    val outputDir: Path
+
+    val classManager: ClassManager
+    val origManager: ClassManager
+
     val `package`: Package
-    val targetDir: Path
+    var klass: Class? = null
+    var methods: Set<Method>? = null
 
     enum class Mode {
         concolic,
@@ -60,12 +71,49 @@ class Kex(args: Array<String>) {
         kexConfig.initLog(logName)
 
         val jarName = cmd.getCmdValue("jar")
-        val packageName = cmd.getCmdValue("package")
+        val targetName = cmd.getCmdValue("target")
         require(jarName != null, cmd::printHelp)
 
         jar = JarFile(Paths.get(jarName).toAbsolutePath().toFile())
-        `package` = packageName?.let { Package.parse(it) } ?: Package.defaultPackage
-        targetDir = Paths.get(cmd.getCmdValue("target", "instrumented/")).toAbsolutePath()
+
+        when {
+            targetName == null -> {
+                `package` = Package.defaultPackage
+                classManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                origManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                log.debug("Running with jar ${jar.name} and default package $`package`")
+            }
+            targetName.matches(Regex("[a-zA-Z]+(\\.[a-zA-Z]+)*\\.\\*")) -> {
+                `package` = Package.parse(targetName)
+                classManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                origManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                log.debug("Running with jar ${jar.name} and package $`package`")
+            }
+            targetName.matches(Regex("[a-zA-Z]+(\\.[a-zA-Z]+)*\\.[a-zA-Z\$_]+::[a-zA-Z\$_]+")) -> {
+                val (klassName, methodName) = targetName.split("::")
+                `package` = Package.parse("${klassName.dropLastWhile { it != '.' }}*")
+                classManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                origManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                klass = classManager.getByName(klassName.replace('.', '/'))
+                methods = klass!!.getMethods(methodName)
+                log.debug("Running with jar ${jar.name} and methods $methods")
+            }
+            targetName.matches(Regex("[a-zA-Z]+(\\.[a-zA-Z]+)*\\.[a-zA-Z\$_]+")) -> {
+                `package` = Package.parse("${targetName.dropLastWhile { it != '.' }}*")
+                classManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                origManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
+                klass = classManager.getByName(targetName.replace('.', '/'))
+                log.debug("Running with jar ${jar.name} and class $klass")
+            }
+            else -> {
+                log.error("Could not parse target $targetName")
+                cmd.printHelp()
+                exitProcess(1)
+            }
+        }
+
+        outputDir = (cmd.getCmdValue("output")?.let { Paths.get(it) }
+                ?: Files.createTempDirectory(Paths.get("."), "kex-instrumented")).toAbsolutePath()
     }
 
     private fun updateClassPath(loader: URLClassLoader) {
@@ -79,20 +127,16 @@ class Kex(args: Array<String>) {
 
     @ImplicitReflectionSerializer
     fun main() {
-        val classManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
-        val origManager = ClassManager(jar, KfgConfig(`package` = `package`, flags = Flags.readAll, failOnError = false))
-
-        log.debug("Running with jar ${jar.name} and package $`package`")
-        // write all classes to target, so they will be seen by ClassLoader
-        jar.unpack(classManager, targetDir, Package.defaultPackage, true)
-        val classLoader = URLClassLoader(arrayOf(targetDir.toUri().toURL()))
+        // write all classes to output directory, so they will be seen by ClassLoader
+        jar.unpack(classManager, outputDir, Package.defaultPackage, true)
+        val classLoader = URLClassLoader(arrayOf(outputDir.toUri().toURL()))
 
         val originalContext = ExecutionContext(origManager, jar.classLoader, EasyRandomDriver())
         val analysisContext = ExecutionContext(classManager, classLoader, EasyRandomDriver())
 
-        executePipeline(originalContext.cm, `package`) {
+        runPipeline(originalContext) {
             +RuntimeTraceCollector(originalContext.cm)
-            +ClassWriter(originalContext, targetDir)
+            +ClassWriter(originalContext, outputDir)
         }
 
         when (cmd.getEnumValue<Mode>("mode") ?: this.mode) {
@@ -115,7 +159,7 @@ class Kex(args: Array<String>) {
         updateClassPath(classLoader)
 
         val checker = Checker(method, classLoader, psa)
-        val result = checker.check(failure.state) as? Result.SatResult ?: return
+        val result = checker.prepareAndCheck(failure.state) as? Result.SatResult ?: return
         log.debug(result.model)
         val recMod = executeModel(analysisContext, checker.state, method, result.model)
         log.debug(recMod)
@@ -128,7 +172,7 @@ class Kex(args: Array<String>) {
         val cm = CoverageCounter(originalContext.cm, traceManager)
 
         updateClassPath(analysisContext.loader as URLClassLoader)
-        executePipeline(analysisContext.cm, `package`) {
+        runPipeline(analysisContext) {
             +RandomChecker(analysisContext, traceManager)
             +LoopSimplifier(analysisContext.cm)
             +LoopDeroller(analysisContext.cm)
@@ -145,12 +189,18 @@ class Kex(args: Array<String>) {
                 "full coverage: ${String.format("%.2f", coverage.fullCoverage)}%")
     }
 
+    protected fun runPipeline(context: ExecutionContext, init: Pipeline.() -> Unit) = when {
+        methods != null -> executePipeline(context.cm, methods!!, init)
+        klass != null -> executePipeline(context.cm, klass!!, init)
+        else -> executePipeline(context.cm, `package`, init)
+    }
+
 
     private fun concolic(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
         val traceManager = ObjectTraceManager()
         val cm = CoverageCounter(originalContext.cm, traceManager)
 
-        executePipeline(analysisContext.cm, `package`) {
+        runPipeline(analysisContext) {
             +ConcolicChecker(analysisContext, traceManager)
             +cm
         }

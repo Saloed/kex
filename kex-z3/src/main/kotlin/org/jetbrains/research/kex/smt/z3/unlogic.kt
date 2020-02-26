@@ -1,21 +1,37 @@
 package org.jetbrains.research.kex.smt.z3
 
+import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.smt.SMTEngine
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
-import org.jetbrains.research.kex.util.log
-import org.jetbrains.research.kex.util.unreachable
 import java.lang.Math.pow
 
 object Z3Unlogic {
     fun undo(expr: Expr): Term = when (expr) {
         is BoolExpr -> undoBool(expr)
         is BitVecNum -> undoBV(expr)
+        is BitVecExpr -> undoBVExpr(expr)
         is IntNum -> undoInt(expr)
         is FPNum -> undoFloat(expr)
         else -> unreachable { log.error("Unexpected expr in unlogic: $expr") }
+    }
+
+    private fun undoBVExpr(expr: BitVecExpr): Term {
+        return when {
+            expr.numArgs == 2 && expr.args[0] is FPRMNum -> {
+                val arg = undo(expr.args[1])
+                when (expr.args[0] as FPRMNum) {
+                    // todo: support all modes
+                    else -> arg
+                }
+            }
+            expr.isBVExtract -> undo(expr.args[0])
+            // todo: support more bv expressions
+            else -> TODO()
+        }
     }
 
     private fun undoBool(expr: BoolExpr) = when (expr.boolValue) {

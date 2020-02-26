@@ -1,5 +1,8 @@
 package org.jetbrains.research.kex.smt.z3
 
+import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.logging.debug
+import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.smt.*
@@ -9,9 +12,6 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.collectVariables
 import org.jetbrains.research.kex.state.transformer.memspace
-import org.jetbrains.research.kex.util.debug
-import org.jetbrains.research.kex.util.log
-import org.jetbrains.research.kex.util.unreachable
 import org.jetbrains.research.kfg.type.TypeFactory
 
 private val timeout = kexConfig.getIntValue("smt", "timeout", 3) * 1000
@@ -71,16 +71,14 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
 
         solver.add(state_.asAxiom() as BoolExpr)
         solver.add(query_.axiom as BoolExpr)
-
-        val pred = ef.makeBool("$\$CHECK$$")
-        solver.add(pred.implies(query_).expr as BoolExpr)
+        solver.add(query_.expr as BoolExpr)
 
         log.debug("Running z3 solver")
         if (printSMTLib) {
             log.debug("SMTLib formula:")
             log.debug(solver)
         }
-        val result = solver.check(pred.expr) ?: unreachable { log.error("Solver error") }
+        val result = solver.check(query.expr) ?: unreachable { log.error("Solver error") }
         log.debug("Solver finished")
 
         return when (result) {
