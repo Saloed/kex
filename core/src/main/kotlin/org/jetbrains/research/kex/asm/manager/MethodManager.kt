@@ -32,7 +32,7 @@ object MethodManager {
             ignoreMethods.contains(method) -> false
             method.isStatic -> true
             method.isConstructor -> true
-            !method.isFinal -> false
+            !method.isFinal && !method.`class`.isFinal -> false
             method.flatten().all { it !is ReturnInst } -> false
             else -> true
         }
