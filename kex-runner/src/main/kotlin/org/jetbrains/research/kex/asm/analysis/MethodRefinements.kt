@@ -23,16 +23,13 @@ class MethodRefinements(
     override fun cleanup() {}
 
 
-    private val methodsToAnalyze = listOf("dummy", "dummy2", "dummy3", "fooWithoutStdlib", "foo", "test")
-//    private val methodsToAnalyze = listOf("dummy3")
-
     override fun visit(method: Method) {
         super.visit(method)
-
-        if (method.name !in methodsToAnalyze) {
-            return
+        try {
+            analyzeMethodPaths(method)
+        } catch (ex: Exception) {
+            log.error("Error in analysis: method $method", ex)
         }
-        analyzeMethodPaths(method)
     }
 
 
@@ -67,10 +64,15 @@ class MethodRefinements(
         val state = methodFullState(method)
         val (normalPaths, exceptionPaths) = findExceptionRelatedPaths(method)
 
-        log.info("Start fixpoint: ${method.name}")
+        log.info("Start analysis: ${method.name}")
 
         val allExceptions = ChoiceState(exceptionPaths)
         val allNormal = ChoiceState(normalPaths)
+
+        if (allExceptions.isEmpty || allNormal.isEmpty) {
+            log.info("No paths to analyse")
+            return
+        }
 
         log.info("State:\n$state\nPositive:\n$allExceptions\nNegative:\n$allNormal")
 
