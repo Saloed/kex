@@ -63,6 +63,7 @@ class Kex(args: Array<String>) {
     enum class Mode {
         concolic,
         bmc,
+        refinements,
         debug
     }
 
@@ -140,6 +141,7 @@ class Kex(args: Array<String>) {
         }
 
         when (cmd.getEnumValue<Mode>("mode") ?: this.mode) {
+            Mode.refinements -> refinements(originalContext, analysisContext)
             Mode.bmc -> bmc(originalContext, analysisContext)
             Mode.concolic -> concolic(originalContext, analysisContext)
             else -> debug(analysisContext)
@@ -166,6 +168,17 @@ class Kex(args: Array<String>) {
         clearClassPath()
     }
 
+    private fun refinements(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
+        val psa = PredicateStateAnalysis(analysisContext.cm)
+        updateClassPath(analysisContext.loader as URLClassLoader)
+        runPipeline(analysisContext) {
+            +LoopSimplifier(analysisContext.cm)
+            +LoopDeroller(analysisContext.cm)
+            +psa
+            +MethodRefinements(analysisContext, psa)
+        }
+    }
+
     private fun bmc(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
         val traceManager = ObjectTraceManager()
         val psa = PredicateStateAnalysis(analysisContext.cm)
@@ -181,8 +194,6 @@ class Kex(args: Array<String>) {
             +cm
         }
         clearClassPath()
-
-        val refinements = MethodRefinements.getRefinements(psa)
         val coverage = cm.totalCoverage
         log.info("Overall summary for ${cm.methodInfos.size} methods:\n" +
                 "body coverage: ${String.format("%.2f", coverage.bodyCoverage)}%\n" +

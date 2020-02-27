@@ -25,7 +25,6 @@ import org.jetbrains.research.kex.state.transformer.generateFinalDescriptors
 import org.jetbrains.research.kex.state.transformer.generateInputByModel
 import org.jetbrains.research.kex.trace.TraceManager
 import org.jetbrains.research.kex.trace.`object`.Trace
-import org.jetbrains.research.kex.trace.runner.InvocationResult
 import org.jetbrains.research.kex.trace.runner.ObjectTracingRunner
 import org.jetbrains.research.kex.trace.runner.TimeoutException
 import org.jetbrains.research.kfg.ClassManager
@@ -149,8 +148,7 @@ class MethodChecker(
                 }
 
                 try {
-                    val invocationResult = collectTrace(method, instance, args)
-                    MethodRefinements.add(method, checker.state, checker.query, invocationResult.exception)
+                    collectTrace(method, instance, args)
                 } catch (e: TimeoutException) {
                     throw e
                 } catch (e: Exception) {
@@ -164,11 +162,10 @@ class MethodChecker(
         return result
     }
 
-    private fun collectTrace(method: Method, instance: Any?, args: Array<Any?>): InvocationResult {
+    private fun collectTrace(method: Method, instance: Any?, args: Array<Any?>) {
         val runner = ObjectTracingRunner(method, loader)
         val trace = runner.collectTrace(instance, args)
         tm[method] = trace
-        return runner.lastInvocationResult
     }
 
     private fun generateInput(method: Method, state: PredicateState, model: SMTModel): Pair<Any?, Array<Any?>> = when {
