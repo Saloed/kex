@@ -36,20 +36,16 @@ class MethodRefinements(
     }
 
 
-    private fun methodFullState(method: Method): PredicateState {
-        val builder = psa.builder(method)
-        var state: PredicateState = builder.getMethodFullState()
-        state = MethodInliner(method, psa).apply(state)
-        state = IntrinsicAdapter.apply(state)
-        state = Optimizer().apply(state)
-        state = ConstantPropagator.apply(state)
-        state = BoolTypeAdapter(method.cm.type).apply(state)
-        state = ArrayBoundsAdapter().apply(state)
-
-        state = MemorySpacer(state).apply(state)
-        state = Optimizer().apply(state)
-        return state
-    }
+    private fun methodFullState(method: Method): PredicateState =
+            transform(psa.builder(method).getMethodFullState()) {
+                +MethodInliner(method, psa)
+                +IntrinsicAdapter
+                +Optimizer()
+                +ConstantPropagator
+                +BoolTypeAdapter(cm.type)
+                +ArrayBoundsAdapter()
+                +Optimizer()
+            }.let { state -> MemorySpacer(state).apply(state) }
 
 
     private fun findExceptionRelatedPaths(method: Method): Pair<List<PredicateState>, List<PredicateState>> {
