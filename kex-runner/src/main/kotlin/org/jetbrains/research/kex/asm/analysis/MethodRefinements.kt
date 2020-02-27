@@ -399,16 +399,19 @@ object MethodRefinements {
         val allExceptions = ChoiceState(exceptionPaths)
         val allNormal = ChoiceState(normalPaths)
 
-        log.info("State:\n$state\nPositive:\n$allNormal\nNegative:\n$allExceptions")
+        log.info("State:\n$state\nPositive:\n$allExceptions\nNegative:\n$allNormal")
 
         val slv = Z3FixpointSolver(refinement.method.cm.type)
-        slv.mkFixpointQuery(state, allNormal, allExceptions)
-        val a = 3
+        val result = slv.mkFixpointQuery(state, allExceptions, allNormal)
+
+        log.info("Result:\n$result")
 
     }
 
     fun analyzeMethod(refinement: MethodRefinement, psa: PredicateStateAnalysis) {
-        if (refinement.method.name !in listOf("dummy", "dummy3", "fooWithoutStdlib", "foo", "test")) {
+        val test = listOf("dummy", "dummy2", "dummy3", "fooWithoutStdlib", "foo", "test")
+//        val test = listOf("dummy2")
+        if (refinement.method.name !in test) {
             return
         }
 
