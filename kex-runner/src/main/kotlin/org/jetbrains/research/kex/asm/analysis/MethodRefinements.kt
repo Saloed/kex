@@ -76,7 +76,7 @@ class MethodRefinements(
 
         log.info("State:\n$state\nPositive:\n$allExceptions\nNegative:\n$allNormal")
 
-        val slv = Z3FixpointSolver(method.cm.type)
+        val slv = Z3FixpointSolver(cm.type)
         val result = slv.mkFixpointQuery(state, allExceptions, allNormal)
 
         log.info("Result:\n$result")

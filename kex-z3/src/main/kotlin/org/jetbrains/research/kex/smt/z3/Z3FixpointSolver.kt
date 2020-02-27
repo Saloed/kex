@@ -3,14 +3,7 @@ package org.jetbrains.research.kex.smt.z3
 import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.EqualityPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.ArgumentTerm
-import org.jetbrains.research.kex.state.term.CallTerm
-import org.jetbrains.research.kex.state.term.Term
-import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
@@ -138,20 +131,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private inline fun <reified T : Expr> T.typedSimplify(): T = simplify() as T
 
-    class DummyCallTransformer : Transformer<DummyCallTransformer> {
-        override fun transformCallTerm(term: CallTerm): Term {
-            return org.jetbrains.research.kex.state.term.term {
-                value(term.type, "stub_$term")
-            }
-        }
-
-        override fun transformCallPredicate(predicate: CallPredicate): Predicate {
-            if (!predicate.hasLhv) return nothing()
-            val transformed = super.transformCallPredicate(predicate)
-            return EqualityPredicate(transformed.operands[0], transformed.operands[1])
-        }
-    }
-
     fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTrackingContext.Declaration>): Map<Int, ArgumentTerm> {
         val (thisArg, otherArgs) = collectArguments(state)
         val indexedArgs = arguments.mapIndexed { index, declaration -> declaration to index }
@@ -176,7 +155,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     fun mkFixpointQuery(state: PredicateState, positive: PredicateState, negative: PredicateState): FixpointResult {
-        val state = DummyCallTransformer().transform(state)
         val ctx = CallCtx(tf)
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
         val z3positive = ctx.convert(positive).expr as BoolExpr
