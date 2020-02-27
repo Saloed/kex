@@ -53,7 +53,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val converter = Z3Converter(tf)
 
         val options = Z3OptionBuilder()
-//                .produceUnsatCores(true)
+                .produceUnsatCores(true)
                 .fp.engine("spacer")
                 .fp.generateProofTrace(true)
 

@@ -22,7 +22,7 @@ class Z3OptionBuilder(val params: List<Z3Option> = emptyList()) {
     fun add(name: String, value: String) = Z3OptionBuilder(params + Z3Option(name, value))
 
 
-    fun produceUnsatCores(value: Boolean) = this.add("produce-unsat-cores", value)
+    fun produceUnsatCores(value: Boolean) = this.add("unsat_core", value)
 
     class Z3FpOptions(val builder: Z3OptionBuilder, val prefix: String) {
         val xform = Z3FpXformOptions(builder, "$prefix.xform")
