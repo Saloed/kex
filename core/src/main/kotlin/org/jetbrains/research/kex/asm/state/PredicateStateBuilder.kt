@@ -139,7 +139,7 @@ class PredicateStateBuilder(val method: Method) {
             val inst = blocks.flatten()
                     .dropLastWhile { it is UnreachableInst }
                     .lastOrNull()
-                    ?: return emptyList()
+                    ?: return instructions
             instructions.add(inst)
             blocks = uncoveredBasicBlocks(blocks, inst)
         }

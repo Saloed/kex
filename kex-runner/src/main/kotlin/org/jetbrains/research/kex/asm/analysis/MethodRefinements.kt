@@ -18,6 +18,8 @@ class MethodRefinements(
         private val psa: PredicateStateAnalysis
 ) : MethodVisitor {
 
+    private val debugMethods: List<String> = listOf()
+
     override val cm: ClassManager get() = ctx.cm
 
     override fun cleanup() {}
@@ -25,6 +27,7 @@ class MethodRefinements(
 
     override fun visit(method: Method) {
         super.visit(method)
+        if (debugMethods.isNotEmpty() && method.name !in debugMethods) return
         try {
             analyzeMethodPaths(method)
         } catch (ex: Exception) {

@@ -16,14 +16,22 @@ import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3FixpointModelConverter(private val argumentVars: Map<Int, ArgumentTerm>, private val memspaceVars: Map<Int, Int>, private val tf: TypeFactory) {
+class Z3FixpointModelConverter(
+        private val argumentVars: Map<Int, ArgumentTerm>,
+        private val memspaceVars: Map<Int, Int>,
+        private val tf: TypeFactory
+) {
 
-    fun convert(expr: Expr, generatePs: Boolean = true): PredicateState = when {
-        generatePs && expr is BoolExpr -> convert(expr)
-        else -> basic { state { convertTerm(expr) equality const(true) } }
-    }.simplify()
+    fun apply(expr: Expr): PredicateState = expr.simplify()
+            .let { convert(it) }
+            .simplify()
             .let { Optimizer().apply(it) }
             .simplify()
+
+    private fun convert(expr: Expr): PredicateState = when (expr) {
+        is BoolExpr -> convert(expr)
+        else -> basic { state { convertTerm(expr) equality const(true) } }
+    }
 
     private fun convertTerm(expr: Expr): Term = when {
         expr.isVar -> variableTerm(expr)
@@ -44,7 +52,7 @@ class Z3FixpointModelConverter(private val argumentVars: Map<Int, ArgumentTerm>,
         expr.isOr -> ChoiceState(expr.args.map { convert(it) }).simplify()
         expr.isNot && expr.numArgs == 1 -> basic {
             val arg = convertTerm(expr.args.first())
-            state { arg equality const(false)}
+            state { arg equality const(false) }
         }
         expr.isEq && expr.numArgs == 2 -> basic {
             val (lhs, rhs) = expr.convertArgs()
@@ -130,6 +138,7 @@ class Z3FixpointModelConverter(private val argumentVars: Map<Int, ArgumentTerm>,
         0, 1 -> throw  IllegalArgumentException("Nothing to combine")
         else -> drop(1).fold(first(), combiner)
     }
+
     private fun List<PredicateState>.combine(combiner: (PredicateState, PredicateState) -> PredicateState): PredicateState = when (size) {
         0 -> BasicState()
         else -> drop(1).fold(first(), combiner)

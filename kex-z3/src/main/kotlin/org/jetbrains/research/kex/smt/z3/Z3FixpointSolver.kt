@@ -208,7 +208,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
         val elseEntry = predicateInterpretation.`else`
         log.info("$elseEntry")
-        return  modelConverter.convert(elseEntry, generatePs = true)
+        return  modelConverter.apply(elseEntry)
     }
 
     private fun possibilityChecks(state: BoolExpr, positive: BoolExpr, negative: BoolExpr) {
