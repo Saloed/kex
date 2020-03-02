@@ -42,7 +42,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     private class CallCtx(tf: TypeFactory) {
         val ef = DeclarationTrackingExprFactory()
         val context = ef.ctx
-        val z3Context = Z3Context(ef, (1 shl 8) + 1, (1 shl 24) + 1)
+        val z3Context = Z3Context.create(ef)
         val converter = Z3Converter(tf)
 
         val options = Z3OptionBuilder()

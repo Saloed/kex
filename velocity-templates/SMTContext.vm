@@ -32,6 +32,9 @@ class $self : ${solver}SMTContext {
         const val MEMORY_NAME = "__memory__"
         const val BOUNDS_NAME = "__bounds__"
 
+        const val BASE_LOCAL_PTR = (1 shl 10) + 1
+        const val BASE_STATIC_PTR = (1 shl 24) + 1
+
         fun memoryName(memspace: Int) = "${ MEMORY_NAME }${ memspace }"
         fun boundsName(memspace: Int) = "${ BOUNDS_NAME }${ memspace }"
 
@@ -51,6 +54,9 @@ class $self : ${solver}SMTContext {
             }.toMap()
             return $self(default.factory, maxLocal, maxStatic, memArrays)
         }
+
+        fun create(factory: $factory) = $self(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
+
     }
 
     val factory: $factory

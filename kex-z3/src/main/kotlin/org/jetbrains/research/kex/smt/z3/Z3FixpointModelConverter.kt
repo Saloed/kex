@@ -1,10 +1,14 @@
 package org.jetbrains.research.kex.smt.z3
 
 import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.logging.log
+import com.abdullin.kthelper.logging.warn
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Expr
 import com.microsoft.z3.IntExpr
 import com.microsoft.z3.IntNum
+import org.jetbrains.research.kex.ktype.KexPointer
+import org.jetbrains.research.kex.ktype.KexVoid
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.term.ArgumentTerm
@@ -98,6 +102,12 @@ class Z3FixpointModelConverter(
                 val field = offsetMap(locationVariable)[offset]
                         ?: throw IllegalStateException("No field by offset $offset")
                 val fieldTerm = term { locationVariable.field(field.type.kexType, field.name) }
+                term { fieldTerm.load() }
+            }
+            location is IntNum -> {
+                log.warn("Constant pointer in memory")
+                val locationVariable = term { value(KexVoid(), "Unknown_${location.int}") }
+                val fieldTerm = term { locationVariable.field(KexVoid(), "unknown") }
                 term { fieldTerm.load() }
             }
             else -> TODO()
