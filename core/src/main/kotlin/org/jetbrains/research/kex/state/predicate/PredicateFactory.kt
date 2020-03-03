@@ -55,6 +55,9 @@ object PredicateFactory {
 
     fun getThrow(throwable: Term, type: PredicateType = PredicateType.State(), location: Location = Location()) =
             ThrowPredicate(throwable, type, location)
+
+    fun getConstant(value: Boolean, type: PredicateType = PredicateType.State(), location: Location = Location()) =
+            ConstantPredicate(value, type, location)
 }
 
 abstract class PredicateBuilder : TermBuilder() {
@@ -76,6 +79,7 @@ abstract class PredicateBuilder : TermBuilder() {
 
     fun catch(throwable: Term) = pf.getCatch(throwable, this@PredicateBuilder.type, location)
     fun `throw`(throwable: Term) = pf.getThrow(throwable, this@PredicateBuilder.type, location)
+    fun constant(value: Boolean) = pf.getConstant(value, this@PredicateBuilder.type, location)
 
     infix fun Term.`!in`(cases: List<Term>) = pf.getDefaultSwitchPredicate(this, cases, this@PredicateBuilder.type, location)
 

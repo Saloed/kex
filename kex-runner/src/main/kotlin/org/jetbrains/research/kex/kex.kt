@@ -169,13 +169,15 @@ class Kex(args: Array<String>) {
     }
 
     private fun refinements(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
+        val debugMethods = cmd.getCmdValue("debugMethods")
+                ?.let { it.split(",").map { it.trim() } } ?: emptyList()
         val psa = PredicateStateAnalysis(analysisContext.cm)
         updateClassPath(analysisContext.loader as URLClassLoader)
         runPipeline(analysisContext) {
             +LoopSimplifier(analysisContext.cm)
             +LoopDeroller(analysisContext.cm)
             +psa
-            +MethodRefinements(analysisContext, psa)
+            +MethodRefinements(analysisContext, psa, debugMethods)
         }
     }
 

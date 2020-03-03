@@ -91,6 +91,14 @@ class CmdConfig(args: Array<String>) : Config() {
         val mode = Option("m", "mode", true, "run mode: bmc, concolic or debug")
         mode.isRequired = false
         options.addOption(mode)
+
+        val debugMethods = Option.builder()
+                .longOpt("debugMethods")
+                .required(false)
+                .hasArg(true)
+                .desc("debug method refinements")
+                .build()
+        options.addOption(debugMethods)
     }
 
     fun getCmdValue(name: String): String? = cmd.getOptionValue(name)

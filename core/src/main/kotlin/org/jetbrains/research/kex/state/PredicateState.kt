@@ -6,9 +6,7 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.BaseType
 import org.jetbrains.research.kex.InheritanceInfo
-import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.predicate.PredicateBuilder
-import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kfg.ir.Location
 
 interface TypeInfo {
@@ -18,6 +16,13 @@ interface TypeInfo {
 
 fun emptyState(): PredicateState = BasicState()
 fun Predicate.wrap() = emptyState() + this
+fun trueState(): PredicateState = state { constant(true) }.wrap()
+fun falseState(): PredicateState = state { constant(false) }.wrap()
+
+fun BasicState.evaluatesToFalse() = predicates.any { it is ConstantPredicate && !it.value }
+fun BasicState.evaluatesToTrue() = isEmpty || predicates.all { it is ConstantPredicate && it.value }
+fun PredicateState.evaluatesToTrue() = this is BasicState && evaluatesToTrue()
+fun PredicateState.evaluatesToFalse() = this is BasicState && evaluatesToFalse()
 
 class StateBuilder() : PredicateBuilder() {
     override val type = PredicateType.State()

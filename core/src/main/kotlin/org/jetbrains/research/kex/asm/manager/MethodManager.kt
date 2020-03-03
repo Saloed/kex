@@ -1,6 +1,11 @@
 package org.jetbrains.research.kex.asm.manager
 
 import org.jetbrains.research.kex.config.kexConfig
+import org.jetbrains.research.kex.ktype.kexType
+import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Method
@@ -35,6 +40,27 @@ object MethodManager {
             !method.isFinal && !method.`class`.isFinal -> false
             method.flatten().all { it !is ReturnInst } -> false
             else -> true
+        }
+
+        fun methodArguments(predicate: CallPredicate): Map<Term, Term> {
+            val call = predicate.call as CallTerm
+            val calledMethod = call.method
+            val mappings = hashMapOf<Term, Term>()
+            if (!call.isStatic) {
+                val `this` = term { `this`(call.owner.type) }
+                mappings[`this`] = call.owner
+            }
+            if (predicate.hasLhv) {
+                val retval = term { `return`(calledMethod) }
+                mappings[retval] = predicate.lhv
+            }
+
+            for ((index, argType) in calledMethod.argTypes.withIndex()) {
+                val argTerm = term { arg(argType.kexType, index) }
+                val calledArg = call.arguments[index]
+                mappings[argTerm] = calledArg
+            }
+            return mappings
         }
     }
 

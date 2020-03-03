@@ -2,18 +2,18 @@ package org.jetbrains.research.kex.smt.z3
 
 import com.abdullin.kthelper.assert.unreachable
 import com.abdullin.kthelper.logging.log
-import com.abdullin.kthelper.logging.warn
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Expr
 import com.microsoft.z3.IntExpr
 import com.microsoft.z3.IntNum
-import org.jetbrains.research.kex.ktype.KexPointer
+import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.KexVoid
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.term.ArgumentTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kex.state.transformer.ConstantPropagator
 import org.jetbrains.research.kex.state.transformer.Optimizer
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Field
@@ -28,7 +28,7 @@ class Z3FixpointModelConverter(
 
     fun apply(expr: Expr): PredicateState = expr.simplify()
             .let { convert(it) }
-            .simplify()
+            .let { ConstantPropagator.apply(it) }
             .let { Optimizer().apply(it) }
             .simplify()
 
@@ -73,6 +73,8 @@ class Z3FixpointModelConverter(
         expr.isEq && expr.numArgs == 2 -> term { expr.convertArgs().combine { a, b -> a eq b } }
         expr.isLE && expr.numArgs == 2 -> term { expr.convertArgs().combine { a, b -> a le b } }
         expr.isGE && expr.numArgs == 2 -> term { expr.convertArgs().combine { a, b -> a ge b } }
+        expr.isConst && expr.boolValue == Z3_lbool.Z3_L_TRUE -> term { const(true) }
+        expr.isConst && expr.boolValue == Z3_lbool.Z3_L_FALSE -> term { const(false) }
         else -> TODO()
     }
 

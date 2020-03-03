@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.smt.z3
 import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.term.ArgumentTerm
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kfg.type.TypeFactory
@@ -10,6 +11,23 @@ import java.io.File
 
 
 class Z3FixpointSolver(val tf: TypeFactory) {
+
+    data class QueryCheckStatus(
+            val stateNotPossible: Boolean = false,
+            val positiveNotPossible: Boolean = false,
+            val negativeNotPossible: Boolean = false,
+            val exclusivenessNotPossible: Boolean = false
+    ) {
+        fun raiseIfNotCorrect() {
+            if (stateNotPossible || positiveNotPossible || negativeNotPossible || exclusivenessNotPossible)
+                throw FixpointQueryException(this)
+        }
+    }
+
+    class FixpointQueryException(val status: QueryCheckStatus) : Exception() {
+        override fun fillInStackTrace(): Throwable = this
+    }
+
 
     sealed class FixpointResult {
         data class Unknown(val reason: String) : FixpointResult()
@@ -129,7 +147,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 """.trimIndent()
     }
 
-    private inline fun <reified T : Expr> T.typedSimplify(): T = simplify() as T
+    private fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
     fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTrackingContext.Declaration>): Map<Int, ArgumentTerm> {
         val (thisArg, otherArgs) = collectArguments(state)
@@ -200,6 +218,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     private fun convertModel(model: Model, state: PredicateState, argumentDeclarations: List<DeclarationTrackingContext.Declaration>): PredicateState {
+        if (model.funcDecls.isEmpty()) return falseState()
+        if (model.funcDecls.size > 1) TODO("Too many declarations")
         val predicate = model.funcDecls[0]
         val predicateInterpretation = model.getFuncInterp(predicate)
         val argsMapping = argumentVarIdx(state, argumentDeclarations)
@@ -208,10 +228,11 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
         val elseEntry = predicateInterpretation.`else`
         log.info("$elseEntry")
-        return  modelConverter.apply(elseEntry)
+        return modelConverter.apply(elseEntry)
     }
 
     private fun possibilityChecks(state: BoolExpr, positive: BoolExpr, negative: BoolExpr) {
+        val correctness = QueryCheckStatus()
         val ctx = CallCtx(tf)
         fun logQuery(query: String, name: String) {
             val queryName = name.toLowerCase().replace(" ", "_")
@@ -222,27 +243,22 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             add(this@check)
             logQuery("$this", name)
             val status = check()
-            if (status != expected) {
-                throw IllegalArgumentException("$name is not possible")
-            }
+            status == expected
         }
 
-        ctx.build {
+        correctness.copy(stateNotPossible = ctx.build {
             state.withContext()
-        }.check(Status.SATISFIABLE, "State")
-
-        ctx.build {
+        }.check(Status.SATISFIABLE, "State"))
+        correctness.copy(positiveNotPossible = ctx.build {
             state.withContext() and positive.withContext()
-        }.check(Status.SATISFIABLE, "Positive path")
-
-        ctx.build {
+        }.check(Status.SATISFIABLE, "Positive path"))
+        correctness.copy(negativeNotPossible = ctx.build {
             state.withContext() and negative.withContext()
-        }.check(Status.SATISFIABLE, "Negative path")
-
-        ctx.build {
+        }.check(Status.SATISFIABLE, "Negative path"))
+        correctness.copy(exclusivenessNotPossible = ctx.build {
             state.withContext() and positive.withContext() and negative.withContext()
-        }.check(Status.UNSATISFIABLE, "Path exclusiveness")
-
+        }.check(Status.UNSATISFIABLE, "Path exclusiveness"))
+        correctness.raiseIfNotCorrect()
     }
 
 }

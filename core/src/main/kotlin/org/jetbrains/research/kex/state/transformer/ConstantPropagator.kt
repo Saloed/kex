@@ -6,6 +6,7 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.InequalityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
@@ -132,7 +133,7 @@ object ConstantPropagator : Transformer<ConstantPropagator> {
         }
         return when {
             isNotError -> predicate
-            else -> unreachable { mustBeEqual(nlhv, nrhv) }
+            else -> state { constant(false) }
         }
     }
 
@@ -147,7 +148,7 @@ object ConstantPropagator : Transformer<ConstantPropagator> {
         }
         return when {
             isNotError -> predicate
-            else -> unreachable { mustBeNotEqual(nlhv, nrhv) }
+            else -> state { constant(false) }
         }
     }
 }

@@ -1,65 +1,53 @@
 package org.jetbrains.research.kex.state.transformer
 
-import org.jetbrains.research.kex.state.BasicState
-import org.jetbrains.research.kex.state.ChainState
-import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 
 class Optimizer : Transformer<Optimizer> {
-    private val cache = hashMapOf<Pair<PredicateState, PredicateState>, PredicateState?>()
 
-    override fun transformChainState(ps: ChainState): PredicateState {
-        var merged = merge(ps.base, ps.curr)
+    override fun transformChain(ps: ChainState): PredicateState {
+        val base = transform(ps.base)
+        val curr = transform(ps.curr)
         return when {
-            merged != null -> merged
-            ps.base is ChainState && ps.curr is BasicState -> {
-                merged = merge(ps.base.curr, ps.curr)
-                when {
-                    merged != null -> transformChainState(ChainState(ps.base.base, merged))
-                    else -> null
-                }
-            }
-            ps.base is BasicState && ps.curr is ChainState -> {
-                merged = merge(ps.base, ps.curr.base)
-                if (merged != null) transformChainState(ChainState(merged, ps.curr.curr))
-                else null
-            }
-            else -> null
-        } ?: ps
+            base.evaluatesToFalse() || curr.evaluatesToFalse() -> falseState()
+            base.evaluatesToTrue() && curr.evaluatesToTrue() -> trueState()
+            else -> merge(base, curr)
+        }
     }
 
-    private fun merge(first: PredicateState, second: PredicateState): PredicateState? {
-        val key = first to second
-        val m = cache[key]
+    override fun transformBasicState(ps: BasicState): PredicateState = when {
+        ps.evaluatesToFalse() -> falseState()
+        ps.evaluatesToTrue() -> trueState()
+        else -> ps
+    }
+
+    override fun transformNegation(ps: NegationState): PredicateState {
+        val nested = transform(ps.predicateState)
         return when {
-            m != null -> m
-            first is BasicState && second is BasicState -> {
-                val merged = BasicState(first.predicates + second.predicates)
-                cache[key] = merged
-                merged
-            }
-            first is ChainState && first.curr is BasicState && second is BasicState -> {
-                val merged = merge(first.curr, second)
-                when {
-                    merged != null -> {
-                        val new = ChainState(first.base, merged)
-                        cache[key] = new
-                        new
-                    }
-                    else -> merged
-                }
-            }
-            first is BasicState && second is ChainState && second.base is BasicState -> {
-                val merged = merge(first, second.base)
-                when {
-                    merged != null -> {
-                        val new = ChainState(merged, second.curr)
-                        cache[key] = new
-                        new
-                    }
-                    else -> merged
-                }
-            }
-            else -> cache.getOrPut(key) { null }
+            nested.evaluatesToFalse() -> trueState()
+            nested.evaluatesToTrue() -> falseState()
+            else -> NegationState(nested)
         }
+    }
+
+    override fun transformChoice(ps: ChoiceState): PredicateState {
+        val choices = ps.choices.map { transform(it) }
+        if (choices.any { it.evaluatesToTrue() }) return trueState()
+        val nonFalseChoices = choices.filterNot { it.evaluatesToFalse() }
+        if (nonFalseChoices.isEmpty()) return falseState()
+        return ChoiceState(nonFalseChoices)
+    }
+
+    private fun merge(first: PredicateState, second: PredicateState): PredicateState = when {
+        first is BasicState && second is BasicState -> BasicState(first.predicates + second.predicates)
+        first is ChainState && first.curr is BasicState && second is BasicState -> {
+            val merged = BasicState(first.curr.predicates + second.predicates)
+            ChainState(first.base, merged)
+        }
+        first is BasicState && second is ChainState && second.base is BasicState -> {
+            val merged = BasicState(first.predicates + second.base.predicates)
+            ChainState(merged, second.curr)
+        }
+        else -> ChainState(first, second)
     }
 }
