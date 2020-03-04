@@ -1,15 +1,16 @@
 package org.jetbrains.research.kex.state.transformer
 
-import org.jetbrains.research.kex.asm.analysis.MethodRefinementsManager
 import org.jetbrains.research.kex.asm.manager.MethodManager
+import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.*
+import org.jetbrains.research.kfg.ir.Method
 import java.util.*
 
 class MethodRefinementsInliner(
-        private val refinements: MethodRefinementsManager
+        private val refinements: Map<Method, PredicateState>
 ) : RecollectingTransformer<MethodRefinementsInliner> {
     private val im = MethodManager.InlineManager
     override val builders = ArrayDeque<StateBuilder>()
@@ -21,7 +22,7 @@ class MethodRefinementsInliner(
 
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
         val calledMethod = (predicate.call as CallTerm).method
-        val refinement = refinements.gerOrComputeRefinement(calledMethod)
+        val refinement = refinements[calledMethod] ?: throw IllegalArgumentException("No method $calledMethod for inline")
         val mappings = im.methodArguments(predicate)
         currentBuilder += TermRenamerWithRefinements("inlined_refinement${inlineIndex++}", mappings).apply(refinement)
         return nothing()

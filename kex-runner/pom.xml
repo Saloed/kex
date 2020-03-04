@@ -133,6 +133,11 @@
             <artifactId>kotlinx-serialization-runtime</artifactId>
             <version>${serialization.version}</version>
         </dependency>
+      <dependency>
+        <groupId>ru.spbstu</groupId>
+        <artifactId>ktuples</artifactId>
+        <version>0.0.1.11</version>
+      </dependency>
     </dependencies>
 
     <build>
