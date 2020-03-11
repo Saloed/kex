@@ -1,5 +1,6 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTConverter
+import org.jetbrains.research.kex.smt.z3.fixpoint.ContextWithRecursiveCallSupport
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
@@ -92,7 +93,11 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         return ef.makeTrue()
     }
 
-    fun convert(call: CallPredicate, ef: $factory, ctx: ${solver}Context): Bool_ = ef.makeTrue()
+    fun convert(call: CallPredicate, ef: $factory, ctx: ${solver}Context): Bool_ =
+            when(val context = ef.ctx) {
+                is ContextWithRecursiveCallSupport -> context.convert(call, ef, ctx, this)
+                else -> ef.makeTrue()
+            }
     fun convert(catch: CatchPredicate, ef: $factory, ctx: ${solver}Context): Bool_ = ef.makeTrue()
     fun convert(`throw`: ThrowPredicate, ef: $factory, ctx: ${solver}Context): Bool_ = ef.makeTrue()
     fun convert(constant: ConstantPredicate, ef: $factory, ctx: ${solver}Context): Bool_ = when {

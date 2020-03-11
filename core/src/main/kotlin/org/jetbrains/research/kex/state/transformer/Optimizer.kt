@@ -9,31 +9,31 @@ class Optimizer : Transformer<Optimizer> {
         val base = transform(ps.base)
         val curr = transform(ps.curr)
         return when {
-            base.evaluatesToFalse() || curr.evaluatesToFalse() -> falseState()
-            base.evaluatesToTrue() && curr.evaluatesToTrue() -> trueState()
+            base.evaluatesToFalse || curr.evaluatesToFalse -> falseState()
+            base.evaluatesToTrue && curr.evaluatesToTrue -> trueState()
             else -> merge(base, curr)
         }
     }
 
     override fun transformBasicState(ps: BasicState): PredicateState = when {
-        ps.evaluatesToFalse() -> falseState()
-        ps.evaluatesToTrue() -> trueState()
+        ps.evaluatesToFalse -> falseState()
+        ps.evaluatesToTrue -> trueState()
         else -> ps
     }
 
     override fun transformNegation(ps: NegationState): PredicateState {
         val nested = transform(ps.predicateState)
         return when {
-            nested.evaluatesToFalse() -> trueState()
-            nested.evaluatesToTrue() -> falseState()
+            nested.evaluatesToFalse -> trueState()
+            nested.evaluatesToTrue -> falseState()
             else -> NegationState(nested)
         }
     }
 
     override fun transformChoice(ps: ChoiceState): PredicateState {
         val choices = ps.choices.map { transform(it) }
-        if (choices.any { it.evaluatesToTrue() }) return trueState()
-        val nonFalseChoices = choices.filterNot { it.evaluatesToFalse() }
+        if (choices.any { it.evaluatesToTrue }) return trueState()
+        val nonFalseChoices = choices.filterNot { it.evaluatesToFalse }
         if (nonFalseChoices.isEmpty()) return falseState()
         return ChoiceState(nonFalseChoices)
     }

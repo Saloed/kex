@@ -7,6 +7,7 @@ import com.abdullin.kthelper.collection.queueOf
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.emptyState
+import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kfg.ir.BasicBlock
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
@@ -112,44 +113,7 @@ class PredicateStateBuilder(val method: Method) {
         }
     }
 
-    private fun coveredBasicBlocks(inst: Instruction): Set<BasicBlock> {
-        val active = hashSetOf<BasicBlock>()
-        val queue = ArrayDeque<BasicBlock>()
-        queue.push(inst.parent)
-        while (queue.isNotEmpty()) {
-            val current = queue.first
-            if (current !in active) {
-                active.add(current)
-                queue.addAll(current.predecessors)
-            }
-            queue.pop()
-        }
-        return active
-    }
 
-    private fun uncoveredBasicBlocks(blocks: List<BasicBlock>, inst: Instruction): List<BasicBlock> {
-        val covered = coveredBasicBlocks(inst)
-        return blocks.filterNot { it in covered }
-    }
-
-    fun methodExitInstructions(): List<Instruction> {
-        val instructions = arrayListOf<Instruction>()
-        var blocks = method.toList()
-        while (blocks.isNotEmpty()) {
-            val inst = blocks.flatten()
-                    .dropLastWhile { it is UnreachableInst }
-                    .lastOrNull()
-                    ?: return instructions
-            instructions.add(inst)
-            blocks = uncoveredBasicBlocks(blocks, inst)
-        }
-        return instructions
-    }
-
-
-    fun getMethodFullState(): PredicateState {
-        val instructions = methodExitInstructions()
-        val states = instructions.mapNotNull { getInstructionState(it) }
-        return ChoiceState(states)
-    }
+    fun findInstructionsForPredicate(predicate: Predicate): Instruction? =
+            predicateBuilder.predicateMap.inverse[predicate]
 }

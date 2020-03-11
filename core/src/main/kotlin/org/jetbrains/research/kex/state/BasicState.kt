@@ -4,6 +4,7 @@ import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
+import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 
 @InheritorOf("State")
@@ -46,4 +47,7 @@ class BasicState(@Required val predicates: List<Predicate> = listOf()) : Predica
     override fun iterator() = predicates.iterator()
 
     override fun simplify(): PredicateState = this
+
+    override val evaluatesToTrue: Boolean by lazy { isEmpty || predicates.all { it is ConstantPredicate && it.value } }
+    override val evaluatesToFalse: Boolean by lazy { predicates.any { it is ConstantPredicate && !it.value } }
 }

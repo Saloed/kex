@@ -19,11 +19,6 @@ fun Predicate.wrap() = emptyState() + this
 fun trueState(): PredicateState = state { constant(true) }.wrap()
 fun falseState(): PredicateState = state { constant(false) }.wrap()
 
-fun BasicState.evaluatesToFalse() = predicates.any { it is ConstantPredicate && !it.value }
-fun BasicState.evaluatesToTrue() = isEmpty || predicates.all { it is ConstantPredicate && it.value }
-fun PredicateState.evaluatesToTrue() = this is BasicState && evaluatesToTrue()
-fun PredicateState.evaluatesToFalse() = this is BasicState && evaluatesToFalse()
-
 class StateBuilder() : PredicateBuilder() {
     override val type = PredicateType.State()
     override val location = Location()
@@ -234,4 +229,7 @@ abstract class PredicateState : TypeInfo {
     fun builder() = StateBuilder(this)
     operator fun plus(state: PredicateState) = (builder() + state).apply()
     operator fun plus(states: List<PredicateState>) = (builder() + states).apply()
+
+    abstract val evaluatesToTrue: Boolean
+    abstract val evaluatesToFalse: Boolean
 }

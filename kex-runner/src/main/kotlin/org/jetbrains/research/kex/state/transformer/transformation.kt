@@ -27,3 +27,8 @@ fun transform(state: PredicateState, body: Transformation.() -> Unit): Predicate
     transformer.body()
     return transformer.apply(state)
 }
+
+fun PredicateState.optimize() = transform(this) {
+    +ConstantPropagator
+    +Optimizer()
+}

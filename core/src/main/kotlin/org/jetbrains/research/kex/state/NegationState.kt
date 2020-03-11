@@ -42,4 +42,7 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
     }
 
     override fun simplify(): PredicateState = NegationState(predicateState.simplify())
+
+    override val evaluatesToTrue: Boolean by lazy { predicateState.evaluatesToFalse }
+    override val evaluatesToFalse: Boolean by lazy { predicateState.evaluatesToTrue }
 }
