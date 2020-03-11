@@ -45,9 +45,13 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
             throw IllegalArgumentException("No recursive calls to analyze")
         }
         val rootCall = createRootCall(recursiveCalls.first())
-        val positive = methodPaths.normalExecutionPaths
-        val negative = methodPaths.refinementSources.value.first().condition
-        val result = Z3FixpointSolver(cm.type).analyzeRecursion(state, recursiveCalls, rootCall, positive, negative)
+        val normalExecution = methodPaths.normalExecutionPaths.optimize()
+        val refinementSources = methodPaths.refinementSources
+        val refinementSrc = refinementSources.value.first().condition.optimize()
+        val result = Z3FixpointSolver(cm.type).analyzeRecursion(state, recursiveCalls, rootCall, normalExecution, refinementSrc)
+        println("$state")
+        println("$normalExecution")
+        println("$refinementSrc")
         println("$result")
         TODO()
     }

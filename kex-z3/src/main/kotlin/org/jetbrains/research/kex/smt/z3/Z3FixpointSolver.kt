@@ -163,20 +163,20 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     ): FixpointResult {
         val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, "recursive_function")
         val ctx = CallCtx(tf, recursionConverter)
+        recursionConverter.initVariableOrder(rootCall)
+        val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
         val z3Positive = ctx.convert(positive).asAxiom() as BoolExpr
         val z3Query = ctx.convert(query).asAxiom() as BoolExpr
-        val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
-        val argumentDeclarations = ctx.knownDeclarations.filter { it.isArg || it.isMemory }
         val positiveStmt = ctx.build {
             val statement = (z3State and z3Positive) implies rootPredicate
             statement.forall(declarationExprs)
-        }
+        }.typedSimplify()
         val queryStmt = ctx.build {
             val statement = (z3State and z3Query and rootPredicate) implies context.mkFalse()
             statement.forall(declarationExprs)
-        }
+        }.typedSimplify()
         return ctx.withSolver(fixpoint = true) {
             add(positiveStmt)
             add(queryStmt)
@@ -188,7 +188,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
                 Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
                 Status.SATISFIABLE -> {
-                    val result = convertRecursiveFunctionModel(model, state, argumentDeclarations)
+                    val result = convertRecursiveFunctionModel(model, recursionConverter)
                     FixpointResult.Sat(result)
                 }
             }
@@ -198,15 +198,13 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private fun convertRecursiveFunctionModel(
             model: Model,
-            state: PredicateState,
-            argumentDeclarations: List<DeclarationTracker.Declaration>): List<PredicateState> {
+            recursionConverter: CallPredicateConverterWithRecursion): List<PredicateState> {
         val answer = model.funcDecls.first()
         val answerInterpretation = model.getFuncInterp(answer)
         if (answerInterpretation.numEntries != 0) TODO("Model with entries")
         val elseEntry = answerInterpretation.`else`
-        val argsMapping = argumentVarIdx(state, argumentDeclarations)
-        val memspaceMapping = memspaceVarIdx(argumentDeclarations)
-        val modelConverter = Z3FixpointModelConverter(argsMapping, memspaceMapping, tf)
+        val modelConverter = Z3FixpointModelConverter(recursionConverter.termVars, recursionConverter.memoryVars, tf)
+        println("$elseEntry")
         return listOf(modelConverter.apply(elseEntry))
     }
 

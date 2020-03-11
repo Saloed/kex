@@ -10,7 +10,6 @@ import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.KexVoid
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.term.ArgumentTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.ConstantPropagator
@@ -21,7 +20,7 @@ import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
 
 class Z3FixpointModelConverter(
-        private val argumentVars: Map<Int, ArgumentTerm>,
+        private val termVars: Map<Int, Term>,
         private val memspaceVars: Map<Int, Int>,
         private val tf: TypeFactory
 ) {
@@ -46,7 +45,7 @@ class Z3FixpointModelConverter(
 
 
     private fun variableTerm(expr: Expr): Term {
-        if (expr.index in argumentVars) return argumentVars[expr.index]!!
+        if (expr.index in termVars) return termVars[expr.index]!!
         if (expr.index in memspaceVars) throw IllegalStateException("Try to convert memory var")
         throw IllegalStateException("Unknown var $expr")
     }
