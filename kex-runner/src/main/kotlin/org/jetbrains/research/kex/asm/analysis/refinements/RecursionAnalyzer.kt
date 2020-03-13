@@ -46,8 +46,8 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
         }
         val rootCall = createRootCall()
         val normalExecution = methodPaths.normalExecutionPaths.optimize()
-        val recursionPaths = methodPaths.callInstructions
-                .filter { it.method == root }
+        val recursionPaths = recursiveTraces
+                .map { it.last() }
                 .mapNotNull { methodPaths.builder.getInstructionState(it) }
                 .map { it.filterByType(PredicateType.Path()) }
                 .let { ChoiceState(it) }

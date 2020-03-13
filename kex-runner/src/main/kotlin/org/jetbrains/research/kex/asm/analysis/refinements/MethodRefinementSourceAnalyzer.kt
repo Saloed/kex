@@ -15,7 +15,6 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
     override fun cleanup() {}
     private val returnInstructions = arrayListOf<ReturnInst>()
     private val throwInstructions = arrayListOf<ThrowInst>()
-    val callInstructions = arrayListOf<CallInst>()
 
     val builder = psa.builder(method)
 
@@ -29,10 +28,6 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
 
     override fun visitThrowInst(inst: ThrowInst) {
         throwInstructions.add(inst)
-    }
-
-    override fun visitCallInst(inst: CallInst) {
-        callInstructions.add(inst)
     }
 
     private fun getThrowType(inst: ThrowInst): Type = when {
