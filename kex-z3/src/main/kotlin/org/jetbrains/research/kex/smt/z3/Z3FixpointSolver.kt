@@ -221,7 +221,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         if (answerInterpretation.numEntries != 0) TODO("Model with entries")
         val elseEntry = answerInterpretation.`else`
         val modelConverter = Z3FixpointModelConverter(recursionConverter.termVars, recursionConverter.memoryVars, tf)
-        println("$elseEntry")
         return listOf(modelConverter.apply(elseEntry))
     }
 

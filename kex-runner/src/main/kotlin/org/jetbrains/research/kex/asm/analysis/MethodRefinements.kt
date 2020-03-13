@@ -53,18 +53,33 @@ class MethodRefinements(
 
     private fun analyzeMethod(method: Method): Refinements {
         if (method in methodAnalysisStack) {
-            RecursionAnalyzer(cm, psa, method).analyze()
-            return Refinements.unknown()
+            knownRefinements[method] = RecursionAnalyzer(cm, psa, method).analyze()
+            throw SkipRecursion(method)
         }
         methodAnalysisStack.addLast(method)
+        log.info("Start analysis: $method")
+
         val result = try {
             analyzeMethodPaths(method)
+        } catch (skip: SkipRecursion) {
+            if (methodAnalysisStack.isEmpty()) throw IllegalStateException("Empty recursion stack")
+            if (methodAnalysisStack.last != skip.method) {
+                methodAnalysisStack.removeLast()
+                throw skip
+            }
+            knownRefinements[skip.method] ?: Refinements.unknown()
         } catch (ex: Exception) {
             log.error("Error in analysis: method $method", ex)
             Refinements.unknown()
         }
+        log.info("Result $method:\n$result")
+
         methodAnalysisStack.removeLast()
         return result
+    }
+
+    private class SkipRecursion(val method: Method) : Exception() {
+        override fun fillInStackTrace() = this
     }
 
     private fun nestedMethodCallStates(psb: PredicateStateBuilder, call: CallInst): Pair<PredicateState, Map<CallPredicate, CallInst>> {
@@ -110,10 +125,7 @@ class MethodRefinements(
 
 
     private fun analyzeMethodPaths(method: Method): Refinements {
-        log.info("Start analysis: $method")
-
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
-
         val state = methodPaths.fullState
         val refinementSources = methodPaths.refinementSources
         val normalPaths = methodPaths.normalExecutionPaths
@@ -122,16 +134,13 @@ class MethodRefinements(
         val allSources = refinementSources.merge(nestedRefinementSources)
         val allNormal = ChainState(normalPaths, nestedNormal).optimize()
 
-
         log.info("Analyze: $method")
         log.info("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
         val (trivialRefinements, sourcesToQuery) = searchForDummySolution(allNormal, allSources)
         val otherRefinements = queryRefinementSources(state, allNormal, sourcesToQuery)
-        val result = Refinements(trivialRefinements.value + otherRefinements.value)
 
-        log.info("Result $method:\n$result")
-        return result
+        return Refinements(trivialRefinements.value + otherRefinements.value)
     }
 
     private fun searchForDummySolution(normal: PredicateState, exceptions: RefinementSources): Pair<Refinements, RefinementSources> {
