@@ -86,7 +86,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         fun build(builder: CallCtx.() -> BoolExpr) = builder()
 
         infix fun BoolExpr.and(other: BoolExpr) = context.mkAnd(this, other)
+        infix fun BoolExpr.or(other: BoolExpr) = context.mkOr(this, other)
         infix fun BoolExpr.implies(other: BoolExpr) = context.mkImplies(this, other)
+        fun BoolExpr.not() = context.mkNot(this)
 
         fun BoolExpr.forall(variables: List<Expr>) = context.mkForall(variables.toTypedArray(), this, 0, arrayOf(), null, null, null)
 
@@ -158,6 +160,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             state: PredicateState,
             recursiveCalls: List<CallPredicate>,
             rootCall: CallPredicate,
+            recursionPath: PredicateState,
             positive: PredicateState,
             query: PredicateState
     ): FixpointResult {
@@ -166,19 +169,33 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         recursionConverter.initVariableOrder(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
-        val z3Positive = ctx.convert(positive).asAxiom() as BoolExpr
-        val z3Query = ctx.convert(query).asAxiom() as BoolExpr
+
+        val z3Recursion = ctx.convert(recursionPath).asAxiom() as BoolExpr
+        val z3Positive = ctx.build {
+            val path = convert(positive).asAxiom() as BoolExpr
+            path or z3Recursion
+        }
+        val z3Query = ctx.build {
+            val path = convert(query).asAxiom() as BoolExpr
+            path and z3Recursion.not()
+        }
+
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
-        val positiveStmt = ctx.build {
+
+        possibilityChecks(z3State, listOf(z3Positive), z3Query)
+
+        val recursionStmt = ctx.build {
             val statement = (z3State and z3Positive) implies rootPredicate
             statement.forall(declarationExprs)
         }.typedSimplify()
+
         val queryStmt = ctx.build {
             val statement = (z3State and z3Query and rootPredicate) implies context.mkFalse()
             statement.forall(declarationExprs)
         }.typedSimplify()
+
         return ctx.withSolver(fixpoint = true) {
-            add(positiveStmt)
+            add(recursionStmt)
             add(queryStmt)
 
             File("last_fixpoint_query.smtlib").writeText(ctx.debugFixpointSmtLib(this))

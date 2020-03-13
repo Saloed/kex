@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.ktype.KexPointer
+import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
@@ -15,45 +16,37 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: List<CallPredicate
 
     fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =
             when {
-                recursiveCalls.any { (it.call as CallTerm).method == (call.call as CallTerm).method } -> buildPredicate(call, ef, ctx, converter)
+                recursiveCalls.any {
+                    //fixme: compare by methods because of memspace ...
+                    (it.call as CallTerm).method == (call.call as CallTerm).method
+                } -> buildPredicate(call, ef, ctx, converter)
                 else -> ef.makeTrue()
             }
 
     fun initVariableOrder(callPredicate: CallPredicate) {
-        val call = callPredicate.call as CallTerm
-        if (!call.isStatic) {
-            TODO("Non static recursive call")
-        }
         val receiver = callPredicate.lhvUnsafe
-                ?: TODO("Recursive call without result receiver")
-        val memspaces = call.arguments.filter { it.type is KexPointer }.map { it.memspace }
-
+                ?: throw IllegalStateException("Call prototype must have a receiver")
         termVars = hashMapOf()
         var idx = 0
-        for (term in (call.arguments + receiver)) {
+        for (term in (callArguments(callPredicate.call as CallTerm) + receiver)) {
             termVars[idx] = term
             idx++
         }
         memoryVars = hashMapOf()
-        for (memspace in memspaces) {
+        for (memspace in memspaces(callPredicate.call as CallTerm)) {
             memoryVars[idx] = memspace
             idx++
         }
     }
 
+
     fun buildPredicate(callPredicate: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool {
-        val call = callPredicate.call as CallTerm
-        if (!call.isStatic) {
-            TODO("Non static recursive call")
-        }
         val receiver = callPredicate.lhvUnsafe?.let { converter.convert(it, ef, ctx) }
-        val arguments = call.arguments.map { converter.convert(it, ef, ctx) }
-        if (receiver == null) {
-            TODO("Recursive call without result receiver")
-        }
-        val memspaces = call.arguments.filter { it.type is KexPointer }.map { it.memspace }
-        val memories = memspaces.map { ctx.getMemory(it) }
+                ?: ef.dummyReceiver(callPredicate.call as CallTerm)
+        val arguments = callArguments(callPredicate.call as CallTerm).map { converter.convert(it, ef, ctx) }
+        val memories = memspaces(callPredicate.call as CallTerm).map { ctx.getMemory(it) }
         val memoryArrays = memories.map { it.memory.inner }
+        // fixme: MEMORY
 
         val predicateArguments = arguments + receiver + memoryArrays
         val predicateSorts = predicateArguments.map { it.getSort() }
@@ -64,5 +57,8 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: List<CallPredicate
         return Z3Bool(ef.ctx, predicateApplication, spliceAxioms(ef.ctx, predicateAxioms))
     }
 
+    private fun callArguments(call: CallTerm) = listOf(call.owner) + call.arguments
+    private fun memspaces(call: CallTerm) = callArguments(call).filter { it.type is KexPointer }.map { it.memspace }
+    private fun Z3ExprFactory.dummyReceiver(call: CallTerm) = getVarByTypeAndName(call.method.returnType.kexType, "dummy_result_receiver", fresh = true)
 
 }

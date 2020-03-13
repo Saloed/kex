@@ -7,10 +7,7 @@ import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.value.instruction.CastInst
-import org.jetbrains.research.kfg.ir.value.instruction.Instruction
-import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
-import org.jetbrains.research.kfg.ir.value.instruction.ThrowInst
+import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.visitor.MethodVisitor
 
@@ -18,7 +15,9 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
     override fun cleanup() {}
     private val returnInstructions = arrayListOf<ReturnInst>()
     private val throwInstructions = arrayListOf<ThrowInst>()
-    private val builder = psa.builder(method)
+    val callInstructions = arrayListOf<CallInst>()
+
+    val builder = psa.builder(method)
 
     init {
         visit(method)
@@ -30,6 +29,10 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
 
     override fun visitThrowInst(inst: ThrowInst) {
         throwInstructions.add(inst)
+    }
+
+    override fun visitCallInst(inst: CallInst) {
+        callInstructions.add(inst)
     }
 
     private fun getThrowType(inst: ThrowInst): Type = when {

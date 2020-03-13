@@ -4,11 +4,11 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
+import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.predicate.state
-import org.jetbrains.research.kex.state.term.CallTerm
-import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
@@ -44,11 +44,16 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
         if (recursiveCalls.isEmpty()) {
             throw IllegalArgumentException("No recursive calls to analyze")
         }
-        val rootCall = createRootCall(recursiveCalls.first())
+        val rootCall = createRootCall()
         val normalExecution = methodPaths.normalExecutionPaths.optimize()
-        val refinementSources = methodPaths.refinementSources
-        val refinementSrc = refinementSources.value.first().condition.optimize()
-        val result = Z3FixpointSolver(cm.type).analyzeRecursion(state, recursiveCalls, rootCall, normalExecution, refinementSrc)
+        val recursionPaths = methodPaths.callInstructions
+                .filter { it.method == root }
+                .mapNotNull { methodPaths.builder.getInstructionState(it) }
+                .map { it.filterByType(PredicateType.Path()) }
+                .let { ChoiceState(it) }
+                .optimize()
+        val refinementSrc = methodPaths.refinementSources.value.first().condition.optimize()
+        val result = Z3FixpointSolver(cm.type).analyzeRecursion(state, recursiveCalls, rootCall, recursionPaths, refinementSrc, normalExecution)
         println("$state")
         println("$normalExecution")
         println("$refinementSrc")
@@ -56,21 +61,18 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
         TODO()
     }
 
-    private fun createRootCall(callPrototype: CallPredicate): CallPredicate {
+    private fun createRootCall(): CallPredicate = state {
         val arguments = root.argTypes.withIndex().map { (index, argType) ->
             term { arg(argType.kexType, index) }
         }
-        if (!callPrototype.hasLhv) {
-            TODO("Recursive call without result receiver")
-        }
         val returnTerm = term { `return`(root) }
-        val callTerm = callPrototype.call as CallTerm
-        if (!callTerm.isStatic) {
-            TODO("Non static recursive call")
+        val owner = when {
+            root.isStatic -> term { `class`(root.`class`) }
+            else -> term { value(root.`class`.kexType, "owner") }
         }
-        val owner = callTerm.owner
-        return state { returnTerm.call(term { tf.getCall(root, owner, arguments) }) } as CallPredicate
-    }
+        val methodCall = term { tf.getCall(root, owner, arguments) }
+        returnTerm.call(methodCall)
+    } as CallPredicate
 
     private fun buildMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, List<CallPredicate>> {
         val recursiveCallPredicates = mutableListOf<CallPredicate>()
