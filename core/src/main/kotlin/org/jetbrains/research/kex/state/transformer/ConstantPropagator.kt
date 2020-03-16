@@ -93,7 +93,7 @@ object ConstantPropagator : Transformer<ConstantPropagator> {
 
     override fun transformNegTerm(term: NegTerm): Term {
         val operand = getConstantValue(term.operand) ?: return term
-        return term { const(operand) }
+        return term { const(-operand) }
     }
 
     private fun toCompatibleTypes(lhv: Number, rhv: Number): Pair<Number, Number> = when (lhv) {

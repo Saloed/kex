@@ -116,4 +116,7 @@ class PredicateStateBuilder(val method: Method) {
 
     fun findInstructionsForPredicate(predicate: Predicate): Instruction? =
             predicateBuilder.predicateMap.inverse[predicate]
+
+    fun findPredicateForInstruction(inst: Instruction): Predicate? =
+            predicateBuilder.predicateMap[inst]
 }

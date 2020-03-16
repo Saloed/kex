@@ -53,24 +53,24 @@ class MethodRefinements(
 
     private fun analyzeMethod(method: Method): Refinements {
         if (method in methodAnalysisStack) {
-            knownRefinements[method] = RecursionAnalyzer(cm, psa, method, this).analyze()
+            knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyze()
             throw SkipRecursion(method)
         }
         methodAnalysisStack.addLast(method)
         log.info("Start analysis: $method")
 
         val result = try {
-            analyzeMethodPaths(method)
+            SimpleMethodAnalyzer(cm, psa, this, method).analyze()
         } catch (skip: SkipRecursion) {
             if (methodAnalysisStack.isEmpty()) throw IllegalStateException("Empty recursion stack")
             if (methodAnalysisStack.last != skip.method) {
                 methodAnalysisStack.removeLast()
                 throw skip
             }
-            knownRefinements[skip.method] ?: Refinements.unknown()
+            knownRefinements[skip.method] ?: Refinements.unknown(skip.method)
         } catch (ex: Exception) {
             log.error("Error in analysis: method $method", ex)
-            Refinements.unknown()
+            Refinements.unknown(method)
         }
         log.info("Result $method:\n$result")
 
@@ -81,118 +81,6 @@ class MethodRefinements(
     private class SkipRecursion(val method: Method) : Exception() {
         override fun fillInStackTrace() = this
     }
-
-    private fun nestedMethodCallStates(psb: PredicateStateBuilder, call: CallInst): Pair<PredicateState, Map<CallPredicate, CallInst>> {
-        val state = (psb.getInstructionState(call) ?: BasicState())
-                .filter { it is CallPredicate || it.type == PredicateType.Path() }
-        val callPredicates = PredicateCollector.collectIsInstance<CallPredicate>(state)
-        val callInstructions = callPredicates.map {
-            psb.findInstructionsForPredicate(it) as? CallInst
-                    ?: throw IllegalStateException("Cant find instruction for call")
-        }
-        val callMap = callPredicates.zip(callInstructions).toMap()
-        return state to callMap
-    }
-
-    fun nestedMethodsExceptions(method: Method, ignoredCalls: List<CallInst> = emptyList()): Pair<NegationState, RefinementSources> {
-        val builder = psa.builder(method)
-        val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
-        val refinements = calls.map { getOrComputeRefinement(it.method) }
-        val refinementMap = calls.zip(refinements).toMap()
-        val result = arrayListOf<RefinementSource>()
-        for ((call, refinement) in zip(calls, refinements)) {
-            val otherCalls = refinementMap
-                    .filterKeys { it != call }
-                    .mapValues { it.value.allStates().not() }
-            val (state, callInstructions) = nestedMethodCallStates(builder, call)
-            for ((criteria, refState) in refinement.expanded().value) {
-                val mapping = otherCalls + (call to refState)
-                val inliner = MethodFunctionalInliner(psa) { predicate ->
-                    val instruction = callInstructions[predicate]
-                            ?: throw IllegalStateException("No instruction for predicate")
-                    if (instruction in ignoredCalls) {
-                        skip()
-                        return@MethodFunctionalInliner
-                    }
-                    val predicateState = mapping[instruction]
-                            ?: throw IllegalArgumentException("No method $predicate for inline")
-                    inline(predicateState)
-                }
-                val resultPath = inliner.apply(state)
-                result.add(RefinementSource(criteria, resultPath))
-            }
-        }
-        val exceptionalPaths = RefinementSources(result).simplify()
-        val normalPath = ChoiceState(refinements.map { it.allStates() }).not()
-        return normalPath to exceptionalPaths
-    }
-
-
-    private fun analyzeMethodPaths(method: Method): Refinements {
-        val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
-        val state = methodPaths.fullState
-        val refinementSources = methodPaths.refinementSources
-        val normalPaths = methodPaths.normalExecutionPaths
-        val (nestedNormal, nestedRefinementSources) = nestedMethodsExceptions(method)
-
-        val allSources = refinementSources.merge(nestedRefinementSources)
-        val allNormal = ChainState(normalPaths, nestedNormal).optimize()
-
-        log.info("Analyze: $method")
-        log.info("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
-
-        val (trivialRefinements, sourcesToQuery) = searchForDummySolution(allNormal, allSources)
-        val otherRefinements = queryRefinementSources(state, allNormal, sourcesToQuery)
-
-        return Refinements(trivialRefinements.value + otherRefinements.value)
-    }
-
-    private fun searchForDummySolution(normal: PredicateState, exceptions: RefinementSources): Pair<Refinements, RefinementSources> {
-        val sourcesToQuery = mutableListOf<RefinementSource>()
-        val dummyRefinements = mutableListOf<Refinement>()
-        for (source in exceptions.value) {
-            val dummyResult = analyzeForDummyResult(normal, source.condition)
-            if (dummyResult == null) {
-                sourcesToQuery.add(source)
-                continue
-            }
-            dummyRefinements.add(Refinement(source.criteria, dummyResult))
-        }
-        return Refinements(dummyRefinements) to RefinementSources(sourcesToQuery)
-    }
-
-    private fun analyzeForDummyResult(normalPaths: PredicateState, exceptionPaths: PredicateState): PredicateState? = when {
-        normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToFalse -> falseState()
-        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToTrue -> trueState()
-        normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToTrue -> {
-            log.error("Normal and Exception paths are always true")
-            falseState()
-        }
-        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToFalse -> {
-            log.error("Normal and Exception paths are always false")
-            falseState()
-        }
-        else -> null
-    }
-
-    private fun queryRefinementSources(state: PredicateState, normal: PredicateState, sources: RefinementSources): Refinements {
-        val conditions = sources.value.map { it.condition }
-        val fixpointAnswer = queryFixpointSolver(state, normal, conditions)
-        val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement(src.criteria, answer) }
-        return Refinements(refinements)
-    }
-
-    private fun queryFixpointSolver(state: PredicateState, normal: PredicateState, exceptions: List<PredicateState>): List<PredicateState> =
-            try {
-                val result = Z3FixpointSolver(cm.type).mkFixpointQuery(state, exceptions, normal)
-                when (result) {
-                    is FixpointResult.Sat -> result.result
-                    else -> exceptions.map { falseState() }
-                }
-            } catch (ex: QueryCheckStatus.FixpointQueryException) {
-                log.error("Bad fixpoint query: ${ex.status}")
-                exceptions.map { falseState() }
-            }
 
 }
 

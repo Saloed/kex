@@ -2,6 +2,9 @@ package org.jetbrains.research.kex.state.transformer
 
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.term.ConstBoolTerm
+import org.jetbrains.research.kex.state.term.term
 
 class Optimizer : Transformer<Optimizer> {
 
@@ -18,7 +21,7 @@ class Optimizer : Transformer<Optimizer> {
     override fun transformBasicState(ps: BasicState): PredicateState = when {
         ps.evaluatesToFalse -> falseState()
         ps.evaluatesToTrue -> trueState()
-        else -> ps
+        else -> ps.filterNot { it is ConstantPredicate }
     }
 
     override fun transformNegation(ps: NegationState): PredicateState {
@@ -26,8 +29,22 @@ class Optimizer : Transformer<Optimizer> {
         return when {
             nested.evaluatesToFalse -> trueState()
             nested.evaluatesToTrue -> falseState()
-            else -> NegationState(nested)
+            else -> simplifyNegation(nested)
         }
+    }
+
+    private fun simplifyNegation(ps: PredicateState): PredicateState {
+        if (ps !is BasicState) return NegationState(ps)
+        val equalities = ps.predicates.filterIsInstance<EqualityPredicate>()
+        if (equalities != ps.predicates) return NegationState(ps)
+        val boolEqualities = equalities.filter { it.rhv is ConstBoolTerm }
+        if (boolEqualities != ps.predicates) return NegationState(ps)
+        val simplifiedPredicates = boolEqualities.map {
+            val rhv = it.rhv as ConstBoolTerm
+            val newRhv = term { const(!rhv.value) }
+            EqualityPredicate(it.lhv, newRhv, it.type, it.location)
+        }
+        return BasicState(simplifiedPredicates)
     }
 
     override fun transformChoice(ps: ChoiceState): PredicateState {

@@ -5,6 +5,7 @@ import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.transformer.optimize
+import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.Type
 
 data class RefinementCriteria(val type: Type)
@@ -19,20 +20,20 @@ data class Refinement(val criteria: RefinementCriteria, val state: PredicateStat
     fun fmap(transform: (PredicateState) -> PredicateState) = Refinement(criteria, transform(state))
 }
 
-data class Refinements(val value: List<Refinement>) {
+data class Refinements(val value: List<Refinement>, val method: Method) {
     fun expanded(): Refinements = value
             .map { reft ->
                 val others = value.filter { it.criteria != reft.criteria }
                 val otherSates = others.map { it.state }
                 reft.expand(otherSates)
             }
-            .let { Refinements(it) }
+            .let { Refinements(it, method) }
 
     fun allStates(): PredicateState = ChoiceState(value.map { it.state })
-    fun fmap(transform: (PredicateState) -> PredicateState) = Refinements(value.map { it.fmap(transform) })
+    fun fmap(transform: (PredicateState) -> PredicateState) = Refinements(value.map { it.fmap(transform) }, method)
 
     companion object {
-        fun unknown() = Refinements(emptyList())
+        fun unknown(method: Method) = Refinements(emptyList(), method)
     }
 }
 
