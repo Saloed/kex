@@ -15,6 +15,8 @@ data class Refinement(val criteria: RefinementCriteria, val state: PredicateStat
         val expandedState = ChainState(state, negateOtherPaths).optimize()
         return Refinement(criteria, expandedState)
     }
+
+    fun fmap(transform: (PredicateState) -> PredicateState) = Refinement(criteria, transform(state))
 }
 
 data class Refinements(val value: List<Refinement>) {
@@ -27,6 +29,7 @@ data class Refinements(val value: List<Refinement>) {
             .let { Refinements(it) }
 
     fun allStates(): PredicateState = ChoiceState(value.map { it.state })
+    fun fmap(transform: (PredicateState) -> PredicateState) = Refinements(value.map { it.fmap(transform) })
 
     companion object {
         fun unknown() = Refinements(emptyList())
@@ -46,6 +49,8 @@ data class RefinementSources(val value: List<RefinementSource>) {
         return RefinementSources(merged)
     }
 
+    fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSources(value.map { it.fmap(transform) })
+
     private fun merge(sources: List<RefinementSource>): RefinementSource = when (sources.size) {
         1 -> sources.first()
         else -> sources.drop(1).fold(sources.first()) { acc, refinementSource -> acc.merge(refinementSource) }
@@ -58,4 +63,6 @@ data class RefinementSource(val criteria: RefinementCriteria, val condition: Pre
         val mergedCondition = ChoiceState(listOf(condition, other.condition)).optimize()
         return RefinementSource(criteria, mergedCondition)
     }
+
+    fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSource(criteria, transform(condition))
 }

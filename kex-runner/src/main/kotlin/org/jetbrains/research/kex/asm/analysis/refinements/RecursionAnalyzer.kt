@@ -1,23 +1,23 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
 import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
-import org.jetbrains.research.kex.state.ChoiceState
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.falseState
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.predicate.state
+import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 
-class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, val root: Method) {
+class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, val root: Method, val refinementsManager: MethodRefinements) {
 
     private fun methodRecursiveCallTraces(): List<List<CallInst>> {
         fun go(method: Method, methodTrace: List<Method>, trace: List<CallInst>): List<List<CallInst>> =
@@ -41,25 +41,39 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
         if (recursiveTraces.any { it.size > 1 }) {
             TODO("Co-recursion is not supported yet")
         }
+        val directRecursiveCalls = recursiveTraces.map { it.last() }
 
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, root)
         val (state, recursiveCalls) = buildMethodState(methodPaths)
         if (recursiveCalls.isEmpty()) {
             throw IllegalArgumentException("No recursive calls to analyze")
         }
+
+        val (nestedNormal, nestedRefinementSources) = refinementsManager.nestedMethodsExceptions(root, ignoredCalls = directRecursiveCalls)
+
         val rootCall = createRootCall()
-        val normalExecution = methodPaths.normalExecutionPaths.optimize()
-        val recursionPaths = recursiveTraces
-                .map { it.last() }
+        val recursionPaths = directRecursiveCalls
                 .mapNotNull { methodPaths.builder.getInstructionState(it) }
                 .map { it.filterByType(PredicateType.Path()) }
                 .let { ChoiceState(it) }
                 .optimize()
-        val refinements = methodPaths.refinementSources.value.map {
-            computeRefinement(state, rootCall, recursiveCalls, recursionPaths, normalExecution, it)
+
+        val allSources = methodPaths.refinementSources.merge(nestedRefinementSources)
+                .fmap { it.filterRecursiveCalls() }
+                .fmap { it.optimize() }
+        val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal)
+                .filterRecursiveCalls()
+                .optimize()
+
+        val refinements = allSources.value.map {
+            computeRefinement(state, rootCall, recursiveCalls, recursionPaths, allNormal, it)
         }
+        println(recursionPaths)
         return Refinements(refinements)
     }
+
+    private fun PredicateState.filterRecursiveCalls(): PredicateState =
+            filterNot { it is CallPredicate && (it.callTerm as CallTerm).method == root }
 
     private fun computeRefinement(
             state: PredicateState,
@@ -69,21 +83,19 @@ class RecursionAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, v
             normalPaths: PredicateState,
             refinementSource: RefinementSource
     ): Refinement {
-        val refinementPath = refinementSource.condition.optimize()
         val solver = Z3FixpointSolver(cm.type)
         val refinement: PredicateState = try {
-            val result = solver.analyzeRecursion(state, recursiveCalls, rootCall, recursionPaths, refinementPath, normalPaths)
+            val result = solver.analyzeRecursion(state, recursiveCalls, rootCall, recursionPaths, refinementSource.condition, normalPaths)
             when (result) {
                 is FixpointResult.Sat -> result.result.first()
-                else ->  falseState()
+                else -> falseState()
             }
         } catch (ex: QueryCheckStatus.FixpointQueryException) {
             log.error("Bad fixpoint query: ${ex.status}")
-             falseState()
+            falseState()
         }
         return Refinement(refinementSource.criteria, refinement)
     }
-
 
     private fun createRootCall(): CallPredicate = state {
         val arguments = root.argTypes.withIndex().map { (index, argType) ->

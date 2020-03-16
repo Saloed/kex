@@ -45,7 +45,7 @@ class MethodRefinements(
         getOrComputeRefinement(method)
     }
 
-    private fun getOrComputeRefinement(method: Method): Refinements {
+    fun getOrComputeRefinement(method: Method): Refinements {
         val refinement = knownRefinements[method] ?: analyzeMethod(method)
         knownRefinements[method] = refinement
         return refinement
@@ -53,7 +53,7 @@ class MethodRefinements(
 
     private fun analyzeMethod(method: Method): Refinements {
         if (method in methodAnalysisStack) {
-            knownRefinements[method] = RecursionAnalyzer(cm, psa, method).analyze()
+            knownRefinements[method] = RecursionAnalyzer(cm, psa, method, this).analyze()
             throw SkipRecursion(method)
         }
         methodAnalysisStack.addLast(method)
@@ -94,7 +94,7 @@ class MethodRefinements(
         return state to callMap
     }
 
-    private fun nestedMethodsExceptions(method: Method, ignoredCalls: List<CallInst> = emptyList()): Pair<NegationState, RefinementSources> {
+    fun nestedMethodsExceptions(method: Method, ignoredCalls: List<CallInst> = emptyList()): Pair<NegationState, RefinementSources> {
         val builder = psa.builder(method)
         val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
         val refinements = calls.map { getOrComputeRefinement(it.method) }
@@ -110,6 +110,10 @@ class MethodRefinements(
                 val inliner = MethodFunctionalInliner(psa) { predicate ->
                     val instruction = callInstructions[predicate]
                             ?: throw IllegalStateException("No instruction for predicate")
+                    if (instruction in ignoredCalls) {
+                        skip()
+                        return@MethodFunctionalInliner
+                    }
                     val predicateState = mapping[instruction]
                             ?: throw IllegalArgumentException("No method $predicate for inline")
                     inline(predicateState)
