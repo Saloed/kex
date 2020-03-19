@@ -143,7 +143,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                     inline(state)
                 }.apply(it)
             }
-            .map { it.filterByType(PredicateType.Path()) }
+            .map { it.path }
             .let { ChoiceState(it) }
             .optimize()
 

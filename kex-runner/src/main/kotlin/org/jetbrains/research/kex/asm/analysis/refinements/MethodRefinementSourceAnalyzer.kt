@@ -43,7 +43,7 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
     val normalExecutionPaths: PredicateState by lazy {
         returnInstructions
                 .mapNotNull { builder.getInstructionState(it) }
-                .map { it.filterByType(PredicateType.Path()) }
+                .map { it.path }
                 .let { ChoiceState(it) }
     }
 
@@ -51,7 +51,7 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
         throwInstructions
                 .map { getRefinementCriteria(it) to builder.getInstructionState(it) }
                 .filter { it.second != null }
-                .map { it.first to it.second!!.filterByType(PredicateType.Path()) }
+                .map { it.first to it.second!!.path }
                 .map { RefinementSource(it.first, it.second) }
                 .let { RefinementSources((it)) }
                 .simplify()
