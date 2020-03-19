@@ -116,7 +116,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
-    fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTracker.Declaration>): Map<Int, ArgumentTerm> {
+    private fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTracker.Declaration>): Map<Int, ArgumentTerm> {
         val (thisArg, otherArgs) = collectArguments(state)
         val indexedArgs = arguments.mapIndexed { index, declaration -> declaration to index }
         return otherArgs.values
@@ -129,7 +129,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 .toMap()
     }
 
-    fun memspaceVarIdx(arguments: List<DeclarationTracker.Declaration>): Map<Int, Int> {
+    private fun memspaceVarIdx(arguments: List<DeclarationTracker.Declaration>): Map<Int, Int> {
         val indexedArgs = arguments.mapIndexed { index, declaration -> declaration to index }
         val memories = indexedArgs.filter { it.first.isMemory }
         val memspaceIdRegEx = Regex("__memory__(\\d+)")

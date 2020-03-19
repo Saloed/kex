@@ -1,11 +1,15 @@
 package org.jetbrains.research.kex.state.transformer
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
+import org.jetbrains.research.kex.state.BasicState
+import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.Method
 import java.util.*
@@ -34,6 +38,8 @@ class MethodFunctionalInliner(
         val builder = psa.builder(calledMethod)
         return builder.methodState
     }
+
+    fun fixPathPredicatesOnTopLevelBeforeInlining(ps: PredicateState): PredicateState = PathPredicatesOnTopLevelBeforeInliningFixer(currentPredicate).apply(ps)
 
     fun inline(body: PredicateState) {
         val mappings = im.methodArguments(currentPredicate)
@@ -67,3 +73,17 @@ class MethodFunctionalInliner(
     }
 }
 
+private class PathPredicatesOnTopLevelBeforeInliningFixer(val call: Predicate) : Transformer<PathPredicatesOnTopLevelBeforeInliningFixer> {
+    private lateinit var appliedTo: PredicateState
+    override fun transformChoice(ps: ChoiceState): PredicateState = ps
+    override fun transformBasic(ps: BasicState): PredicateState {
+        if (ps.predicates.all { it.type != PredicateType.Path() }) return ps
+        log.warn("Path predicates on top level when inlining $call:\n$appliedTo")
+        return BasicState(ps.predicates.filter { it.type != PredicateType.Path() })
+    }
+
+    override fun apply(ps: PredicateState): PredicateState {
+        appliedTo = ps
+        return super.apply(ps)
+    }
+}

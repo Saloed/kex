@@ -116,7 +116,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                     skip()
                     return@MethodFunctionalInliner
                 }
-                val state = getStateForInlining() ?: return@MethodFunctionalInliner
+                var state = getStateForInlining() ?: return@MethodFunctionalInliner
+                state = fixPathPredicatesOnTopLevelBeforeInlining(state)
                 inline(state)
             }
             +IntrinsicAdapter
@@ -137,7 +138,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                         skip()
                         return@MethodFunctionalInliner
                     }
-                    val state = getStateForInlining() ?: return@MethodFunctionalInliner
+                    var state = getStateForInlining() ?: return@MethodFunctionalInliner
+                    state = fixPathPredicatesOnTopLevelBeforeInlining(state)
                     inline(state)
                 }.apply(it)
             }

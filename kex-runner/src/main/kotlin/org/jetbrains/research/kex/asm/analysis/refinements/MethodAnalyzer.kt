@@ -89,4 +89,6 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         return state to callMap
     }
 
+    override fun toString() = "Analyzer: $method"
+
 }
