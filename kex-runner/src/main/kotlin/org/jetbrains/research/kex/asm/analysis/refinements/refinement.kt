@@ -4,13 +4,16 @@ import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.not
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.term.ConstBoolTerm
 import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.Type
 
 data class RefinementCriteria(val type: Type)
 
-data class Refinement(val criteria: RefinementCriteria, val state: PredicateState) {
+data class Refinement private constructor(val criteria: RefinementCriteria, val state: PredicateState) {
     fun expand(others: List<PredicateState>): Refinement {
         val negateOtherPaths = ChoiceState(others).not()
         val expandedState = ChainState(state, negateOtherPaths).optimize()
@@ -18,6 +21,18 @@ data class Refinement(val criteria: RefinementCriteria, val state: PredicateStat
     }
 
     fun fmap(transform: (PredicateState) -> PredicateState) = Refinement(criteria, transform(state))
+
+    companion object {
+        fun create(criteria: RefinementCriteria, state: PredicateState): Refinement {
+            val ensurePathPredicatesInState = state.map {
+                when {
+                    it is EqualityPredicate && it.rhv is ConstBoolTerm -> EqualityPredicate(it.lhv, it.rhv, PredicateType.Path(), it.location)
+                    else -> it
+                }
+            }
+            return Refinement(criteria, ensurePathPredicatesInState)
+        }
+    }
 }
 
 data class Refinements(val value: List<Refinement>, val method: Method) {

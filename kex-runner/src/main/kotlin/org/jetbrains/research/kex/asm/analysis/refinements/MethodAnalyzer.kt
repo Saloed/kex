@@ -17,6 +17,8 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     abstract fun analyze(): Refinements
 
+    fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
+
     fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
         val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
         val refinements = calls.map { refinementsManager.getOrComputeRefinement(it.method) }

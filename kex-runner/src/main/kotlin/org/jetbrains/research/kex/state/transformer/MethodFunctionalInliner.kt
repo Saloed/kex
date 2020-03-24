@@ -41,9 +41,13 @@ class MethodFunctionalInliner(
 
     fun fixPathPredicatesOnTopLevelBeforeInlining(ps: PredicateState): PredicateState = PathPredicatesOnTopLevelBeforeInliningFixer(currentPredicate).apply(ps)
 
-    fun inline(body: PredicateState) {
+    fun prepareForInline(body: PredicateState): PredicateState {
         val mappings = im.methodArguments(currentPredicate)
-        currentBuilder += TermRenamer("inlined_var_${inlineIndex++}", mappings).apply(body)
+        return TermRenamer("inlined_var_${inlineIndex++}", mappings).apply(body)
+    }
+
+    fun inline(body: PredicateState) {
+        currentBuilder += prepareForInline(body)
     }
 
     fun add(ps: PredicateState) {

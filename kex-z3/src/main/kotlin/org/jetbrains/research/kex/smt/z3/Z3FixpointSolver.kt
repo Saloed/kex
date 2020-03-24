@@ -1,6 +1,8 @@
 package org.jetbrains.research.kex.smt.z3
 
+import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
+import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.falseState
@@ -114,6 +116,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 """.trimIndent()
     }
 
+    private fun BoolExpr.optimize(ctx: CallCtx): BoolExpr = Optimizer(ctx.context).apply(typedSimplify())
+
     private fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
     private fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTracker.Declaration>): Map<Int, ArgumentTerm> {
@@ -168,9 +172,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val ctx = CallCtx(tf, recursionConverter)
         recursionConverter.initVariableOrder(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
-        val z3State = ctx.convert(state).asAxiom() as BoolExpr
-
-        val z3Recursion = ctx.convert(recursionPath).asAxiom() as BoolExpr
+        val z3State = ctx.build {
+            convert(state).asAxiom() as BoolExpr
+        }
+        val z3Recursion = ctx.build {
+            convert(recursionPath).asAxiom() as BoolExpr
+        }
         val z3Positive = ctx.build {
             val path = convert(positive).asAxiom() as BoolExpr
             path or z3Recursion
@@ -187,12 +194,15 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val recursionStmt = ctx.build {
             val statement = (z3State and z3Positive) implies rootPredicate
             statement.forall(declarationExprs)
-        }.typedSimplify()
+        }.optimize(ctx)
 
         val queryStmt = ctx.build {
             val statement = (z3State and z3Query and rootPredicate) implies context.mkFalse()
             statement.forall(declarationExprs)
-        }.typedSimplify()
+        }.optimize(ctx)
+
+        log.info("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
+        log.info("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
 
         return ctx.withSolver(fixpoint = true) {
             add(recursionStmt)
@@ -216,6 +226,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     private fun convertRecursiveFunctionModel(
             model: Model,
             recursionConverter: CallPredicateConverterWithRecursion): List<PredicateState> {
+        if (model.funcDecls.isEmpty()) throw IllegalStateException("Model is empty")
         val answer = model.funcDecls.first()
         val answerInterpretation = model.getFuncInterp(answer)
         if (answerInterpretation.numEntries != 0) TODO("Model with entries")

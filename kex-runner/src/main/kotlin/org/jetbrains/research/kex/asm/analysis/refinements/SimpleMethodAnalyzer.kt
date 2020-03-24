@@ -44,7 +44,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
                 sourcesToQuery.add(source)
                 continue
             }
-            dummyRefinements.add(Refinement(source.criteria, dummyResult))
+            dummyRefinements.add(Refinement.create(source.criteria, dummyResult))
         }
         return Refinements(dummyRefinements, method) to RefinementSources(sourcesToQuery)
     }
@@ -66,7 +66,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
     private fun queryRefinementSources(state: PredicateState, normal: PredicateState, sources: RefinementSources): Refinements {
         val conditions = sources.value.map { it.condition }
         val fixpointAnswer = queryFixpointSolver(state, normal, conditions)
-        val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement(src.criteria, answer) }
+        val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement.create(src.criteria, answer) }
         return Refinements(refinements, method)
     }
 
