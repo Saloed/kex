@@ -174,10 +174,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val expr = ef.getVarByTypeAndName(argument.type, argument.name)
         val result =  addTypeAxioms(argument, expr, ef, ctx)
         if(argument.type !is KexPointer) return result
-        val kType = argument.type.getKfgType(tf)
-        if (kType !is ClassType) return result
-        val clsSize = kType.`class`.fields.map { Byte_.BITSIZE }.sum()
-        return result.withAxiom(expr lt ef.makeIntConst(${solver}Context.BASE_LOCAL_PTR - clsSize))
+        return result.withAxiom(expr lt ef.makeIntConst(${solver}Context.BASE_LOCAL_PTR - 1))
     }
 
     fun convert(arrayindex: ArrayIndexTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {

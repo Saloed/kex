@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import com.microsoft.z3.BoolExpr
+import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
@@ -11,9 +12,6 @@ import org.jetbrains.research.kex.state.transformer.memspace
 
 class CallPredicateConverterWithRecursion(val recursiveCalls: List<CallPredicate>, val predicateName: String) {
 
-    lateinit var termVars: MutableMap<Int, Term>
-    lateinit var memoryVars: MutableMap<Int, Int>
-
     fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =
             when {
                 recursiveCalls.any {
@@ -23,20 +21,20 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: List<CallPredicate
                 else -> ef.makeTrue()
             }
 
-    fun initVariableOrder(callPredicate: CallPredicate) {
+    fun initVariableOrder(callPredicate: CallPredicate): ModelDeclarationMapping {
         val receiver = callPredicate.lhvUnsafe
                 ?: throw IllegalStateException("Call prototype must have a receiver")
-        termVars = hashMapOf()
-        var idx = 0
-        for (term in (callArguments(callPredicate.call as CallTerm) + receiver)) {
-            termVars[idx] = term
-            idx++
-        }
-        memoryVars = hashMapOf()
-        for (memspace in memspaces(callPredicate.call as CallTerm)) {
-            memoryVars[idx] = memspace
-            idx++
-        }
+        val call = callPredicate.call as CallTerm
+        val argumentDecls = call.arguments.mapIndexed { index, term -> DeclarationTracker.Declaration.Argument(index) }
+        val ownerDecl = DeclarationTracker.Declaration.Other()
+        val receiverDecl = DeclarationTracker.Declaration.Other()
+        val memoryDecls = memspaces(call).map { DeclarationTracker.Declaration.Memory(it) }
+        val orderedDeclarations = listOf(ownerDecl) + argumentDecls + listOf(receiverDecl) + memoryDecls
+        val mapper = ModelDeclarationMapping(orderedDeclarations)
+        argumentDecls.zip(call.arguments).forEach { (decl, term) -> mapper.setTerm(decl, term) }
+        mapper.setTerm(ownerDecl, call.owner)
+        mapper.setTerm(receiverDecl, receiver)
+        return mapper
     }
 
 

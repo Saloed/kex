@@ -1,27 +1,24 @@
-package org.jetbrains.research.kex.smt.z3
+package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Expr
 import com.microsoft.z3.IntExpr
 import com.microsoft.z3.IntNum
 import com.microsoft.z3.enumerations.Z3_lbool
-import org.jetbrains.research.kex.ktype.KexVoid
+import org.jetbrains.research.kex.ktype.KexArray
+import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.term.ArrayLengthTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.ConstantPropagator
 import org.jetbrains.research.kex.state.transformer.Optimizer
-import org.jetbrains.research.kfg.ir.Class
-import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3FixpointModelConverter(
-        private val termVars: Map<Int, Term>,
-        private val memspaceVars: Map<Int, Int>,
+class FixpointModelConverter(
+        private val mapping: ModelDeclarationMapping,
         private val tf: TypeFactory
 ) {
 
@@ -43,12 +40,7 @@ class Z3FixpointModelConverter(
         else -> TODO()
     }
 
-
-    private fun variableTerm(expr: Expr): Term {
-        if (expr.index in termVars) return termVars[expr.index]!!
-        if (expr.index in memspaceVars) throw IllegalStateException("Try to convert memory var")
-        throw IllegalStateException("Unknown var $expr")
-    }
+    private fun variableTerm(expr: Expr) = mapping.getTerm(expr.index)
 
     private fun convert(expr: BoolExpr): PredicateState = when {
         expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
@@ -87,61 +79,44 @@ class Z3FixpointModelConverter(
 
     private fun convertMemoryLoad(memory: Expr, location: Expr): Term {
         if (!memory.isVar) throw IllegalStateException("Memory is not var $memory")
-        val memspace = memspaceVars[memory.index]
-                ?: throw IllegalStateException("Unexpected memspace $memory")
+        val decl = mapping.declarations[memory.index]
+        if (decl !is DeclarationTracker.Declaration.Memory && decl !is DeclarationTracker.Declaration.Property) {
+            throw IllegalStateException("Unexpected memspace $memory")
+        }
+        if (decl !is DeclarationTracker.Declaration.Property) {
+            TODO("Only properties are supported")
+        }
         return when {
             location.isVar -> {
                 val locationVariable = variableTerm(location)
-                val field = offsetMap(locationVariable)[0]
-                        ?: throw IllegalStateException("No field by offset 0")
-                val fieldTerm = term { locationVariable.field(field.type.kexType, field.name) }
-                term { fieldTerm.load() }
-            }
-            correctLocationWithOffset(location) -> {
-                val locationVariable = variableTerm(locationObject(location))
-                val offset = locationOffset(location)
-                val field = offsetMap(locationVariable)[offset]
-                        ?: throw IllegalStateException("No field by offset $offset")
-                val fieldTerm = term { locationVariable.field(field.type.kexType, field.name) }
-                term { fieldTerm.load() }
-            }
-            location is IntNum -> {
-                log.warn("Constant pointer in memory")
-                val locationVariable = term { value(KexVoid(), "Unknown_${location.int}") }
-                val fieldTerm = term { locationVariable.field(KexVoid(), "unknown") }
-                term { fieldTerm.load() }
+                val field = findProperty(locationVariable, decl)
+                term { field.load() }
             }
             else -> TODO()
         }
     }
 
-    private fun locationOffset(location: Expr) = with(location) {
-        when {
-            args[0].isIntNum -> (args[0] as IntNum).int
-            args[1].isIntNum -> (args[1] as IntNum).int
-            else -> unreachable("Impossible")
+    private fun findProperty(obj: Term, property: DeclarationTracker.Declaration.Property): Term = when (property) {
+        is DeclarationTracker.Declaration.ClassProperty -> {
+            val kType = obj.type.getKfgType(tf)
+            if (kType !is ClassType) {
+                TODO("Only class types supported")
+            }
+            val kfgClass = kType.`class`
+            if (kfgClass.name != property.className) {
+                throw IllegalArgumentException("Class $kfgClass doesn't match property $property")
+            }
+            val field = kfgClass.fields.find { it.name == property.propertyName }
+                    ?: throw IllegalArgumentException("Class $kfgClass has no property $property")
+            term { obj.field(field.type.kexType, field.name) }
         }
-    }
-
-    private fun locationObject(location: Expr) = with(location) {
-        when {
-            args[0].isVar -> args[0]
-            args[1].isVar -> args[1]
-            else -> unreachable("Impossible")
+        else -> when {
+            obj.type is KexArray && property.propertyName == "length" -> {
+                ArrayLengthTerm(KexInt(), obj)
+            }
+            else -> TODO("Unknown property $property")
         }
-    }
 
-    private fun correctLocationWithOffset(location: Expr) = with(location) {
-        isAdd && numArgs == 2 && ((args[0].isIntNum && args[1].isVar) || (args[1].isIntNum && args[0].isVar))
-    }
-
-    private fun offsetMap(obj: Term): Map<Int, Field> {
-        val kType = obj.type.getKfgType(tf)
-        if (kType !is ClassType) TODO("Only class types supported")
-        val kfgClass = kType.`class`
-        return kfgClass.fields.map {
-            Z3ExprFactory.getFieldOffset(kfgClass, Class.FieldKey("'${it.name}'", it.type)) to it
-        }.toMap()
     }
 
     private fun Expr.convertArgs() = args.map { convertTerm(it) }

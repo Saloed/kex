@@ -59,7 +59,7 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
 
     val fullState: PredicateState by lazy {
         transform(methodRawFullState()) {
-            +MethodInliner(method, psa)
+            +MethodInliner(psa)
             +IntrinsicAdapter
             +Optimizer()
             +ConstantPropagator

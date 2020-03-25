@@ -7,8 +7,6 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.term.ArgumentTerm
-import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
 
@@ -120,29 +118,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
-    private fun argumentVarIdx(state: PredicateState, arguments: List<DeclarationTracker.Declaration>): Map<Int, ArgumentTerm> {
-        val (thisArg, otherArgs) = collectArguments(state)
-        val indexedArgs = arguments.mapIndexed { index, declaration -> declaration to index }
-        return otherArgs.values
-                .map { arg ->
-                    arg to (indexedArgs.find { it.first.name == arg.name }
-                            ?.second
-                            ?: throw IllegalStateException("Argument ${arg.name} not found "))
-                }
-                .map { it.second to it.first }
-                .toMap()
-    }
-
-    private fun memspaceVarIdx(arguments: List<DeclarationTracker.Declaration>): Map<Int, Int> {
-        val indexedArgs = arguments.mapIndexed { index, declaration -> declaration to index }
-        val memories = indexedArgs.filter { it.first.isMemory }
-        val memspaceIdRegEx = Regex("__memory__(\\d+)")
-        return memories.map {
-            (memspaceIdRegEx.find(it.first.name)?.groupValues?.get(1)?.toInt()
-                    ?: throw IllegalStateException("No memspace id")) to it.second
-        }.map { it.second to it.first }.toMap()
-    }
-
     private data class Predicate(val idx: Int) {
         fun call(ctx: CallCtx, arguments: List<DeclarationTracker.Declaration>) = ctx.build {
             val argumentsSorts = arguments.map { it.sort }
@@ -152,8 +127,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
 
         companion object {
+            val idxRegex = Regex("function_argument_predicate_(\\d+)")
             fun getPredicateIdx(name: String): Int {
-                val idxRegex = Regex("function_argument_predicate_(\\d+)")
                 return idxRegex.find(name)?.groupValues?.get(1)?.toInt()
                         ?: throw IllegalStateException("No predicate idx")
             }
@@ -170,7 +145,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     ): FixpointResult {
         val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, "recursive_function")
         val ctx = CallCtx(tf, recursionConverter)
-        recursionConverter.initVariableOrder(rootCall)
+        val modelDeclarationMapper = recursionConverter.initVariableOrder(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
@@ -201,13 +176,14 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             statement.forall(declarationExprs)
         }.optimize(ctx)
 
-        log.info("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
-        log.info("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
+        log.debug("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
+        log.debug("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
 
         return ctx.withSolver(fixpoint = true) {
             add(recursionStmt)
             add(queryStmt)
 
+            log.debug(ctx.debugFixpointSmtLib(this))
             File("last_fixpoint_query.smtlib").writeText(ctx.debugFixpointSmtLib(this))
 
             val status = check()
@@ -215,7 +191,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
                 Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
                 Status.SATISFIABLE -> {
-                    val result = convertRecursiveFunctionModel(model, recursionConverter)
+                    val result = convertRecursiveFunctionModel(model, modelDeclarationMapper)
                     FixpointResult.Sat(result)
                 }
             }
@@ -225,13 +201,13 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private fun convertRecursiveFunctionModel(
             model: Model,
-            recursionConverter: CallPredicateConverterWithRecursion): List<PredicateState> {
+            mapper: ModelDeclarationMapping): List<PredicateState> {
         if (model.funcDecls.isEmpty()) throw IllegalStateException("Model is empty")
         val answer = model.funcDecls.first()
         val answerInterpretation = model.getFuncInterp(answer)
         if (answerInterpretation.numEntries != 0) TODO("Model with entries")
         val elseEntry = answerInterpretation.`else`
-        val modelConverter = Z3FixpointModelConverter(recursionConverter.termVars, recursionConverter.memoryVars, tf)
+        val modelConverter = FixpointModelConverter(mapper, tf)
         return listOf(modelConverter.apply(elseEntry))
     }
 
@@ -241,7 +217,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val z3positive = positivePaths.map { ctx.convert(it).expr as BoolExpr }
         val z3query = ctx.convert(query).expr as BoolExpr
         val allDeclarations = ctx.knownDeclarations
-        val argumentDeclarations = allDeclarations.filter { it.isArg || it.isMemory }
+        val argumentDeclarations = allDeclarations.filter { it.isValuable() }
         val declarationExprs = allDeclarations.map { it.expr }
 
         possibilityChecks(z3State, z3positive, z3query)
@@ -291,9 +267,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         return predicates.map {
             val predicate = modelPredicates[it.idx] ?: return@map falseState()
             val predicateInterpretation = model.getFuncInterp(predicate)
-            val argsMapping = argumentVarIdx(state, argumentDeclarations)
-            val memspaceMapping = memspaceVarIdx(argumentDeclarations)
-            val modelConverter = Z3FixpointModelConverter(argsMapping, memspaceMapping, tf)
+            val mapping = ModelDeclarationMapping.create(argumentDeclarations, state)
+            val modelConverter = FixpointModelConverter(mapping, tf)
             if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
             val elseEntry = predicateInterpretation.`else`
             modelConverter.apply(elseEntry)

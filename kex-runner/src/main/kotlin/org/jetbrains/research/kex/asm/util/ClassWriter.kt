@@ -14,7 +14,8 @@ class ClassWriter(val ctx: ExecutionContext, val target: Path) : ClassVisitor {
     override fun cleanup() {}
 
     override fun visit(`class`: Class) {
-        val classFileName = "${target.toAbsolutePath()}/${`class`.fullname}.class"
+        val classFilePath = Path.of("$target", "${`class`.fullname}.class")
+        val classFileName = "${classFilePath.toAbsolutePath()}"
         `class`.write(cm, ctx.loader, classFileName)
     }
 }
