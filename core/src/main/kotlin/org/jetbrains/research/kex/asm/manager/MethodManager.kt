@@ -14,7 +14,7 @@ import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
 
 object MethodManager {
     object InlineManager {
-        private val inliningEnabled = kexConfig.getBooleanValue("inliner", "enabled", true)
+        val inliningEnabled = kexConfig.getBooleanValue("inliner", "enabled", true)
         private val ignorePackages = hashSetOf<Package>()
         private val ignoreClasses = hashSetOf<String>()
         private val ignoreMethods = hashSetOf<Method>()
@@ -30,11 +30,16 @@ object MethodManager {
             }
         }
 
+        fun isIgnored(method: Method) = when {
+            ignorePackages.any { it.isParent(method.`class`.`package`) } -> true
+            ignoreClasses.any { method.cm[it] == method.`class` } -> true
+            ignoreMethods.contains(method) -> true
+            else -> false
+        }
+
         fun isInlinable(method: Method): Boolean = when {
             !inliningEnabled -> false
-            ignorePackages.any { it.isParent(method.`class`.`package`) } -> false
-            ignoreClasses.any { method.cm.getByName(it) == method.`class` } -> false
-            ignoreMethods.contains(method) -> false
+            isIgnored(method) -> false
             method.isStatic -> true
             method.isConstructor -> true
             !method.isFinal && !method.`class`.isFinal -> false
@@ -67,7 +72,7 @@ object MethodManager {
     object IntrinsicManager {
         private const val intrinsicsClass = "kotlin/jvm/internal/Intrinsics"
 
-        fun checkNotNull(cm: ClassManager) = cm.getByName(intrinsicsClass).getMethod(
+        fun checkNotNull(cm: ClassManager) = cm[intrinsicsClass].getMethod(
                 "checkParameterIsNotNull",
                 MethodDesc(
                         arrayOf(cm.type.objectType, cm.type.stringType),
@@ -75,7 +80,7 @@ object MethodManager {
                 )
         )
 
-        fun areEqual(cm: ClassManager) = cm.getByName(intrinsicsClass).getMethod(
+        fun areEqual(cm: ClassManager) = cm[intrinsicsClass].getMethod(
                 "areEqual",
                 MethodDesc(
                         arrayOf(cm.type.objectType, cm.type.objectType),

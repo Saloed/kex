@@ -2,30 +2,48 @@
 
 package org.jetbrains.research.kex.test.debug
 
-import org.jetbrains.research.kex.test.Intrinsics
+import java.io.ByteArrayInputStream
 
 class BasicTests {
-
-    open class AC
-
-    class Impl1 : AC()
-
-    open class Impl2 : AC()
-
-    class Impl3 : Impl2()
-
-    fun testAC(a: AC) {
-//        if (a is Impl1) {
-//            Intrinsics.assertReachable()
-//        }
-        if (a is Impl2) {
-            Intrinsics.assertReachable()
+    object AnnotatedMethodsThere {
+        @JvmStatic
+        fun rangeExample(param0: Any?, param1: Int): Int {
+            return param1 + 2
         }
-        if (a is Impl3) {
-            Intrinsics.assertReachable()
+        @JvmStatic
+        // "!null, _ -> !null; _, true -> new; _, false -> param1"
+        fun haveContract(param0: Any?, param1: Boolean): Any? = if (param1) Any() else param0
+
+        // "false -> fail; _ -> this"
+        fun assertTrue(param0: Boolean): AnnotatedMethodsThere {
+            if (!param0) throw IllegalStateException()
+            return this
         }
-        val b = a as Impl1
-        Intrinsics.assertReachable()
+
+        fun assertNotNull(param0: Any?) {
+            if (param0 == null) throw IllegalArgumentException()
+        }
+
+        fun makeBeautifulList(n: Int) = MutableList(n) { 0 }
+    }
+
+    class ThatClassContainsHighQualityCodeToProf {
+        fun incredibleMethod(exitingArgument: String, unusualNumber: Double): List<Int> {
+            val importantMethods = AnnotatedMethodsThere
+            val lovelyInteger = unusualNumber.toInt()
+            if (lovelyInteger.toDouble() == unusualNumber) {
+                val bestStream = ByteArrayInputStream(exitingArgument.toByteArray())
+                val meaningfulResult = importantMethods.makeBeautifulList(lovelyInteger)
+                //while (bestStream.available() > 0) {
+                val remarkableLetter = bestStream.read()
+                importantMethods.assertTrue(importantMethods.assertTrue(remarkableLetter > 0) == importantMethods)
+                meaningfulResult += remarkableLetter
+                //}
+                importantMethods.assertNotNull(meaningfulResult)
+                return meaningfulResult
+            }
+            return emptyList()
+        }
     }
 
 }

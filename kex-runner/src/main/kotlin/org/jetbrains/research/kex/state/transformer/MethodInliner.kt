@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.state.transformer
 
+import com.abdullin.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.PredicateState
@@ -8,15 +9,17 @@ import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.Method
-import java.util.*
 
-open class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : RecollectingTransformer<MethodInliner> {
+class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransformer<MethodInliner> {
     private val im = MethodManager.InlineManager
-    override val builders = ArrayDeque<StateBuilder>()
+    override val builders = dequeOf(StateBuilder())
     private var inlineIndex = 0
 
-    init {
-        builders.push(StateBuilder())
+    protected class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
+        override fun transformTerm(term: Term): Term = remapping[term] ?: when (term) {
+            is ValueTerm, is ArgumentTerm, is ReturnValueTerm -> term { value(term.type, "${term.name}.$suffix") }
+            else -> term
+        }
     }
 
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
@@ -38,12 +41,5 @@ open class MethodInliner(val method: Method, val psa: PredicateStateAnalysis) : 
         val endState = builder.methodState ?: return null
 
         return TermRenamer("inlined${inlineIndex++}", mappings).apply(endState)
-    }
-}
-
-private class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
-    override fun transformTerm(term: Term): Term = remapping[term] ?: when (term) {
-        is ValueTerm, is ArgumentTerm, is ReturnValueTerm -> term { value(term.type, "${term.name}.$suffix") }
-        else -> term
     }
 }
