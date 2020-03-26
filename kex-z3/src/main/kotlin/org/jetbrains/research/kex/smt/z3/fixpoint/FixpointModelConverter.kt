@@ -80,19 +80,28 @@ class FixpointModelConverter(
     private fun convertMemoryLoad(memory: Expr, location: Expr): Term {
         if (!memory.isVar) throw IllegalStateException("Memory is not var $memory")
         val decl = mapping.declarations[memory.index]
-        if (decl !is DeclarationTracker.Declaration.Memory && decl !is DeclarationTracker.Declaration.Property) {
-            throw IllegalStateException("Unexpected memspace $memory")
-        }
-        if (decl !is DeclarationTracker.Declaration.Property) {
-            //fixme: array index terms are also here
-            throw IllegalArgumentException("Only properties are supported")
-        }
         return when {
-            location.isVar -> {
-                val locationVariable = variableTerm(location)
-                readProperty(locationVariable, decl)
+            decl is DeclarationTracker.Declaration.Property -> when {
+                location.isVar -> {
+                    val locationVariable = variableTerm(location)
+                    readProperty(locationVariable, decl)
+                }
+                else -> TODO("Property location is not var")
             }
-            else -> TODO()
+            decl is DeclarationTracker.Declaration.Memory && mapping.isArrayMemory(decl) -> {
+                if (!(location.isAdd && location.args.size == 2)) {
+                    throw IllegalStateException("Unexpected array memory location $location")
+                }
+                val (lhs, rhs) = location.convertArgs()
+                val (base, index) = when {
+                    lhs.type is KexArray -> lhs to rhs
+                    rhs.type is KexArray -> rhs to lhs
+                    else -> throw IllegalStateException("Array load has no base and index")
+                }
+                val arrayIndex = term { tf.getArrayIndex(base, index) }
+                term { tf.getArrayLoad(arrayIndex) }
+            }
+            else -> throw IllegalStateException("Unexpected memory $memory : $decl")
         }
     }
 

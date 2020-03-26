@@ -4,6 +4,7 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
+import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
@@ -206,6 +207,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             val loads = fieldTerms.map { term { it.load() } as FieldLoadTerm }
             fields.zip(loads)
         }
+        is KexArray -> TODO("Array argument in recursive function")
         else -> emptyList()
     }
 
