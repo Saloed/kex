@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import com.abdullin.kthelper.defaultHashCode
 import com.microsoft.z3.Expr
 import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.smt.z3.Z3Context
@@ -7,7 +8,7 @@ import org.jetbrains.research.kex.smt.z3.Z3Context
 class DeclarationTracker {
     val declarations = hashSetOf<Declaration>()
 
-    class DeclarationInfo(val name: String, val sort: Sort, val expr: Expr)
+    data class DeclarationInfo(val name: String, val sort: Sort, val expr: Expr)
     sealed class Declaration(val info: DeclarationInfo? = null) {
         val name: String
             get() = info?.name ?: throw IllegalArgumentException("Declaration without info")
@@ -16,11 +17,51 @@ class DeclarationTracker {
         val sort: Sort
             get() = info?.sort ?: throw IllegalArgumentException("Declaration without info")
 
-        class Other(info: DeclarationInfo? = null) : Declaration(info)
-        class Argument(val index: Int, info: DeclarationInfo? = null) : Declaration(info)
-        class Memory(val memspace: Int, info: DeclarationInfo? = null) : Declaration(info)
-        open class Property(val propertyName: String, val memspace: Int, info: DeclarationInfo? = null) : Declaration(info)
-        class ClassProperty(val className: String, propertyName: String, memspace: Int, info: DeclarationInfo? = null) : Property(propertyName, memspace, info)
+
+        class Other(info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString(): String = "Other(info=$info)"
+            override fun hashCode() = info?.hashCode() ?: 0
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Other) return false
+                return info == other.info
+            }
+        }
+
+        class Argument(val index: Int, info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString(): String = "Argument(index=$index info=$info)"
+            override fun hashCode() = defaultHashCode(index)
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Argument) return false
+                return index == other.index
+            }
+        }
+
+        class Memory(val memspace: Int, info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString(): String = "Memory(memspace=$memspace info=$info)"
+            override fun hashCode() = defaultHashCode(memspace)
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Memory) return false
+                return memspace == other.memspace && info == other.info
+            }
+        }
+
+        open class Property(val fullName: String, val memspace: Int, info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString(): String = "Property(fullName='$fullName', memspace=$memspace info=$info)"
+            override fun hashCode() = defaultHashCode(fullName, memspace)
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Property) return false
+                return memspace == other.memspace && fullName == other.fullName
+            }
+        }
+
+        class ClassProperty(val className: String, val propertyName: String, memspace: Int, info: DeclarationInfo? = null) : Property("$className.$propertyName", memspace, info) {
+            override fun toString(): String =
+                    "ClassProperty(className='$className' propertyName='$propertyName', memspace=$memspace info=$info)"
+        }
 
         fun isValuable() = this is Argument || this is Memory || this is Property
 

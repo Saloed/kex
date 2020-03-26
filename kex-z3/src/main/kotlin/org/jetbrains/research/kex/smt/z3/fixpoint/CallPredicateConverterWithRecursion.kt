@@ -35,7 +35,7 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: Map<CallPredicate,
         return mapper
     }
 
-    private fun prepareMemoryProperties(): List<DeclarationTracker.Declaration.ClassProperty> {
+    private fun prepareMemoryProperties(): List<DeclarationTracker.Declaration.Property> {
         val allCallProperties = recursiveCalls.values
         val propertyPrototype = allCallProperties.first()
         if (allCallProperties.any { it != propertyPrototype }) {
@@ -51,7 +51,7 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: Map<CallPredicate,
         val receiver = callPredicate.lhvUnsafe?.let { converter.convert(it, ef, ctx) }
                 ?: ef.dummyReceiver(callPredicate.call as CallTerm)
         val arguments = callArguments(callPredicate.call as CallTerm).map { converter.convert(it, ef, ctx) }
-        val propertyArrays = orderedProperties.map {ctx.getProperties(it.memspace, propertyName(it))}.map { it.memory.inner }
+        val propertyArrays = orderedProperties.map {ctx.getProperties(it.memspace, it.fullName)}.map { it.memory.inner }
         val predicateArguments = arguments + receiver + propertyArrays
         val predicateSorts = predicateArguments.map { it.getSort() }
         val predicateAxioms = predicateArguments.map { it.axiom }
@@ -59,12 +59,6 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: Map<CallPredicate,
         val predicate = ef.ctx.mkFuncDecl(predicateName, predicateSorts.toTypedArray(), ef.ctx.mkBoolSort())
         val predicateApplication = ef.ctx.mkApp(predicate, *predicateExprs.toTypedArray()) as BoolExpr
         return Z3Bool(ef.ctx, predicateApplication, spliceAxioms(ef.ctx, predicateAxioms))
-    }
-
-
-    private fun propertyName(property: DeclarationTracker.Declaration.Property) = when (property) {
-        is DeclarationTracker.Declaration.ClassProperty -> "${property.className}.${property.propertyName}"
-        else -> property.propertyName
     }
 
     private fun callArguments(call: CallTerm) = listOf(call.owner) + call.arguments

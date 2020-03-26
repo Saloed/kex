@@ -84,19 +84,19 @@ class FixpointModelConverter(
             throw IllegalStateException("Unexpected memspace $memory")
         }
         if (decl !is DeclarationTracker.Declaration.Property) {
-            TODO("Only properties are supported")
+            //fixme: array index terms are also here
+            throw IllegalArgumentException("Only properties are supported")
         }
         return when {
             location.isVar -> {
                 val locationVariable = variableTerm(location)
-                val field = findProperty(locationVariable, decl)
-                term { field.load() }
+                readProperty(locationVariable, decl)
             }
             else -> TODO()
         }
     }
 
-    private fun findProperty(obj: Term, property: DeclarationTracker.Declaration.Property): Term = when (property) {
+    private fun readProperty(obj: Term, property: DeclarationTracker.Declaration.Property): Term = when (property) {
         is DeclarationTracker.Declaration.ClassProperty -> {
             val kType = obj.type.getKfgType(tf)
             if (kType !is ClassType) {
@@ -108,10 +108,10 @@ class FixpointModelConverter(
             }
             val field = kfgClass.fields.find { it.name == property.propertyName }
                     ?: throw IllegalArgumentException("Class $kfgClass has no property $property")
-            term { obj.field(field.type.kexType, field.name) }
+            term { obj.field(field.type.kexType, field.name).load() }
         }
         else -> when {
-            obj.type is KexArray && property.propertyName == "length" -> {
+            obj.type is KexArray && property.fullName == "length" -> {
                 ArrayLengthTerm(KexInt(), obj)
             }
             else -> TODO("Unknown property $property")
