@@ -28,6 +28,16 @@ class DeclarationTracker {
             }
         }
 
+        class This(info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString(): String = "This(info=$info)"
+            override fun hashCode() = info?.hashCode() ?: 0
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is This) return false
+                return info == other.info
+            }
+        }
+
         class Argument(val index: Int, info: DeclarationInfo? = null) : Declaration(info) {
             override fun toString(): String = "Argument(index=$index info=$info)"
             override fun hashCode() = defaultHashCode(index)
@@ -63,7 +73,10 @@ class DeclarationTracker {
                     "ClassProperty(className='$className' propertyName='$propertyName', memspace=$memspace info=$info)"
         }
 
-        fun isValuable() = this is Argument || this is Memory || this is Property
+        fun isValuable() = when (this) {
+            is This, is Argument, is Memory, is Property -> true
+            else -> false
+        }
 
         companion object {
             private val argRegexp = Regex("arg\\$(\\d+)")
@@ -78,6 +91,7 @@ class DeclarationTracker {
                 val matchOtherProperty = otherPropertyRegexp.find(name)
                 val declarationInfo = DeclarationInfo(name, sort, expr)
                 return when {
+                    name == "this" -> This(declarationInfo)
                     matchArgument != null -> {
                         val idx = matchArgument.groupValues[1].toInt()
                         Argument(idx, declarationInfo)

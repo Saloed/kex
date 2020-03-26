@@ -23,8 +23,8 @@ class CallPredicateConverterWithRecursion(val recursiveCalls: Map<CallPredicate,
         val receiver = callPredicate.lhvUnsafe
                 ?: throw IllegalStateException("Call prototype must have a receiver")
         val call = callPredicate.call as CallTerm
-        val argumentDecls = call.arguments.mapIndexed { index, term -> DeclarationTracker.Declaration.Argument(index) }
-        val ownerDecl = DeclarationTracker.Declaration.Other()
+        val argumentDecls = call.arguments.mapIndexed { index, _ -> DeclarationTracker.Declaration.Argument(index) }
+        val ownerDecl = DeclarationTracker.Declaration.This()
         val receiverDecl = DeclarationTracker.Declaration.Other()
         orderedProperties = prepareMemoryProperties()
         val orderedDeclarations = listOf(ownerDecl) + argumentDecls + listOf(receiverDecl) + orderedProperties
