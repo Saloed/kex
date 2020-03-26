@@ -4,16 +4,23 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
+import org.jetbrains.research.kex.ktype.KexClass
+import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
 import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.FieldLoadTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
+import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 
@@ -75,7 +82,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     private fun computeRefinement(
             state: PredicateState,
             rootCall: CallPredicate,
-            recursiveCalls: List<CallPredicate>,
+            recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
             recursionPaths: PredicateState,
             normalPaths: PredicateState,
             refinementSource: RefinementSource
@@ -108,12 +115,15 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     } as CallPredicate
 
 
-    private fun buildMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, List<CallPredicate>> {
-        val (preparedState, recursiveCallPredicates, otherExecutionPaths) = prepareMethodState(builder)
-        val (transformedTopChoices, otherPathRecursiveCalls) = prepareMethodOtherExecutionPaths(otherExecutionPaths)
+    private fun buildMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, Map<CallPredicate, Map<Field, FieldLoadTerm>>> {
+        val (preparedState, otherExecutionPaths) = prepareMethodState(builder)
+        val transformedTopChoices = prepareMethodOtherExecutionPaths(otherExecutionPaths)
+        val interestingTopChoices = transformedTopChoices
+                .map { it.optimize() }
+                .filterNot { it.evaluatesToTrue || it.evaluatesToFalse }
         var state = when {
-            transformedTopChoices.isEmpty() -> preparedState
-            else -> ChoiceState(listOf(preparedState) + transformedTopChoices)
+            interestingTopChoices.isEmpty() -> preparedState
+            else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
         }
         state = transform(state) {
             +IntrinsicAdapter
@@ -123,36 +133,103 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             +ArrayBoundsAdapter()
             +StateReducer()
             +Optimizer()
-        }.let { state -> MemorySpacer(state).apply(state) }
-        return state to (recursiveCallPredicates + otherPathRecursiveCalls)
-    }
-
-    private fun prepareMethodOtherExecutionPaths(otherExecutionPaths: List<PredicateState>): Pair<List<PredicateState>, List<CallPredicate>> {
-        val recursiveCallPredicates = mutableListOf<CallPredicate>()
-        val transformedOtherPaths = otherExecutionPaths.map {
-            MethodFunctionalInliner(psa) {
-                if (calledMethod == method) {
-                    recursiveCallPredicates.add(it)
-                    skip()
-                    return@MethodFunctionalInliner
-                }
-                val refinement = findRefinement(calledMethod).expanded()
-                var methodState = getStateForInlining() ?: BasicState()
-                methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
-                val state = ChainState(refinement.allStates().not(), methodState)
-                inline(state)
-            }.apply(it)
         }
-        return transformedOtherPaths to recursiveCallPredicates
+        return memspaceWithRecursionInfo(state)
     }
 
-    private fun prepareMethodState(builder: MethodRefinementSourceAnalyzer): Triple<PredicateState, List<CallPredicate>, List<PredicateState>> {
-        val recursiveCallPredicates = mutableListOf<CallPredicate>()
+
+    private fun memspaceWithRecursionInfo(state: PredicateState): Pair<PredicateState, Map<CallPredicate, Map<Field, FieldLoadTerm>>> {
+        val recursiveCalls = stateRecursiveCalls(state)
+        val callProperties = recursiveCalls.map { callMemoryProperties(it) }
+        var expandedState = state
+        for ((callPredicate, properties) in recursiveCalls.zip(callProperties)) {
+            val dummyEqualities = properties.values.map { state { it equality it } }
+            expandedState = expandedState.insertBefore(callPredicate, BasicState(dummyEqualities))
+        }
+        val memorySpacer = MemorySpacer(expandedState)
+        val resultState = memorySpacer.apply(state)
+
+        val callInfo = mutableMapOf<CallPredicate, Map<Field, FieldLoadTerm>>()
+        for ((callPredicate, properties) in recursiveCalls.zip(callProperties)) {
+            val propertiesWithMemspace = properties.mapValues { (_, term) -> memorySpacer.transform(term) as FieldLoadTerm }
+            val callWithMemspace = memorySpacer.transform(callPredicate) as CallPredicate
+            callInfo[callWithMemspace] = propertiesWithMemspace
+        }
+        return resultState to callInfo
+    }
+
+    fun collectMemspaces(state: PredicateState): List<Pair<Term, Int>> =
+            collectVariables(state).filter { it.type is KexPointer }.map { it to it.memspace }
+
+    private fun callMemoryProperties(callPredicate: CallPredicate): Map<Field, FieldLoadTerm> {
+        val call = callPredicate.call as CallTerm
+        val arguments = listOf(call.owner) + call.arguments
+        return arguments.filter { it.type is KexPointer }
+                .flatMap { expandProperties(it) }
+                .toMap()
+    }
+
+    private fun stateRecursiveCalls(state: PredicateState): List<CallPredicate> {
+        val recursiveCalls = arrayListOf<CallPredicate>()
+        state.map {
+            if (it is CallPredicate && (it.call as CallTerm).method == method) {
+                recursiveCalls.add(it)
+            }
+            it
+        }
+        return recursiveCalls
+    }
+
+    private fun PredicateState.insertBefore(predicate: Predicate, state: PredicateState): PredicateState = when (this) {
+        is BasicState -> when {
+            predicate !in predicates -> this
+            else -> {
+                val before = arrayListOf<Predicate>()
+                val after = arrayListOf<Predicate>()
+                var isBefore = true
+                for (it in predicates) {
+                    if (it == predicate) isBefore = false
+                    val predicateSet = if (isBefore) before else after
+                    predicateSet.add(it)
+                }
+                (StateBuilder() + BasicState(before) + state + BasicState(after)).apply()
+            }
+        }
+        else -> fmap { it.insertBefore(predicate, state) }
+    }
+
+
+    private fun expandProperties(obj: Term) = when (val type = obj.type) {
+        is KexClass -> {
+            val fields = type.getKfgClass(cm.type).fields.toList()
+            val fieldTerms = fields.map { term { obj.field(it.type.kexType, it.name) } }
+            val loads = fieldTerms.map { term { it.load() } as FieldLoadTerm }
+            fields.zip(loads)
+        }
+        else -> emptyList()
+    }
+
+
+    private fun prepareMethodOtherExecutionPaths(otherExecutionPaths: List<PredicateState>): List<PredicateState> =
+            otherExecutionPaths.map {
+                MethodFunctionalInliner(psa) {
+                    if (calledMethod == method) {
+                        skip()
+                        return@MethodFunctionalInliner
+                    }
+                    val refinement = findRefinement(calledMethod).expanded()
+                    var methodState = getStateForInlining() ?: BasicState()
+                    methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
+                    val state = ChainState(refinement.allStates().not(), methodState)
+                    inline(state)
+                }.apply(it)
+            }
+
+    private fun prepareMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, List<PredicateState>> {
         val otherExecutionPaths = mutableListOf<PredicateState>()
         val state = transform(builder.methodRawFullState()) {
             +MethodFunctionalInliner(psa) {
                 if (calledMethod == method) {
-                    recursiveCallPredicates.add(it)
                     skip()
                     return@MethodFunctionalInliner
                 }
@@ -171,7 +248,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                 otherExecutionPaths.add(negativeExecution)
             }
         }
-        return Triple(state, recursiveCallPredicates, otherExecutionPaths)
+        return state to otherExecutionPaths
     }
 
     private fun findPathsLeadsToRecursion(calls: List<CallInst>, psb: PredicateStateBuilder) = calls

@@ -7,6 +7,8 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.term.FieldLoadTerm
+import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
 
@@ -137,7 +139,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     fun analyzeRecursion(
             state: PredicateState,
-            recursiveCalls: List<CallPredicate>,
+            recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
             rootCall: CallPredicate,
             recursionPath: PredicateState,
             positive: PredicateState,
@@ -145,7 +147,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     ): FixpointResult {
         val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, "recursive_function")
         val ctx = CallCtx(tf, recursionConverter)
-        val modelDeclarationMapper = recursionConverter.initVariableOrder(rootCall)
+        val modelDeclarationMapper = recursionConverter.initializeAndCreateMapping(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
