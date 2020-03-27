@@ -121,15 +121,17 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     private fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
     private data class Predicate(val idx: Int) {
+        val name = "$BASE_NAME$idx"
         fun call(ctx: CallCtx, arguments: List<DeclarationTracker.Declaration>) = ctx.build {
             val argumentsSorts = arguments.map { it.sort }
             val callArguments = arguments.map { it.expr }
-            val predicate = boolFunction("function_argument_predicate_$idx", argumentsSorts)
+            val predicate = boolFunction(name, argumentsSorts)
             boolFunctionApp(predicate, callArguments)
         }
 
         companion object {
-            val idxRegex = Regex("function_argument_predicate_(\\d+)")
+            const val BASE_NAME = "function_argument_predicate__"
+            val idxRegex = Regex("$BASE_NAME(\\d+)")
             fun getPredicateIdx(name: String): Int {
                 return idxRegex.find(name)?.groupValues?.get(1)?.toInt()
                         ?: throw IllegalStateException("No predicate idx")
@@ -145,9 +147,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             positive: PredicateState,
             query: PredicateState
     ): FixpointResult {
-        val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, "recursive_function")
+        val recursionPredicate = Predicate(0)
+        val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, recursionPredicate.name)
         val ctx = CallCtx(tf, recursionConverter)
-        val modelDeclarationMapper = recursionConverter.initializeAndCreateMapping(rootCall)
+        val declarationMapping = recursionConverter.initializeAndCreateMapping(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
@@ -181,36 +184,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         log.debug("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
         log.debug("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
 
-        return ctx.withSolver(fixpoint = true) {
-            add(recursionStmt)
-            add(queryStmt)
-
-            log.debug(ctx.debugFixpointSmtLib(this))
-            File("last_fixpoint_query.smtlib").writeText(ctx.debugFixpointSmtLib(this))
-
-            val status = check()
-            when (status) {
-                Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
-                Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
-                Status.SATISFIABLE -> {
-                    val result = convertRecursiveFunctionModel(model, modelDeclarationMapper)
-                    FixpointResult.Sat(result)
-                }
-            }
-        }
-    }
-
-
-    private fun convertRecursiveFunctionModel(
-            model: Model,
-            mapper: ModelDeclarationMapping): List<PredicateState> {
-        if (model.funcDecls.isEmpty()) throw IllegalStateException("Model is empty")
-        val answer = model.funcDecls.first()
-        val answerInterpretation = model.getFuncInterp(answer)
-        if (answerInterpretation.numEntries != 0) TODO("Model with entries")
-        val elseEntry = answerInterpretation.`else`
-        val modelConverter = FixpointModelConverter(mapper, tf)
-        return listOf(modelConverter.apply(elseEntry))
+        return ctx.callSolver(listOf(recursionPredicate), declarationMapping, listOf(recursionStmt), queryStmt)
     }
 
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
@@ -218,9 +192,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
         val z3positive = positivePaths.map { ctx.convert(it).expr as BoolExpr }
         val z3query = ctx.convert(query).expr as BoolExpr
-        val allDeclarations = ctx.knownDeclarations
-        val argumentDeclarations = allDeclarations.filter { it.isValuable() }
-        val declarationExprs = allDeclarations.map { it.expr }
+
+        val declarationExprs = ctx.knownDeclarations.map { it.expr }
+        val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+        val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state)
 
         possibilityChecks(z3State, z3positive, z3query)
 
@@ -229,47 +204,51 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val positiveStatements = z3positive.mapIndexed { idx, it ->
             ctx.build {
                 val statement = (z3State and it) implies predicateApplications[idx]
-                statement.forall(declarationExprs)
+                statement.forall(declarationExprs).typedSimplify()
             }
         }
         val queryStatement = ctx.build {
             val applications = predicateApplications.toTypedArray()
             val allApplications = context.mkOr(*applications)
             val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
-            statement.forall(declarationExprs)
+            statement.forall(declarationExprs).typedSimplify()
         }
+        return ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
+    }
 
-        return ctx.withSolver(fixpoint = true) {
-            for (statement in positiveStatements) {
-                add(statement)
-            }
-            add(queryStatement)
+    private fun CallCtx.callSolver(
+            predicates: List<Predicate>,
+            mapper: ModelDeclarationMapping,
+            positives: List<BoolExpr>,
+            query: BoolExpr
+    ) = withSolver(fixpoint = true) {
+        for (statement in positives) {
+            add(statement)
+        }
+        add(query)
 
-            File("last_fixpoint_query.smtlib").writeText(ctx.debugFixpointSmtLib(this))
+        File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(this))
 
-            val status = check()
-            when (status) {
-                Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
-                Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
-                Status.SATISFIABLE -> {
-                    val result = convertModel(model, state, predicates, argumentDeclarations)
-                    FixpointResult.Sat(result)
-                }
+        val status = check()
+        when (status) {
+            Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
+            Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
+            Status.SATISFIABLE -> {
+                val result = convertModel(model, mapper, predicates)
+                FixpointResult.Sat(result)
             }
         }
     }
 
     private fun convertModel(
             model: Model,
-            state: PredicateState,
-            predicates: List<Predicate>,
-            argumentDeclarations: List<DeclarationTracker.Declaration>
+            mapping: ModelDeclarationMapping,
+            predicates: List<Predicate>
     ): List<PredicateState> {
         val modelPredicates = model.funcDecls.map { Predicate.getPredicateIdx("${it.name}") to it }.toMap()
         return predicates.map {
             val predicate = modelPredicates[it.idx] ?: return@map falseState()
             val predicateInterpretation = model.getFuncInterp(predicate)
-            val mapping = ModelDeclarationMapping.create(argumentDeclarations, state)
             val modelConverter = FixpointModelConverter(mapping, tf)
             if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
             val elseEntry = predicateInterpretation.`else`
