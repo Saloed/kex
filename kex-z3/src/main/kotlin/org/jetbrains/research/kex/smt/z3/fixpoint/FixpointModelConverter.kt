@@ -120,7 +120,7 @@ class FixpointModelConverter(
                 TODO("Only class types supported")
             }
             val kfgClass = kType.`class`
-            if (kfgClass.name != property.className) {
+            if (kfgClass.fullname != property.className) {
                 throw IllegalArgumentException("Class $kfgClass doesn't match property $property")
             }
             val field = kfgClass.fields.find { it.name == property.propertyName }
