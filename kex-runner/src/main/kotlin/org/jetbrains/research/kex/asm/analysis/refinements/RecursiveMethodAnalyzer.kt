@@ -207,22 +207,21 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         else -> emptyList()
     }
 
+    private fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
+        val refinement = findRefinement(calledMethod).expanded()
+        val methodState = getStateForInlining()
+        if (refinement.isUnknown() && methodState == null) skip()
+        val state = methodState ?: BasicState()
+        return refinement to state
+    }
 
     private fun prepareMethodOtherExecutionPaths(otherExecutionPaths: List<PredicateState>): List<PredicateState> =
             otherExecutionPaths.map {
                 MethodFunctionalInliner(psa) {
-                    if (calledMethod == method) {
-                        skip()
-                        return@MethodFunctionalInliner
-                    }
-                    val refinement = findRefinement(calledMethod).expanded()
-                    var methodState = getStateForInlining() ?: BasicState()
-                    if (refinement.isUnknown() && methodState.isEmpty) {
-                        skip()
-                        return@MethodFunctionalInliner
-                    }
-                    methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
-                    val state = ChainState(refinement.allStates().not(), methodState)
+                    if (calledMethod == method) skip()
+                    val (refinement, methodState) = getMethodStateAndRefinement()
+                    val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
+                    val state = ChainState(refinement.allStates().not(), fixedState)
                     inline(state)
                 }.apply(it)
             }
@@ -231,25 +230,17 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         val otherExecutionPaths = mutableListOf<PredicateState>()
         val state = transform(builder.methodRawFullState()) {
             +MethodFunctionalInliner(psa) {
-                if (calledMethod == method) {
-                    skip()
-                    return@MethodFunctionalInliner
-                }
-                val instruction = psa.builder(method).findInstructionsForPredicate(it)
+                if (calledMethod == method) skip()
+                val instruction = psa.builder(method).findInstructionsForPredicate(predicate)
                         ?: throw IllegalStateException("No instruction for predicate")
                 val instructionState = psa.builder(method).getInstructionState(instruction)
                         ?: throw IllegalStateException("No state for call")
-                val refinement = findRefinement(calledMethod).expanded()
-                var methodState = getStateForInlining() ?: BasicState()
-                if (refinement.isUnknown() && methodState.isEmpty) {
-                    skip()
-                    return@MethodFunctionalInliner
-                }
-                methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
-                val state = ChainState(refinement.allStates().not(), methodState)
+                val (refinement, methodState) = getMethodStateAndRefinement()
+                val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
+                val state = ChainState(refinement.allStates().not(), fixedState)
                 inline(state)
                 val inlinedNegative = prepareForInline(refinement.allStates())
-                val withoutCurrentCall = instructionState.filterNot { predicate -> predicate == it }
+                val withoutCurrentCall = instructionState.filterNot { it == predicate }
                 val negativeExecution = ChainState(withoutCurrentCall, inlinedNegative)
                 otherExecutionPaths.add(negativeExecution)
             }
@@ -261,15 +252,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             .mapNotNull { psb.getInstructionState(it) }
             .map {
                 MethodFunctionalInliner(psa) {
-                    if (calledMethod == method) {
-                        skip()
-                        return@MethodFunctionalInliner
-                    }
-                    var state = getStateForInlining()
-                    if (state == null) {
-                        skip()
-                        return@MethodFunctionalInliner
-                    }
+                    if (calledMethod == method) skip()
+                    var state = getStateForInlining() ?: skip()
                     state = fixPathPredicatesOnTopLevelBeforeInlining(state)
                     inline(state)
                 }.apply(it)

@@ -52,13 +52,10 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
             callInstructions: Map<CallPredicate, CallInst>,
             ignoredCalls: List<CallInst>
     ): RefinementSource {
-        val inliner = MethodFunctionalInliner(psa) { predicate ->
+        val inliner = MethodFunctionalInliner(psa) {
             val instruction = callInstructions[predicate]
                     ?: throw IllegalStateException("No instruction for predicate")
-            if (instruction in ignoredCalls) {
-                skip()
-                return@MethodFunctionalInliner
-            }
+            if (instruction in ignoredCalls) skip()
             val predicateState = mapping[instruction]
                     ?: throw IllegalArgumentException("No method $predicate for inline")
             inline(predicateState)

@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.state.transformer
 
+import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
@@ -12,61 +13,54 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.Method
-import java.util.*
 
 class MethodFunctionalInliner(
         private val psa: PredicateStateAnalysis,
-        private val function: MethodFunctionalInliner.(CallPredicate) -> Unit
+        private val transformation: TransformationState.() -> Unit
 ) : RecollectingTransformer<MethodFunctionalInliner> {
-    val im = MethodManager.InlineManager
-    override val builders = ArrayDeque<StateBuilder>()
+    override val builders = dequeOf(StateBuilder())
+    private val im = MethodManager.InlineManager
     private var inlineIndex = 0
 
-    private lateinit var currentPredicate: CallPredicate
-    private lateinit var currentResult: Predicate
+    inner class TransformationState(val predicate: CallPredicate) {
+        val calledMethod: Method = (predicate.call as CallTerm).method
+        var currentResult: Predicate = nothing()
 
-    init {
-        builders.push(StateBuilder())
+        fun getStateForInlining(): PredicateState? {
+            if (!im.isInlinable(calledMethod)) return null
+            if (calledMethod.isEmpty()) return null
+            val builder = psa.builder(calledMethod)
+            return builder.methodState
+        }
+
+        fun fixPathPredicatesOnTopLevelBeforeInlining(ps: PredicateState): PredicateState = PathPredicatesOnTopLevelBeforeInliningFixer(predicate).apply(ps)
+
+        fun prepareForInline(body: PredicateState): PredicateState {
+            val mappings = im.methodArguments(predicate)
+            return TermRenamer("inlined_var_${inlineIndex++}", mappings).apply(body)
+        }
+
+        fun inline(body: PredicateState) {
+            currentBuilder += prepareForInline(body)
+        }
+
+        fun skip(): Nothing {
+            currentResult = predicate
+            throw StopInliningException()
+        }
     }
 
-    val calledMethod: Method
-        get() = (currentPredicate.call as CallTerm).method
-
-    fun getStateForInlining(): PredicateState? {
-        if (!im.isInlinable(calledMethod)) return null
-        if (calledMethod.isEmpty()) return null
-        val builder = psa.builder(calledMethod)
-        return builder.methodState
-    }
-
-    fun fixPathPredicatesOnTopLevelBeforeInlining(ps: PredicateState): PredicateState = PathPredicatesOnTopLevelBeforeInliningFixer(currentPredicate).apply(ps)
-
-    fun prepareForInline(body: PredicateState): PredicateState {
-        val mappings = im.methodArguments(currentPredicate)
-        return TermRenamer("inlined_var_${inlineIndex++}", mappings).apply(body)
-    }
-
-    fun inline(body: PredicateState) {
-        currentBuilder += prepareForInline(body)
-    }
-
-    fun add(ps: PredicateState) {
-        currentBuilder += ps
-    }
-
-    fun skip() {
-        currentResult = currentPredicate
-    }
-
-    fun replace(new: Predicate) {
-        currentResult = new
+    private class StopInliningException : Exception() {
+        override fun fillInStackTrace(): Throwable = this
     }
 
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
-        currentPredicate = predicate
-        currentResult = nothing()
-        function(predicate)
-        return currentResult
+        val state = TransformationState(predicate)
+        try {
+            state.transformation()
+        } catch (ex: StopInliningException) {
+        }
+        return state.currentResult
     }
 
     private class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
