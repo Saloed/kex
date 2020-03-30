@@ -56,7 +56,7 @@ class CallPredicateConverterWithRecursion(
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            DeclarationTracker.Declaration.ClassProperty(field.`class`.name, field.name, loadTerm.field.memspace)
+            DeclarationTracker.Declaration.ClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
         }
     }
 
