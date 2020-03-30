@@ -89,6 +89,7 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         is BoolExpr -> ctx.mkNot(expr)
         is BitVecExpr -> ctx.mkBVNeg(expr)
         is FPExpr -> ctx.mkFPNeg(expr)
+        is ArithExpr -> ctx.mkUnaryMinus(expr)
         else -> unreachable { log.error("Unimplemented operation negate") }
     }
 

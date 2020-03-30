@@ -73,8 +73,18 @@ class DeclarationTracker {
                     "ClassProperty(className='$className' propertyName='$propertyName', memspace=$memspace info=$info)"
         }
 
+        class Call(val index: Int, info: DeclarationInfo? = null) : Declaration(info) {
+            override fun toString() = "Call(info=$info)"
+            override fun hashCode() = info?.hashCode() ?: 0
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (other !is Call) return false
+                return index == other.index
+            }
+        }
+
         fun isValuable() = when (this) {
-            is This, is Argument, is Memory, is Property -> true
+            is This, is Argument, is Memory, is Property, is Call -> true
             else -> false
         }
 
@@ -83,12 +93,14 @@ class DeclarationTracker {
             private val memoryRegexp = Regex("${Z3Context.MEMORY_NAME}(\\d+)")
             private val classPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}(\\w+)\\.(\\w+)__(\\d+)")
             private val otherPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}(\\w+)__(\\d+)")
+            private val callRegexp = Regex("call__(\\d+)")
 
             fun create(name: String, sort: Sort, expr: Expr): Declaration {
                 val matchArgument = argRegexp.find(name)
                 val matchMemory = memoryRegexp.find(name)
                 val matchClassProperty = classPropertyRegexp.find(name)
                 val matchOtherProperty = otherPropertyRegexp.find(name)
+                val matchCall = callRegexp.find(name)
                 val declarationInfo = DeclarationInfo(name, sort, expr)
                 return when {
                     name == "this" -> This(declarationInfo)
@@ -112,6 +124,10 @@ class DeclarationTracker {
                         val propertyName = groups[1]
                         val memspace = groups[2].toInt()
                         Property(propertyName, memspace, declarationInfo)
+                    }
+                    matchCall != null -> {
+                        val idx = matchCall.groupValues[1].toInt()
+                        Call(idx, declarationInfo)
                     }
                     else -> Other(declarationInfo)
                 }

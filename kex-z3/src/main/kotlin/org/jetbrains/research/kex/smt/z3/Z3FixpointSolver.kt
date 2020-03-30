@@ -189,6 +189,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
         val ctx = CallCtx(tf)
+
+        val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
+        val state = unknownCallsProcessor.apply(state)
+        val positivePaths = unknownCallsProcessor.apply(positivePaths)
+        val query = unknownCallsProcessor.apply(query)
+
         val z3State = ctx.convert(state).asAxiom() as BoolExpr
         val z3positive = positivePaths.map { ctx.convert(it).expr as BoolExpr }
         val z3query = ctx.convert(query).expr as BoolExpr
@@ -196,6 +202,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
         val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
         val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state)
+        unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
 
         possibilityChecks(z3State, z3positive, z3query)
 
