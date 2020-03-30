@@ -47,6 +47,8 @@ data class Refinements(val value: List<Refinement>, val method: Method) {
     fun allStates(): PredicateState = ChoiceState(value.map { it.state })
     fun fmap(transform: (PredicateState) -> PredicateState) = Refinements(value.map { it.fmap(transform) }, method)
 
+    fun isUnknown() = value.isEmpty()
+
     companion object {
         fun unknown(method: Method) = Refinements(emptyList(), method)
     }

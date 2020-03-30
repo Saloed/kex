@@ -127,7 +127,6 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
         }
         state = transform(state) {
-            +IntrinsicAdapter
             +Optimizer()
             +ConstantPropagator
             +BoolTypeAdapter(cm.type)
@@ -158,9 +157,6 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         }
         return resultState to callInfo
     }
-
-    fun collectMemspaces(state: PredicateState): List<Pair<Term, Int>> =
-            collectVariables(state).filter { it.type is KexPointer }.map { it to it.memspace }
 
     private fun callMemoryProperties(callPredicate: CallPredicate): Map<Field, FieldLoadTerm> {
         val call = callPredicate.call as CallTerm
@@ -221,6 +217,10 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                     }
                     val refinement = findRefinement(calledMethod).expanded()
                     var methodState = getStateForInlining() ?: BasicState()
+                    if (refinement.isUnknown() && methodState.isEmpty) {
+                        skip()
+                        return@MethodFunctionalInliner
+                    }
                     methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
                     val state = ChainState(refinement.allStates().not(), methodState)
                     inline(state)
@@ -241,6 +241,10 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                         ?: throw IllegalStateException("No state for call")
                 val refinement = findRefinement(calledMethod).expanded()
                 var methodState = getStateForInlining() ?: BasicState()
+                if (refinement.isUnknown() && methodState.isEmpty) {
+                    skip()
+                    return@MethodFunctionalInliner
+                }
                 methodState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
                 val state = ChainState(refinement.allStates().not(), methodState)
                 inline(state)
@@ -261,7 +265,11 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                         skip()
                         return@MethodFunctionalInliner
                     }
-                    var state = getStateForInlining() ?: return@MethodFunctionalInliner
+                    var state = getStateForInlining()
+                    if (state == null) {
+                        skip()
+                        return@MethodFunctionalInliner
+                    }
                     state = fixPathPredicatesOnTopLevelBeforeInlining(state)
                     inline(state)
                 }.apply(it)
