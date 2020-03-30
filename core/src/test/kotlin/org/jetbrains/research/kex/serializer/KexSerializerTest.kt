@@ -10,8 +10,7 @@ import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.*
 
 @UnstableDefault
 @ImplicitReflectionSerializer

@@ -6,8 +6,7 @@ import org.jetbrains.research.kfg.analysis.LoopAnalysis
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.UnreachableInst
-import org.junit.Assert.assertNotNull
-import kotlin.test.Test
+import kotlin.test.*
 
 class PredicateStateBuilderTest : KexTest() {
 

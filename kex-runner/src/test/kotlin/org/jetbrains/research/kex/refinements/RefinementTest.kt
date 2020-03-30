@@ -15,9 +15,11 @@ import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.visitor.executePipeline
+import org.junit.jupiter.api.TestInstance
 import java.net.URLClassLoader
 import kotlin.test.assertEquals
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
 
     private val `class`: Class

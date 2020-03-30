@@ -11,9 +11,8 @@ import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.mergeTypes
 import org.jetbrains.research.kfg.visitor.MethodVisitor
-import org.junit.Assert.*
-import kotlin.test.Test
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertArrayEquals
+import kotlin.test.*
 
 class PredicateBuilderTest : KexTest() {
     val tf = TermFactory

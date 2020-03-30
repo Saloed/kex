@@ -4,10 +4,7 @@ import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Context
 import com.microsoft.z3.Status
 import org.jetbrains.research.kex.KexTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class Z3SolverTest : KexTest() {
     @Test
