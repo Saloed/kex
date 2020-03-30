@@ -127,12 +127,12 @@ abstract class KexRunnerTest : KexTest() {
         }
     }
 
-    private fun updateClassPath(loader: URLClassLoader) {
+    fun updateClassPath(loader: URLClassLoader) {
         val urlClassPath = loader.urLs.joinToString(separator = ":") { "${it.path}." }
         System.setProperty("java.class.path", "${classPath.split(":").filter { "kex-test" !in it }.joinToString(":")}:$urlClassPath")
     }
 
-    private fun clearClassPath() {
+    fun clearClassPath() {
         System.setProperty("java.class.path", classPath)
     }
 

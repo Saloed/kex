@@ -139,6 +139,23 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
+    fun checkEquality(first: PredicateState, second: PredicateState): Boolean {
+        val ctx = CallCtx(tf)
+        val z3First = ctx.build {
+            convert(first).asAxiom() as BoolExpr
+        }
+        val z3Second = ctx.build {
+            convert(second).asAxiom() as BoolExpr
+        }
+        val query = ctx.build {
+            context.mkEq(z3First, z3Second).forall(ctx.knownDeclarations.map { it.expr })
+        }
+        return ctx.withSolver(fixpoint = false) {
+            add(query)
+            Status.SATISFIABLE == check()
+        }
+    }
+
     fun analyzeRecursion(
             state: PredicateState,
             recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
