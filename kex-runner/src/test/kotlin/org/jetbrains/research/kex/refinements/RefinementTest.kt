@@ -10,6 +10,7 @@ import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
@@ -22,8 +23,22 @@ import kotlin.test.assertEquals
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
 
-    private val `class`: Class
-        get() = cm["$packageName/refinements/$suiteName"]
+    val refinementsPackageName = "$packageName/refinements"
+    val refinementsPackage = Package("$refinementsPackageName/*")
+    val `class`: Class
+        get() = cm["$refinementsPackageName/$suiteName"]
+
+    private val psa = PredicateStateAnalysis(analysisContext.cm)
+
+    init {
+        updateClassPath(analysisContext.loader as URLClassLoader)
+        executePipeline(analysisContext.cm, refinementsPackage) {
+            +LoopSimplifier(analysisContext.cm)
+            +LoopDeroller(analysisContext.cm)
+            +psa
+        }
+        clearClassPath()
+    }
 
     fun run(method: String, expected: RefinementBuilder.() -> Unit) {
         val testMethod = findMethod(method)
@@ -56,16 +71,8 @@ abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
             ?: throw IllegalStateException("Method $name not found in $`class`")
 
     private fun refinementsForMethod(method: Method): Refinements {
-        val psa = PredicateStateAnalysis(analysisContext.cm)
-        updateClassPath(analysisContext.loader as URLClassLoader)
         val refinements = MethodRefinements(analysisContext, psa)
-        executePipeline(analysisContext.cm, listOf(method)) {
-            +LoopSimplifier(analysisContext.cm)
-            +LoopDeroller(analysisContext.cm)
-            +psa
-            +refinements
-        }
-        clearClassPath()
+        refinements.visit(method)
         return refinements.getOrComputeRefinement(method)
     }
 
