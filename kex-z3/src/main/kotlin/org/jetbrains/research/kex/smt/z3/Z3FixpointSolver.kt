@@ -148,10 +148,13 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             query: PredicateState
     ): FixpointResult {
         val recursionPredicate = Predicate(0)
-        val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, recursionPredicate.name)
+        val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, rootCall, recursionPredicate.name)
+        val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys) + state + recursionPath + positive + query
+        if (unknownCallsProcessor.hasUnknownCalls()) throw IllegalArgumentException("Recursive with unknowns")
+
         val ctx = CallCtx(tf, recursionConverter)
-        val declarationMapping = recursionConverter.initializeAndCreateMapping(rootCall)
         val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
+
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
         }
@@ -184,7 +187,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         log.debug("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
         log.debug("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
 
-        return ctx.callSolver(listOf(recursionPredicate), declarationMapping, listOf(recursionStmt), queryStmt)
+        return ctx.callSolver(listOf(recursionPredicate), recursionConverter.mapper, listOf(recursionStmt), queryStmt)
     }
 
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {

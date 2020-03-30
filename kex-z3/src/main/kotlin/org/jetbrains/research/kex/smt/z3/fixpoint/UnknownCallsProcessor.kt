@@ -6,12 +6,15 @@ import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 
 class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
+    data class UnknownCall(val idx: Int, val call: CallTerm, val variable: Term)
+
     private val states = arrayListOf<PredicateState>()
     private val replacement = hashMapOf<CallPredicate, Predicate>()
-    private val reverseMapping = hashMapOf<Int, CallTerm>()
+    private val unknownCalls = hashMapOf<Int, UnknownCall>()
     private var initialized = false
 
     operator fun plus(ps: PredicateState): UnknownCallsProcessor = apply { states.add(ps) }
@@ -33,8 +36,15 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
         ensureReplacement()
         val calls = declarationMapping.declarations.filterIsInstance<DeclarationTracker.Declaration.Call>()
         for (call in calls) {
-            declarationMapping.setTerm(call, reverseMapping[call.index]!!)
+            declarationMapping.setTerm(call, unknownCalls[call.index]!!.call)
         }
+    }
+
+    fun hasUnknownCalls() = unknownCalls.isNotEmpty()
+
+    fun unknownCalls(): List<UnknownCall> {
+        ensureReplacement()
+        return unknownCalls.values.toList()
     }
 
     private fun collectCalls(ps: PredicateState): Set<CallPredicate> {
@@ -58,7 +68,7 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
             }
             val callVariable = term { value(call.lhv.type, "call__$index") }
             replacement[call] = EqualityPredicate(call.lhv, callVariable, call.type, call.location)
-            reverseMapping[index] = call.call as CallTerm
+            unknownCalls[index] = UnknownCall(index, call.call as CallTerm, callVariable)
         }
     }
 
