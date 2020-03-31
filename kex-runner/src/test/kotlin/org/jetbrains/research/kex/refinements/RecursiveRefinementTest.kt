@@ -59,7 +59,7 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
         }
     }
 
-    val xcls = "$refinementsPackageName/Recursive\$XCls"
+    private val xcls = nestedClass("XCls")
 
     @Test
     fun testRecursiveWithMemory() = run("recursiveWithMemory") {

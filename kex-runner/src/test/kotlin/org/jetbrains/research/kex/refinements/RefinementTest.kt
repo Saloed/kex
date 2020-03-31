@@ -10,6 +10,8 @@ import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.state.predicate.PredicateBuilder
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
@@ -46,6 +48,8 @@ abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
         val expectedRefinements = RefinementBuilder(testMethod).apply { expected() }.refinements()
         assertRefinementsEqual(expectedRefinements, refinements)
     }
+
+    fun nestedClass(name: String) = "$refinementsPackageName/$suiteName\$$name"
 
     private fun assertRefinementsEqual(expected: Refinements, actual: Refinements) {
         if (expected == actual) return
