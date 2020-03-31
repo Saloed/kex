@@ -1,8 +1,11 @@
 package org.jetbrains.research.kex.refinements
 
+import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.ChainState
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.term.Term
 import kotlin.test.Test
 
@@ -44,8 +47,9 @@ class ClassesRefinementTest : RefinementTest("Classes") {
     }
 
     @Test
+    @ImplicitReflectionSerializer
     fun testManyClassArgs() = run("manyClassArgs") {
-        refinement(IllegalArgumentException()) { emptyState() }
+        refinementFromResource(IllegalArgumentException())
     }
 
     @Test

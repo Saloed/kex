@@ -2,10 +2,15 @@ package org.jetbrains.research.kex.refinements
 
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.ChoiceState
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.choice
+import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
 
 class RecursiveRefinementTest : RefinementTest("Recursive") {
+    private val xcls = nestedClass("XCls")
+
     @Test
     fun testRecursiveSimple() = run("recursiveSimple") {
         refinement(IllegalArgumentException()) {
@@ -58,8 +63,6 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
             })
         }
     }
-
-    private val xcls = nestedClass("XCls")
 
     @Test
     fun testRecursiveWithMemory() = run("recursiveWithMemory") {

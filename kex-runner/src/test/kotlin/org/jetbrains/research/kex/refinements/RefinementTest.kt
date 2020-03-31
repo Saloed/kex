@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
+import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.KexRunnerTest
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
@@ -7,11 +8,10 @@ import org.jetbrains.research.kex.asm.analysis.refinements.RefinementCriteria
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
+import org.jetbrains.research.kex.serialization.KexSerializer
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
-import org.jetbrains.research.kex.state.predicate.PredicateBuilder
-import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
@@ -24,7 +24,6 @@ import kotlin.test.assertEquals
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
-
     val refinementsPackageName = "$packageName/refinements"
     val refinementsPackage = Package("$refinementsPackageName/*")
     val `class`: Class
@@ -86,6 +85,16 @@ abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
         fun refinement(exception: Exception, psBuilder: StateBuilder.() -> PredicateState) {
             val criteria = criteriaForException(exception)
             val ps = StateBuilder().psBuilder()
+            values.add(Refinement.create(criteria, ps))
+        }
+
+        @ImplicitReflectionSerializer
+        fun refinementFromResource(exception: Exception) {
+            val criteria = criteriaForException(exception)
+            val resourceName = "${suiteName}__${method.name}.json"
+            val resource = RefinementTest::class.java.getResource(resourceName)
+            val resourceContent = resource.readText()
+            val ps = KexSerializer(cm).fromJson<PredicateState>(resourceContent)
             values.add(Refinement.create(criteria, ps))
         }
 

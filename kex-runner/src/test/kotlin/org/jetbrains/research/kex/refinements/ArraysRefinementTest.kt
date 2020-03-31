@@ -7,6 +7,7 @@ import org.jetbrains.research.kex.state.choice
 import kotlin.test.Test
 
 class ArraysRefinementTest : RefinementTest("Arrays") {
+
     @Test
     fun testArray() = run("arrayTest") {
         refinement(ArrayIndexOutOfBoundsException()) {

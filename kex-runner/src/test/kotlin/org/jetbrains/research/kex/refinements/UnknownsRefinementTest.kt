@@ -1,21 +1,21 @@
 package org.jetbrains.research.kex.refinements
 
-import org.jetbrains.research.kex.state.emptyState
+import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlin.test.Test
 
 class UnknownsRefinementTest : RefinementTest("Unknowns") {
     @Test
+    @ImplicitReflectionSerializer
     fun testUnknownSimple() = run("unknownSimple") {
-        refinement(IllegalStateException()) { emptyState() }
+        refinementFromResource(IllegalStateException())
     }
 
     @Test
+    @ImplicitReflectionSerializer
     fun testUnknownFunctionCall() = run("unknownFunctionCall") {
-        refinement(IllegalStateException()) { emptyState() }
+        refinementFromResource(IllegalStateException())
     }
 
     @Test
-    fun testRecursiveUnknownFunction() = run("recursiveUnknownFunction") {
-        refinement(IllegalArgumentException()) { emptyState() }
-    }
-} 
+    fun testRecursiveUnknownFunction() = run("recursiveUnknownFunction") {}
+}

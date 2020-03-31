@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex.asm.state
 
-import com.uchuhimo.collections.mutableBiMapOf
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.path
@@ -15,7 +14,7 @@ import org.jetbrains.research.kfg.visitor.MethodVisitor
 class InvalidInstructionError(message: String) : Exception(message)
 
 class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
-    val predicateMap = mutableBiMapOf<Instruction, Predicate>()
+    val predicateMap = hashMapOf<Instruction, Predicate>()
     val phiPredicateMap = hashMapOf<Pair<BasicBlock, Instruction>, Predicate>()
     val terminatorPredicateMap = hashMapOf<Pair<BasicBlock, TerminateInst>, Predicate>()
 

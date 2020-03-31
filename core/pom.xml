@@ -69,11 +69,6 @@
             <artifactId>kotlinx-serialization-runtime</artifactId>
             <version>${serialization.version}</version>
         </dependency>
-      <dependency>
-        <groupId>com.uchuhimo</groupId>
-        <artifactId>kotlinx-bimap</artifactId>
-        <version>1.2</version>
-      </dependency>
     </dependencies>
 
     <build>
