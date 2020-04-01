@@ -12,16 +12,13 @@ import org.jetbrains.research.kex.state.term.term
 class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
     data class UnknownCall(val idx: Int, val call: CallTerm, val variable: Term)
 
-    private val states = arrayListOf<PredicateState>()
     private val replacement = hashMapOf<CallPredicate, Predicate>()
     private val unknownCalls = hashMapOf<Int, UnknownCall>()
-    private var initialized = false
 
-    operator fun plus(ps: PredicateState): UnknownCallsProcessor = apply { states.add(ps) }
-    operator fun plus(ps: List<PredicateState>): UnknownCallsProcessor = apply { states.addAll(ps) }
+    operator fun plus(ps: PredicateState): UnknownCallsProcessor = apply { analyzeState(ps) }
+    operator fun plus(ps: List<PredicateState>): UnknownCallsProcessor = apply { ps.forEach { analyzeState(it) } }
 
     fun apply(ps: PredicateState): PredicateState {
-        ensureReplacement()
         return ps.map {
             when (it) {
                 !is CallPredicate -> it
@@ -33,7 +30,6 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
     fun apply(ps: List<PredicateState>) = ps.map { apply(it) }
 
     fun addToDeclarationMapping(declarationMapping: ModelDeclarationMapping) {
-        ensureReplacement()
         val calls = declarationMapping.declarations.filterIsInstance<DeclarationTracker.Declaration.Call>()
         for (call in calls) {
             declarationMapping.setTerm(call, unknownCalls[call.index]!!.call)
@@ -42,10 +38,7 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
 
     fun hasUnknownCalls() = unknownCalls.isNotEmpty()
 
-    fun unknownCalls(): List<UnknownCall> {
-        ensureReplacement()
-        return unknownCalls.values.toList()
-    }
+    fun unknownCalls(): List<UnknownCall> = unknownCalls.values.toList()
 
     private fun collectCalls(ps: PredicateState): Set<CallPredicate> {
         val result = hashSetOf<CallPredicate>()
@@ -58,19 +51,17 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
         return result
     }
 
-    private fun ensureReplacement() {
-        if (initialized) return
-        val calls = states.fold(emptySet<CallPredicate>()) { acc, state -> acc + collectCalls(state) }
-        for ((index, call) in calls.withIndex()) {
+    private fun analyzeState(ps: PredicateState) {
+        val calls = collectCalls(ps).filterNot { it in replacement }
+        for (call in calls) {
             if (!call.hasLhv) {
                 replacement[call] = ConstantPredicate(true, call.type, call.location)
                 continue
             }
+            val index = replacement.size
             val callVariable = term { value(call.lhv.type, "call__$index") }
             replacement[call] = EqualityPredicate(call.lhv, callVariable, call.type, call.location)
             unknownCalls[index] = UnknownCall(index, call.call as CallTerm, callVariable)
         }
     }
-
-
 }
