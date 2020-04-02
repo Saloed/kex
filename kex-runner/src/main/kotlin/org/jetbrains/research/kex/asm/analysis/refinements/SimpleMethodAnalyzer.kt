@@ -64,6 +64,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
     }
 
     private fun queryRefinementSources(state: PredicateState, normal: PredicateState, sources: RefinementSources): Refinements {
+        if (sources.value.isEmpty()) return Refinements(emptyList(), method)
         val conditions = sources.value.map { it.condition }
         val fixpointAnswer = queryFixpointSolver(state, normal, conditions)
         val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement.create(src.criteria, answer) }
@@ -75,7 +76,10 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
                 val result = Z3FixpointSolver(cm.type).mkFixpointQuery(state, exceptions, normal)
                 when (result) {
                     is FixpointResult.Sat -> result.result
-                    else -> exceptions.map { falseState() }
+                    else -> {
+                        if (result is FixpointResult.Unknown) log.error("Unknown: ${result.reason}")
+                        exceptions.map { falseState() }
+                    }
                 }
             } catch (ex: QueryCheckStatus.FixpointQueryException) {
                 log.error("Bad fixpoint query: ${ex.status}")

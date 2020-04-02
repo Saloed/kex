@@ -49,11 +49,17 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         }
     }
 
-    override fun bv2float(ctx: Context, expr: Expr, sort: Sort): Expr =
-            ctx.mkFPToFP(ctx.mkFPRTZ(), expr as BitVecExpr, sort as FPSort, true)
+    override fun bv2float(ctx: Context, expr: Expr, sort: Sort): Expr = when(expr){
+        is BitVecExpr -> ctx.mkFPToFP(ctx.mkFPRTZ(), expr, sort as FPSort, true)
+        is IntExpr -> ctx.mkFPToFP(ctx.mkFPRTZ(), ctx.mkInt2Real(expr), sort as FPSort)
+        else -> throw IllegalStateException("Unexpected expr $expr")
+    }
 
-    override fun float2bv(ctx: Context, expr: Expr, sort: Sort): Expr =
-            ctx.mkFPToBV(ctx.mkFPRTZ(), expr as FPExpr, (sort as BitVecSort).size, true)
+    override fun float2bv(ctx: Context, expr: Expr, sort: Sort): Expr = when(sort){
+        is BitVecSort -> ctx.mkFPToBV(ctx.mkFPRTZ(), expr as FPExpr, sort.size, true)
+        is IntSort -> ctx.mkReal2Int(ctx.mkFPToReal(expr as FPExpr))
+        else -> throw IllegalStateException("Unexpected sort $sort")
+    }
 
     override fun float2float(ctx: Context, expr: Expr, sort: Sort): Expr =
             ctx.mkFPToFP(ctx.mkFPRTZ(), expr as FPExpr, sort as FPSort )

@@ -93,7 +93,10 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             val result = solver.analyzeRecursion(state, recursiveCalls, rootCall, recursionPaths, refinementSource.condition, normalPaths)
             when (result) {
                 is FixpointResult.Sat -> result.result.first()
-                else -> falseState()
+                else -> {
+                    if (result is FixpointResult.Unknown) log.error("Unknown: ${result.reason}")
+                    falseState()
+                }
             }
         } catch (ex: QueryCheckStatus.FixpointQueryException) {
             log.error("Bad fixpoint query: ${ex.status}")

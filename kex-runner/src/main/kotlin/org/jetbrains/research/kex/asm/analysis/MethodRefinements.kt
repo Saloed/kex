@@ -52,30 +52,37 @@ class MethodRefinements(
     }
 
     private fun analyzeMethod(method: Method): Refinements {
+        log.info("Start analysis: $method")
         if (method in methodAnalysisStack) {
-            knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyze()
+            knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyzeSafely()
             throw SkipRecursion(method)
         }
         methodAnalysisStack.addLast(method)
-        log.info("Start analysis: $method")
-
-        val result = try {
-            SimpleMethodAnalyzer(cm, psa, this, method).analyze()
-        } catch (skip: SkipRecursion) {
-            if (methodAnalysisStack.isEmpty()) throw IllegalStateException("Empty recursion stack")
-            if (methodAnalysisStack.last != skip.method) {
-                methodAnalysisStack.removeLast()
-                throw skip
-            }
-            knownRefinements[skip.method] ?: Refinements.unknown(skip.method)
-        } catch (ex: Exception) {
-            log.error("Error in analysis: method $method", ex)
-            Refinements.unknown(method)
-        }
-        log.info("Result $method:\n$result")
-
+        val result = SimpleMethodAnalyzer(cm, psa, this, method).analyzeSafely()
         methodAnalysisStack.removeLast()
+        log.info("Result $method:\n$result")
         return result
+    }
+
+    private fun MethodAnalyzer.analyzeAndTrackRecursion() = try {
+        analyze()
+    } catch (skip: SkipRecursion) {
+        if (methodAnalysisStack.isEmpty()) throw IllegalStateException("Empty recursion stack")
+        if (methodAnalysisStack.last != skip.method) {
+            methodAnalysisStack.removeLast()
+            throw skip
+        }
+        knownRefinements[skip.method] ?: Refinements.unknown(skip.method)
+    }
+
+    private fun MethodAnalyzer.analyzeSafely() = try {
+        analyzeAndTrackRecursion()
+    } catch (ex: Exception) {
+        log.error("Error in analysis: method $method", ex)
+        Refinements.unknown(method)
+    } catch (ex: NotImplementedError) {
+        log.error("Error in analysis: method $method", ex)
+        Refinements.unknown(method)
     }
 
     private class SkipRecursion(val method: Method) : Exception() {
