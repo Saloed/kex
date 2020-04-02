@@ -69,7 +69,7 @@ class $self< in Index : $Bitvector, Element : $Bitvector >(val inner: $Array< El
             cases.add(((index + start) as Index) to storeElement)
             start += byteSize
         }
-        return ${self}Memory(inner.store(cases), byteSize)
+        return ${self}(inner.store(cases), byteSize)
     }
 
     fun < T : $valexpr > store(index: Index, element: T) = store(index, element.toBV())
