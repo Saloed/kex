@@ -33,8 +33,14 @@ class $self< in Index : $Bitvector, Element : $Bitvector >(val inner: $Array< El
         }
         var expr = bytes.first().expr
         var axiom = bytes.first().axiom
+        if(bytes.size == 1){
+            return $Bitvector(ctx, expr, axiom)
+        }
+        // fixme: bunch of tricky hacks
+        expr = ctx.mkInt2BV(byteSize, expr as IntExpr)
         bytes.drop(1).forEach {
-            expr = engine.binary(ctx, SMTEngine.Opcode.CONCAT, expr, it.expr)
+            val currentExpr = ctx.mkInt2BV(byteSize, it.expr as IntExpr)
+            expr = engine.binary(ctx, SMTEngine.Opcode.CONCAT, expr, currentExpr)
             axiom = spliceAxioms(ctx, axiom, it.axiom)
         }
         return $Bitvector(ctx, expr, axiom)
@@ -42,22 +48,28 @@ class $self< in Index : $Bitvector, Element : $Bitvector >(val inner: $Array< El
     inline fun < reified T : $valexpr > load(index: Index) =
         ${valexpr}.forceCast< T >(load(index, ${valexpr}.getStaticBitsize< T >(ctx)))
 
-    fun store(index: Index, element: $Bitvector): $self< Index, Element > {
+    fun store(index: Index, element: $Bitvector): Z3Memory< Index, Element > {
         val elementSize = element.getBitsize()
         var start = 0
-        val cases = arrayListOf< Pair< Index, Element >>()
-
-        //fixme: hack to avoid bitvec extract
         if(elementSize == byteSize){
-            cases.add(((index + start) as Index) to (element.toBV(byteSize) as Element))
-        } else {
-            while (start < elementSize) {
-                val hi = min(start + byteSize - 1, elementSize - 1)
-                cases.add(((index + start) as Index) to (element.extract(hi, start).toBV(byteSize) as Element))
-                start += byteSize
-            }
+            val storeIdx = (index + start) as Index
+            val storeElement = element.toBV(byteSize) as Element
+            return Z3Memory(inner.store(listOf(storeIdx to storeElement)), byteSize)
         }
-        return $self(inner.store(cases), byteSize)
+        // fixme: bunch of tricky hacks
+        val cases = arrayListOf< Pair< Index, Element >>()
+        val fixedElement = when {
+            element.expr is IntExpr -> $Bitvector(ctx, ctx.mkInt2BV(elementSize, element.expr), element.axiom)
+            else -> element
+        }
+        while (start < elementSize) {
+            val hi = min(start + byteSize - 1, elementSize - 1)
+            val tmpElement = fixedElement.extract(hi, start)
+            val storeElement = $Bitvector(ctx, ctx.mkBV2Int(tmpElement.expr as BitVecExpr, false), tmpElement.axiom) as Element
+            cases.add(((index + start) as Index) to storeElement)
+            start += byteSize
+        }
+        return ${self}Memory(inner.store(cases), byteSize)
     }
 
     fun < T : $valexpr > store(index: Index, element: T) = store(index, element.toBV())

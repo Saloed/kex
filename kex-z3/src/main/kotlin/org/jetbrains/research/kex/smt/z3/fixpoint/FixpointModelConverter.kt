@@ -1,13 +1,14 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.microsoft.z3.BoolExpr
-import com.microsoft.z3.Expr
-import com.microsoft.z3.IntExpr
-import com.microsoft.z3.IntNum
+import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.logging.log
+import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.kexType
+import org.jetbrains.research.kex.smt.SMTEngine
+import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.state
@@ -37,6 +38,8 @@ class FixpointModelConverter(
         expr.isVar -> variableTerm(expr)
         expr is BoolExpr -> convertTerm(expr)
         expr is IntExpr -> convertTerm(expr)
+        expr is BitVecExpr -> convertTerm(expr)
+        expr is FPExpr -> convertTerm(expr)
         else -> TODO()
     }
 
@@ -65,7 +68,6 @@ class FixpointModelConverter(
         else -> convertTerm(expr).equality { const(true) }
     }
 
-
     private fun convertTerm(expr: BoolExpr): TermWithAxiom = when {
         expr.isAnd -> expr.convertArgs().combine { a, b -> a and b }
         expr.isOr -> expr.convertArgs().combine { a, b -> a or b }
@@ -75,6 +77,8 @@ class FixpointModelConverter(
         expr.isGE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a ge b }
         expr.isConst && expr.boolValue == Z3_lbool.Z3_L_TRUE -> TermWithAxiom.wrap { const(true) }
         expr.isConst && expr.boolValue == Z3_lbool.Z3_L_FALSE -> TermWithAxiom.wrap { const(false) }
+        expr.isBVSLE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a le b }
+        expr.isBVSGE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a ge b }
         else -> TODO()
     }
 
@@ -83,6 +87,19 @@ class FixpointModelConverter(
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
         expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
+        else -> TODO()
+    }
+
+    private fun convertTerm(expr: BitVecExpr): TermWithAxiom = when {
+        expr is BitVecNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
+        expr.isBVAdd -> expr.convertArgs().combine { a, b -> a add b }
+        expr.isBVMul -> expr.convertArgs().combine { a, b -> a mul b }
+        expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
+        else -> TODO()
+    }
+
+    private fun convertTerm(expr: FPExpr): TermWithAxiom = when {
+        expr is FPNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
         else -> TODO()
     }
 

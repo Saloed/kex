@@ -32,7 +32,7 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
 
     private fun getThrowType(inst: ThrowInst): Type = when {
         inst.throwable is CastInst -> (inst.throwable as CastInst).operand.type
-        else -> inst.type
+        else -> inst.throwable.type
     }
 
     private fun getRefinementCriteria(inst: Instruction) = when (inst) {

@@ -11,6 +11,10 @@ class Z3BooleanOption(name: String, private val boolValue: Boolean) : Z3Option(n
     override fun addToParams(params: Params) = params.apply { add(name, boolValue) }
 }
 
+class Z3IntOption(name: String, private val intValue: Int) : Z3Option(name, "$intValue") {
+    override fun addToParams(params: Params) = params.apply { add(name, intValue) }
+}
+
 class Z3OptionBuilder(val params: List<Z3Option> = emptyList()) {
     val fp = Z3FpOptions(this, "fp")
 
@@ -19,10 +23,12 @@ class Z3OptionBuilder(val params: List<Z3Option> = emptyList()) {
 
 
     fun add(name: String, value: Boolean) = Z3OptionBuilder(params + Z3BooleanOption(name, value))
+    fun add(name: String, value: Int) = Z3OptionBuilder(params + Z3IntOption(name, value))
     fun add(name: String, value: String) = Z3OptionBuilder(params + Z3Option(name, value))
 
 
     fun produceUnsatCores(value: Boolean) = this.add("unsat_core", value)
+    fun timeout(value: Int) = this.add("timeout", value)
 
     class Z3FpOptions(val builder: Z3OptionBuilder, val prefix: String) {
         val xform = Z3FpXformOptions(builder, "$prefix.xform")
