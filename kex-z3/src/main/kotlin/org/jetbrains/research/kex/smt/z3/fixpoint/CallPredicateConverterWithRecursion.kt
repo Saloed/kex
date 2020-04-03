@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import com.microsoft.z3.BoolExpr
+import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -16,6 +17,7 @@ class CallPredicateConverterWithRecursion(
 
     private val orderedDeclarations: MutableList<DeclarationTracker.Declaration>
     private val orderedProperties: List<DeclarationTracker.Declaration.Property>
+    private val propertyTypes = hashMapOf<DeclarationTracker.Declaration.Property, KexType>()
     val mapper: ModelDeclarationMapping
 
     init {
@@ -56,7 +58,9 @@ class CallPredicateConverterWithRecursion(
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            DeclarationTracker.Declaration.ClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
+            val property = DeclarationTracker.Declaration.ClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
+            propertyTypes[property] = loadTerm.type
+            property
         }
     }
 
@@ -66,8 +70,15 @@ class CallPredicateConverterWithRecursion(
         val receiver = callPredicate.lhvUnsafe?.let { converter.convert(it, ef, ctx) } ?: ef.dummyReceiver(call)
         return (arguments
                 + listOf(receiver)
-                + orderedProperties.map { ctx.getProperties(it.memspace, it.fullName) }.map { it.memory.inner }
+                + orderedProperties.map { readProperty(it, converter, ef, ctx) }
                 )
+    }
+
+    private fun readProperty(property: DeclarationTracker.Declaration.Property, converter: Z3Converter, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
+        val type = converter.Z3Type(propertyTypes[property]!!)
+        val memory = ctx.getProperties(property.memspace, property.fullName).memory
+        memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory
+        return memory.inner
     }
 
     private fun Z3ExprFactory.dummyReceiver(call: CallTerm) = getVarByTypeAndName(call.method.returnType.kexType, "dummy_result_receiver", fresh = true)

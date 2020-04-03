@@ -1,6 +1,7 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTExpr
 import kotlin.math.max
+import kotlin.reflect.KClass
 
 private val engine = ${solver}Engine
 
@@ -23,19 +24,28 @@ fun spliceAxioms(ctx: $context, exprs: List< $expr >) = engine.conjunction(ctx, 
 
 open class $valexpr : ${solver}SMTExpr {
     companion object {
-        inline fun < reified Type : $valexpr> getStaticSort(ctx: $context) = when (Type::class) {
+        inline fun < reified Type : $valexpr> getStaticSort(ctx: $context) = getStaticSort(ctx, Type::class)
+        fun getStaticSort(ctx: $context, type: KClass< out $valexpr >) = when (type) {
 #foreach($class in $exprClasses)
             $class::class -> ${class}.getStaticSort(ctx)
 #end
             else -> unreachable { log.error("Trying to get static sort of non-simple SMTExpr") }
         }
 
-        inline fun < reified Type : $valexpr> forceCast(value: $valexpr) = when (Type::class) {
+        fun getDynamicSort(ctx: $context, expr: $valexpr) = when(expr) {
+#foreach($class in $exprClasses)
+            is $class -> ${class}.getStaticSort(ctx)
+#end
+            else -> unreachable { log.error("Trying to get dynamic sort of non-simple SMTExpr: ${ expr }") }
+        }
+
+        inline fun < reified Type : $valexpr> forceCast(value: $valexpr) = forceCast(value, Type::class) as Type
+        fun forceCast(value: $valexpr, type: KClass< out $valexpr >) = when(type){
 #foreach($class in $exprClasses)
             $class::class -> ${class}.forceCast(value)
 #end
             else -> unreachable { log.error("Trying to forceCast to non-simple SMTExpr") }
-        } as Type
+        }
 
         inline fun < reified Type : $valexpr > getStaticBitsize(ctx: $context) = when (Type::class) {
 #foreach($class in $exprClasses)
@@ -312,15 +322,31 @@ class $self< Element : $valexpr, in Index : $valexpr > : $valexpr {
             $self< Element, Index >(ctx, ${solver}Engine.makeConstArray(ctx, ${valexpr}.getStaticSort< Index >(ctx), default.expr))
 
         inline fun < reified Element : $valexpr, reified Index : $valexpr > makeFree(ctx: $context, name: String): $self< Element, Index > {
-            val sort = ${solver}Engine.getArraySort(ctx, ${valexpr}.getStaticSort< Element >(ctx), ${valexpr}.getStaticSort< Index >(ctx))
+            val sort = ${solver}Engine.getArraySort(ctx, ${valexpr}.getStaticSort< Index >(ctx), ${valexpr}.getStaticSort< Element >(ctx))
             return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, false))
         }
 
         inline fun < reified Element : $valexpr, reified Index : $valexpr > makeVar(ctx: $context, name: String): $self< Element, Index > {
-            val sort = ${solver}Engine.getArraySort(ctx, ${valexpr}.getStaticSort< Element >(ctx), ${valexpr}.getStaticSort< Index >(ctx))
+            val sort = ${solver}Engine.getArraySort(ctx, ${valexpr}.getStaticSort< Index >(ctx), ${valexpr}.getStaticSort< Element >(ctx))
+            return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, false))
+        }
+
+        fun < Element : $valexpr, Index : $valexpr > makeFree(ctx: $context, name: String, elementSort: $sort, indexSort: $sort): $self< Element, Index > {
+            val sort = ${solver}Engine.getArraySort(ctx, indexSort, elementSort)
+            return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, false))
+        }
+
+        fun < Element : $valexpr, Index : $valexpr > makeVar(ctx: $context, name: String, elementSort: $sort, indexSort: $sort): $self< Element, Index > {
+            val sort = ${solver}Engine.getArraySort(ctx, indexSort, elementSort)
             return $self< Element, Index >(ctx, ${solver}Engine.makeVar(ctx, sort, name, false))
         }
     }
+
+    val indexSort: $sort
+        get() = engine.getArrayDomain(ctx, getSort())
+
+    val elementSort: $sort
+        get() = engine.getArrayRange(ctx, getSort())
 
     #constructors("Array")
 

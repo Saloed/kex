@@ -11,7 +11,8 @@ import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
-
+import kotlin.time.ExperimentalTime
+import kotlin.time.measureTimedValue
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
@@ -26,7 +27,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val converter = Z3Converter(tf)
 
         val options = Z3OptionBuilder()
-                .timeout(5)
+                .timeout(10 * 1000 )
                 .produceUnsatCores(true)
                 .fp.engine("spacer")
                 .fp.generateProofTrace(true)
@@ -76,9 +77,16 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                     }
                     ?: throw IllegalStateException("Unable to build solver")
 
-        inline fun <reified T> withSolver(fixpoint: Boolean = false, query: Solver.() -> T) = when (fixpoint) {
-            true -> query(fixpointSolver)
-            else -> query(solver)
+        @OptIn(ExperimentalTime::class)
+        inline fun <reified T> withSolver(fixpoint: Boolean = false, query: Solver.() -> T): T {
+            val result = measureTimedValue {
+                when (fixpoint) {
+                    true -> query(fixpointSolver)
+                    else -> query(solver)
+                }
+            }
+            log.info("Run solver for ${result.duration}")
+            return result.value
         }
 
         val knownDeclarations: List<DeclarationTracker.Declaration>
@@ -93,7 +101,13 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         infix fun BoolExpr.implies(other: BoolExpr) = context.mkImplies(this, other)
         fun BoolExpr.not() = context.mkNot(this)
 
-        fun BoolExpr.forall(variables: List<Expr>) = context.mkForall(variables.toTypedArray(), this, 0, arrayOf(), null, null, null)
+        fun BoolExpr.forall(variables: List<Expr>): Quantifier = when {
+            variables.isEmpty() -> {
+                val dummy = context.mkFreshConst("dummy", context.mkBoolSort())
+                context.mkForall(arrayOf(dummy), this, 0, arrayOf(), null, null, null)
+            }
+            else -> context.mkForall(variables.toTypedArray(), this, 0, arrayOf(), null, null, null)
+        }
 
         fun boolFunction(name: String, argumentsSorts: List<Sort>) = context.mkFuncDecl(name, argumentsSorts.toTypedArray(), context.mkBoolSort())
         fun boolFunctionApp(function: FuncDecl, arguments: List<Expr>) = context.mkApp(function, *arguments.toTypedArray()) as BoolExpr
@@ -190,8 +204,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
 
-        possibilityChecks(z3State, listOf(z3Positive), z3Query)
-
         val recursionStmt = ctx.build {
             val statement = (z3State and z3Positive) implies rootPredicate
             statement.forall(declarationExprs)
@@ -225,8 +237,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state)
         unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
 
-        possibilityChecks(z3State, z3positive, z3query)
-
         val predicates = z3positive.indices.map { idx -> Predicate(idx) }
         val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
         val positiveStatements = z3positive.mapIndexed { idx, it ->
@@ -258,12 +268,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(this))
 
         val status = check()
-        when (status) {
-            Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
-            Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
-            Status.SATISFIABLE -> {
-                val result = convertModel(model, mapper, predicates)
-                FixpointResult.Sat(result)
+            when (status) {
+                Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
+                Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
+                Status.SATISFIABLE -> {
+                    val result = convertModel(model, mapper, predicates)
+                    FixpointResult.Sat(result)
             }
         }
     }
@@ -282,38 +292,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val elseEntry = predicateInterpretation.`else`
             modelConverter.apply(elseEntry)
         }
-    }
-
-    private fun possibilityChecks(state: BoolExpr, positives: List<BoolExpr>, query: BoolExpr) {
-        val correctness = QueryCheckStatus()
-        val ctx = CallCtx(tf)
-        fun logQuery(query: String, name: String) {
-            val queryName = name.toLowerCase().replace(" ", "_")
-            File("check_$queryName.smtlib").writeText(query)
-        }
-
-        fun BoolExpr.check(expected: Status, name: String) = ctx.withSolver {
-            add(this@check)
-            logQuery("$this", name)
-            val status = check()
-            status == expected
-        }
-
-        correctness.copy(stateNotPossible = ctx.build {
-            state.withContext()
-        }.check(Status.SATISFIABLE, "State"))
-        correctness.copy(negativeNotPossible = ctx.build {
-            state.withContext() and query.withContext()
-        }.check(Status.SATISFIABLE, "Query path"))
-        for (positive in positives) {
-            correctness.copy(positiveNotPossible = ctx.build {
-                state.withContext() and positive.withContext()
-            }.check(Status.SATISFIABLE, "Positive path"))
-            correctness.copy(exclusivenessNotPossible = ctx.build {
-                state.withContext() and positive.withContext() and query.withContext()
-            }.check(Status.UNSATISFIABLE, "Path exclusiveness"))
-        }
-        correctness.raiseIfNotCorrect()
     }
 
 }

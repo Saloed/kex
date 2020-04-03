@@ -14,8 +14,8 @@ typealias Float_ = $Float
 typealias Double_ = $Double
 typealias Word_ = $Bitvector32
 typealias DWord_ = $Bitvector64
-typealias Memory_ = $Memory< Ptr_, Word_ >
 typealias Dynamic_ = $valexpr
+typealias Memory_ = $Memory< Ptr_, Dynamic_ >
 
 enum class TypeSize (val int: Int) {
     WORD(1), DWORD(2);
@@ -60,10 +60,10 @@ open class $factory : ${solver}SMTExprFactory() {
 
 #generateMakes("Double", "Double")
 
-    inline fun < reified  Element: $Bitvector > makeEmptyMemory(id: String) = Memory_.makeFree< Ptr_, Element >(ctx, id)
+    inline fun < reified  Element: $valexpr > makeEmptyMemory(id: String) = Memory_.makeFree< Ptr_, Element >(ctx, id)
     //            makeDefaultMemory(id, 0xFF)
-    inline fun < reified  Element: $Bitvector > makeDefaultMemory(id: String, default: Int) =
-        Memory_.makeDefault< Ptr_, Element >(ctx, id, bvMakeConst< Element >(ctx, default) as Element)
+    inline fun < reified  Element: $valexpr > makeDefaultMemory(id: String, default: Int) =
+        Memory_.makeDefault< Ptr_, Element >(ctx, id, makeIntConst(default) as Element)
 
 #set($types = ["Bool", "Short", "Char", "Int", "Long", "Float", "Double"])
     fun getVarByTypeAndName(type: KexType, name: String, fresh: Boolean = false) = when(type) {

@@ -1,6 +1,7 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContext
 import kotlin.math.max
+import kotlin.reflect.KClass
 
 class VersionedMemory(val memory: Memory_, val version: Long = 0) {
     companion object {
@@ -14,8 +15,7 @@ class VersionedMemory(val memory: Memory_, val version: Long = 0) {
         }
     }
 
-    inline fun < reified T : $valexpr > load(ptr: Ptr_) = memory.load< T >(ptr)
-    fun load(index: Ptr_, elementSize: Int) = memory.load(index, elementSize)
+    fun < T : $valexpr > load(ptr: Ptr_, type: KClass< out $valexpr >) = memory.load< T >(ptr, type)
 
     fun < T : Dynamic_ > store(index: Ptr_, element: T): VersionedMemory {
         val newMemory = memory.store(index, element)
@@ -103,25 +103,15 @@ class $self : ${solver}SMTContext {
     fun getInitialProperties(memspace: Int, name: String) =
         initialMemories.getOrElse(propertyName(memspace, name)) { getProperties(memspace, name) }
 
-    fun readMemory(ptr: Ptr_, memspace: Int, size: TypeSize) = when (size) {
-        TypeSize.WORD -> readMemory< Word_ >(ptr, memspace)
-        TypeSize.DWORD -> readMemory< DWord_ >(ptr, memspace)
-    }
-
-    inline fun < reified T : $valexpr > readMemory(ptr: Ptr_, memspace: Int) = getMemory(memspace).load< T >(ptr)
+    fun < T : $valexpr > readMemory(ptr: Ptr_, memspace: Int, type: KClass< out $valexpr >) = getMemory(memspace).load< T >(ptr, type)
 
     fun < T : $valexpr > writeMemory(ptr: Ptr_, value: T, memspace: Int) {
         val mem = getMemory(memspace).store(ptr, value)
         setMemory(memspace, mem)
     }
 
-    fun readProperty(ptr: Ptr_, memspace: Int, name: String, size: TypeSize) = when (size) {
-        TypeSize.WORD -> readProperty< Word_ >(ptr, memspace, name)
-        TypeSize.DWORD -> readProperty< DWord_ >(ptr, memspace, name)
-    }
-
-    inline fun < reified T : $valexpr > readProperty(ptr: Ptr_, memspace: Int, name: String) =
-            getProperties(memspace, name).load< T >(ptr)
+    fun < T : $valexpr > readProperty(ptr: Ptr_, memspace: Int, name: String, type: KClass< out $valexpr >) =
+            getProperties(memspace, name).load< T >(ptr, type)
 
     fun < T : $valexpr > writeProperty(ptr: Ptr_, memspace: Int, name: String, prop: T) {
         val mem = getProperties(memspace, name).store(ptr, prop)

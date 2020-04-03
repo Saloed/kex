@@ -18,6 +18,8 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     override fun getFloatSort(ctx: Context): Sort = ctx.mkFPSortSingle()
     override fun getDoubleSort(ctx: Context): Sort = ctx.mkFPSortDouble()
     override fun getArraySort(ctx: Context, domain: Sort, range: Sort): Sort = ctx.mkArraySort(domain, range)
+    override fun getArrayDomain(ctx: Context, array: Sort): Sort = (array as ArraySort).domain
+    override fun getArrayRange(ctx: Context, array: Sort): Sort = (array as ArraySort).range
 
     override fun isBoolSort(ctx: Context, sort: Sort): Boolean = sort is BoolSort
     override fun isBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort || sort is IntSort

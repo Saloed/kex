@@ -12,7 +12,8 @@ annotation class SMTMemory(
         val solver: String,
         val importPackage: String,
         val context: String,
-        val byteSize: Int
+        val byteSize: Int,
+        val sort: String
 )
 
 annotation class SMTExprFactory(

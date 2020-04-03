@@ -1,13 +1,16 @@
 package org.jetbrains.research.kex.refinements
 
 import kotlinx.serialization.ImplicitReflectionSerializer
+import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexRunnerTest
+import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementCriteria
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
+import org.jetbrains.research.kex.random.easyrandom.EasyRandomDriver
 import org.jetbrains.research.kex.serialization.KexSerializer
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.state.PredicateState
@@ -23,22 +26,23 @@ import java.net.URLClassLoader
 import kotlin.test.assertEquals
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-abstract class RefinementTest(val suiteName: String) : KexRunnerTest() {
+abstract class RefinementTest(val suiteName: String) : KexTest() {
     val refinementsPackageName = "$packageName/refinements"
     val refinementsPackage = Package("$refinementsPackageName/*")
     val `class`: Class
         get() = cm["$refinementsPackageName/$suiteName"]
 
-    private val psa = PredicateStateAnalysis(analysisContext.cm)
+    private val psa: PredicateStateAnalysis
+    private val analysisContext: ExecutionContext
 
     init {
-        updateClassPath(analysisContext.loader as URLClassLoader)
+        analysisContext = ExecutionContext(cm, URLClassLoader(emptyArray()), EasyRandomDriver())
+        psa = PredicateStateAnalysis(analysisContext.cm)
         executePipeline(analysisContext.cm, refinementsPackage) {
             +LoopSimplifier(analysisContext.cm)
             +LoopDeroller(analysisContext.cm)
             +psa
         }
-        clearClassPath()
     }
 
     fun run(method: String, expected: RefinementBuilder.() -> Unit) {

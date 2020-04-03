@@ -44,6 +44,17 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
                 else -> unreachable { log.error("Unable to cast expr ${ expr } to ${ type }") }
             }
 
+    fun ${solver}Type(type: KexType) = when (type) {
+        is KexLong -> Long_::class
+        is KexBool -> Bool_::class
+        is KexIntegral -> Int_::class
+        is KexFloat -> Float_::class
+        is KexDouble -> Double_::class
+        is KexClass -> Ptr_::class
+        is KexArray -> Ptr_::class
+        else -> unreachable { log.error("Unable to get ${solver} type for ${ type }") }
+    }
+
 
     fun convert(ps: PredicateState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ = when (ps) {
 #set($states = ["Basic", "Chain", "Choice", "Negation"])
@@ -189,14 +200,14 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val memspace = arraylength.arrayRef.memspace
         val ptr = convert(arraylength.arrayRef, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `arraylength`") }
 
-        return ctx.readProperty< Int_ >(ptr, memspace, "length")
+        return ctx.readProperty< Int_ >(ptr, memspace, "length", Int_::class)
     }
 
     fun convert(arrayload: ArrayLoadTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
         val memspace = arrayload.arrayRef.memspace
         val arrayref = convert(arrayload.arrayRef, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr operand of array load") }
 
-        val ret = ctx.readMemory(arrayref, memspace, ${factory}.getTypeSize(arrayload.type))
+        val ret = ctx.readMemory< Dynamic_ >(arrayref, memspace, ${solver}Type(arrayload.type))
         return cast(arrayload.type, ret)
     }
 
@@ -284,7 +295,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val field = (fieldload.field as FieldTerm)
         val name = field.fieldNameString
         val klass = field.klass
-        val res = ctx.readProperty(ptr, memspace, "${ klass }.${ name }", ${factory}.getTypeSize(fieldload.type))
+        val res = ctx.readProperty< Dynamic_ >(ptr, memspace, "${ klass }.${ name }", ${solver}Type(fieldload.type))
         return cast(fieldload.type, res)
     }
 

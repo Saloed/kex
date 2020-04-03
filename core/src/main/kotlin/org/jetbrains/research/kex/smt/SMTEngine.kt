@@ -42,6 +42,8 @@ abstract class SMTEngine<in Context_t : Any, Expr_t : Any, Sort_t : Any, Functio
     abstract fun getFloatSort(ctx: Context_t): Sort_t
     abstract fun getDoubleSort(ctx: Context_t): Sort_t
     abstract fun getArraySort(ctx: Context_t, domain: Sort_t, range: Sort_t): Sort_t
+    abstract fun getArrayDomain(ctx: Context_t, array: Sort_t): Sort_t
+    abstract fun getArrayRange(ctx: Context_t, array: Sort_t): Sort_t
     abstract fun isBoolSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isBVSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isFloatSort(ctx: Context_t, sort: Sort_t): Boolean

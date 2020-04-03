@@ -149,6 +149,12 @@ class Kex(args: Array<String>) {
 
     @ImplicitReflectionSerializer
     fun main() {
+        val mode = cmd.getEnumValue<Mode>("mode") ?: this.mode
+        if (mode == Mode.refinements) {
+            val analysisContext = ExecutionContext(classManager, URLClassLoader(emptyArray()), EasyRandomDriver())
+            return refinements(analysisContext)
+        }
+
         // write all classes to output directory, so they will be seen by ClassLoader
         jar.unpack(classManager, outputDir, true)
         val classLoader = URLClassLoader(arrayOf(outputDir.toUri().toURL()))
@@ -162,8 +168,7 @@ class Kex(args: Array<String>) {
             +ClassWriter(originalContext, outputDir)
         }
 
-        when (cmd.getEnumValue<Mode>("mode") ?: this.mode) {
-            Mode.refinements -> refinements(originalContext, analysisContext)
+        when (mode) {
             Mode.bmc -> bmc(originalContext, analysisContext)
             Mode.concolic -> concolic(originalContext, analysisContext)
             else -> debug(analysisContext)
@@ -190,7 +195,7 @@ class Kex(args: Array<String>) {
         clearClassPath()
     }
 
-    private fun refinements(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
+    private fun refinements(analysisContext: ExecutionContext) {
         val debugMethods = cmd.getCmdValue("debugMethods")
                 ?.let { it.split(",").map { it.trim() } } ?: emptyList()
         val psa = PredicateStateAnalysis(analysisContext.cm)

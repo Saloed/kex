@@ -8,12 +8,14 @@ import com.microsoft.z3.*
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexInt
+import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.smt.*
 import org.jetbrains.research.kex.smt.Solver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.collectVariables
 import org.jetbrains.research.kex.state.transformer.memspace
@@ -147,15 +149,16 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
 
             when (ptr) {
                 is FieldTerm -> {
-                    val ptrExpr = Z3Converter(tf).convert(ptr.owner, ef, ctx) as? Ptr_
+                    val converter = Z3Converter(tf)
+                    val ptrExpr = converter.convert(ptr.owner, ef, ctx) as? Ptr_
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
                     val name = "${ptr.klass}.${ptr.fieldNameString}"
                     val startProp = ctx.getInitialProperties(memspace, name)
                     val endProp = ctx.getProperties(memspace, name)
 
-                    val startV = startProp.load(ptrExpr, Z3ExprFactory.getTypeSize((ptr.type as KexReference).reference).int)
-                    val endV = endProp.load(ptrExpr, Z3ExprFactory.getTypeSize((ptr.type as KexReference).reference).int)
+                    val startV = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
+                    val endV = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
 
                     val modelPtr = Z3Unlogic.undo(model.evaluate(ptrExpr.expr, true))
                     val modelStartV = Z3Unlogic.undo(model.evaluate(startV.expr, true))
@@ -170,12 +173,12 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                 else -> {
                     val startMem = ctx.getInitialMemory(memspace)
                     val endMem = ctx.getMemory(memspace)
-
-                    val ptrExpr = Z3Converter(tf).convert(ptr, ef, ctx) as? Ptr_
+                    val converter = Z3Converter(tf)
+                    val ptrExpr = converter.convert(ptr, ef, ctx) as? Ptr_
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
-                    val startV = startMem.load(ptrExpr, Z3ExprFactory.getTypeSize(ptr.type).int)
-                    val endV = endMem.load(ptrExpr, Z3ExprFactory.getTypeSize(ptr.type).int)
+                    val startV = startMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
+                    val endV = endMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
 
                     val modelPtr = Z3Unlogic.undo(model.evaluate(ptrExpr.expr, true))
                     val modelStartV = Z3Unlogic.undo(model.evaluate(startV.expr, true))
@@ -189,8 +192,8 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                         val startProp = ctx.getInitialProperties(memspace, "length")
                         val endProp = ctx.getProperties(memspace, "length")
 
-                        val startLength = startProp.load(ptrExpr, Z3ExprFactory.getTypeSize(KexInt()).int)
-                        val endLength = endProp.load(ptrExpr, Z3ExprFactory.getTypeSize(KexInt()).int)
+                        val startLength = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))
+                        val endLength = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))
 
                         val startLengthV = Z3Unlogic.undo(model.evaluate(startLength.expr, true))
                         val endLengthV = Z3Unlogic.undo(model.evaluate(endLength.expr, true))

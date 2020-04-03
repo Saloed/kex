@@ -72,7 +72,7 @@ class Z3SolverTest : KexTest() {
                 condB to memB
         ))
 
-        val c = merged.readMemory<Int_>(ptr, 0)
+        val c = merged.readMemory<Int_>(ptr, 0, Int_::class)
 
         val checkExprIn = { e: Bool_, `in`: Dynamic_ ->
             val solver = ef.ctx.mkSolver()

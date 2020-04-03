@@ -1,80 +1,82 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTMemory
 import kotlin.math.min
+import kotlin.reflect.KClass
 
 private val engine = ${solver}Engine
 
-#set($self = $Memory)
-@Suppress("UNCHECKED_CAST")
-class $self< in Index : $Bitvector, Element : $Bitvector >(val inner: $Array< Element, Index >, val byteSize: Int) : ${solver}SMTMemory() {
+#set($self = "${Memory}")
+abstract class ${self}<  in Index : ${Bitvector}, Element : ${valexpr} >(val ctx: ${context}) : Z3SMTMemory() {
+
+    class EmptyMemory <  in Index : ${Bitvector}, Element : ${valexpr} >(val name: String, ctx: ${context}) : ${self}<  Index, Element>(ctx) {
+        private var array: ${Array} <  Element, Index> ? = null
+        override val inner: ${Array}<  Element, Index>
+            get() = array ?: throw IllegalStateException("Inner array of empty memory is not initialized")
+
+        override fun loadRaw(index: Index, kClass: KClass< out ${valexpr}>): ${valexpr} {
+            val elSort = ${valexpr}.getStaticSort(ctx, kClass)
+            val idxSort = ${valexpr}.getDynamicSort(ctx, index)
+            val array = ensureArray(elSort, idxSort)
+            return array.load(index)
+        }
+
+        override fun get(index: Index): Element = inner.load(index) as Element
+
+        override fun store(index: Index, element: Element): ${self}<  Index, Element > {
+            val elSort = ${valexpr}.getDynamicSort(ctx, element)
+            val idxSort = ${valexpr}.getDynamicSort(ctx, index)
+            val array = ensureArray(elSort, idxSort)
+            return FullMemory(array.store(index, element))
+        }
+
+        fun ensureArray(element: $sort, index: $sort): ${Array}<  Element, Index > {
+            val myArray = array ?: ${Array}.makeFree<  Element, Index>(ctx, name, element, index)
+            array = myArray
+            return myArray
+        }
+    }
+
+    class FullMemory<  in Index : ${Bitvector}, Element : ${valexpr} >(val array: ${Array}<  Element, Index>) : ${self}<  Index, Element>(array.ctx) {
+        override val inner: ${Array}<  Element, Index>
+            get() = array
+
+        override fun loadRaw(index: Index, kClass: KClass<  out ${valexpr}>): ${valexpr} = array.load(index)
+        override operator fun get(index: Index) = array[index] as Element
+        override fun store(index: Index, element: Element) = FullMemory(array.store(index, element))
+    }
+
     companion object {
 
-        fun < Index : $Bitvector, Element : $Bitvector > merge(default: $self< Index, Element >,
-                                        cases: List< Pair< $Bool, $self< Index, Element >>>): $self< Index, Element > {
-            val inners = cases.map { it.first to it.second.inner }
-            return $self(${Array}.merge(default.inner, inners), default.byteSize)
+        fun < Index : ${Bitvector}, Element : ${valexpr}> merge(default: ${self}< Index, Element>, cases: List< Pair< ${Bool}, ${self}< Index, Element>>>): ${self}< Index, Element> {
+            val fullCases = cases.filter { it.second !is EmptyMemory }
+            return when {
+                fullCases.isEmpty() -> default
+                default is EmptyMemory -> {
+                    val inners = fullCases.map { it.first to it.second.inner }
+                    val arrayPrototype = inners.first().second
+                    val defaultArray = default.ensureArray(arrayPrototype.elementSort, arrayPrototype.indexSort)
+                    FullMemory< Index, Element>(${Array}.merge(defaultArray, inners))
+                }
+                else -> {
+                    val inners = fullCases.map { it.first to it.second.inner }
+                    FullMemory< Index, Element>(${Array}.merge(default.inner, inners))
+                }
+            }
         }
 
-        inline fun < reified Index : $Bitvector, reified Element : $Bitvector > makeDefault(ctx: $context, name: String, default: Element) =
-            $self< Index, Element >(${Array}.makeDefault< Element, Index >(ctx, name, default), bvStaticBitsize< Element >(ctx))
+        inline fun < reified Index : ${Bitvector}, Element : ${valexpr}> makeDefault(ctx: ${context}, name: String, default: Element) =
+                FullMemory< Index, Element>(${Array}.makeDefault< Element, Index>(ctx, name, default))
 
-        inline fun < reified Index : $Bitvector, reified Element : $Bitvector > makeFree(ctx: $context, name: String) =
-            $self< Index, Element >(${Array}.makeFree< Element, Index >(ctx, name), bvStaticBitsize< Element >(ctx))
-
-        inline fun < reified Index : $Bitvector, reified Element : $Bitvector > makeVar(ctx: $context, name: String) =
-            $self< Index, Element >(${Array}.makeVar< Element, Index >(ctx, name), bvStaticBitsize< Element >(ctx))
+        inline fun < reified Index : ${Bitvector}, Element : ${valexpr}> makeFree(ctx: ${context}, name: String) =
+                EmptyMemory< Index, Element>(name, ctx)
     }
 
-    val ctx = inner.ctx
+    abstract val inner: ${Array}< Element, Index>
 
-    fun load(index: Index, elementSize: Int): $Bitvector {
-        val bytes = (0..((elementSize - 1) / byteSize)).map {
-            inner.load((index + it) as Index)
-        }
-        var expr = bytes.first().expr
-        var axiom = bytes.first().axiom
-        if(bytes.size == 1){
-            return $Bitvector(ctx, expr, axiom)
-        }
-        // fixme: bunch of tricky hacks
-        expr = ctx.mkInt2BV(byteSize, expr as IntExpr)
-        bytes.drop(1).forEach {
-            val currentExpr = ctx.mkInt2BV(byteSize, it.expr as IntExpr)
-            expr = engine.binary(ctx, SMTEngine.Opcode.CONCAT, expr, currentExpr)
-            axiom = spliceAxioms(ctx, axiom, it.axiom)
-        }
-        return $Bitvector(ctx, expr, axiom)
-    }
-    inline fun < reified T : $valexpr > load(index: Index) =
-        ${valexpr}.forceCast< T >(load(index, ${valexpr}.getStaticBitsize< T >(ctx)))
+    fun < T : ${valexpr}> load(index: Index, type: KClass< out ${valexpr}>) = ${valexpr}.forceCast(loadRaw(index, type), type) as T
 
-    fun store(index: Index, element: $Bitvector): Z3Memory< Index, Element > {
-        val elementSize = element.getBitsize()
-        var start = 0
-        if(elementSize == byteSize){
-            val storeIdx = (index + start) as Index
-            val storeElement = element.toBV(byteSize) as Element
-            return Z3Memory(inner.store(listOf(storeIdx to storeElement)), byteSize)
-        }
-        // fixme: bunch of tricky hacks
-        val cases = arrayListOf< Pair< Index, Element >>()
-        val fixedElement = when {
-            element.expr is IntExpr -> $Bitvector(ctx, ctx.mkInt2BV(elementSize, element.expr), element.axiom)
-            else -> element
-        }
-        while (start < elementSize) {
-            val hi = min(start + byteSize - 1, elementSize - 1)
-            val tmpElement = fixedElement.extract(hi, start)
-            val storeElement = $Bitvector(ctx, ctx.mkBV2Int(tmpElement.expr as BitVecExpr, false), tmpElement.axiom) as Element
-            cases.add(((index + start) as Index) to storeElement)
-            start += byteSize
-        }
-        return ${self}(inner.store(cases), byteSize)
-    }
-
-    fun < T : $valexpr > store(index: Index, element: T) = store(index, element.toBV())
-
-    operator fun get(index: Index) = inner[index].toBV(byteSize) as Element
-    operator fun set(index: Index, value: $Bitvector) = store(index, value)
-    operator fun < T : $valexpr > set(index: Index, value: T) = store(index, value)
+    abstract fun loadRaw(index: Index, kClass: KClass< out ${valexpr}>): ${valexpr}
+    abstract fun store(index: Index, element: Element): ${self}< Index, Element>
+    operator fun set(index: Index, value: Element) = store(index, value)
+    abstract operator fun get(index: Index): Element
 }
