@@ -1,21 +1,22 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_lbool
-import org.jetbrains.research.kex.ktype.KexArray
-import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.SMTEngine
+import org.jetbrains.research.kex.ktype.*
+import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.ConstantPropagator
 import org.jetbrains.research.kex.state.transformer.Optimizer
+import org.jetbrains.research.kex.state.transformer.Transformer
+import org.jetbrains.research.kex.state.transformer.TypeIndex
+import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 import org.jetbrains.research.kfg.type.ClassType
+import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
 
 class FixpointModelConverter(
@@ -23,8 +24,92 @@ class FixpointModelConverter(
         private val tf: TypeFactory
 ) {
 
+    object UnknownType : KexType() {
+        override val name: String = "Unknown"
+        override val bitsize: Int = 0
+        override fun getKfgType(types: TypeFactory): Type = throw IllegalStateException("type is unknown")
+    }
+
+    class InstanceOfCorrector : Transformer<InstanceOfCorrector> {
+        class UnknownInstanceOfCollector : Transformer<UnknownInstanceOfCollector> {
+            val predicatesToCorrect = arrayListOf<EqualityPredicate>()
+            override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {
+                if (instanceOfPattern(predicate)) {
+                    predicatesToCorrect.add(predicate)
+                }
+                return super.transformEqualityPredicate(predicate)
+            }
+
+            fun instanceOfPattern(predicate: EqualityPredicate): Boolean {
+                if (predicate.rhv !is ConstBoolTerm) return false
+                val lhv = predicate.lhv as? CmpTerm ?: return false
+                val instanceOf = lhv.lhv as? InstanceOfTerm ?: return false
+                return instanceOf.checkedType is UnknownType
+            }
+        }
+
+        class PredicateRemapping(val mapping: Map<Predicate, Predicate>) : Transformer<PredicateRemapping> {
+            override fun transformPredicate(predicate: Predicate) = mapping[predicate]
+                    ?: super.transformPredicate(predicate)
+        }
+
+        override fun apply(ps: PredicateState): PredicateState {
+            val unknownInstanceOf = UnknownInstanceOfCollector().apply { apply(ps) }.predicatesToCorrect
+            if (unknownInstanceOf.isEmpty()) return ps
+            val normalized = unknownInstanceOf.map { normalize(it) }
+            for (condition in normalized) {
+                condition.findUnknownBound(normalized)
+            }
+            if (normalized.any { it.isUnknown() }) throw IllegalStateException("Unable to restore types")
+            val instanceOfTerms = normalized.map { InstanceOfTerm(TypeIndex.findType(it.typeIdx()), it.arg) }
+            val predicates = unknownInstanceOf.zip(instanceOfTerms).map { (predicate, term) ->
+                EqualityPredicate(term, ConstBoolTerm(true), predicate.type, predicate.location)
+            }
+            val mapping = unknownInstanceOf.zip(predicates).toMap<Predicate, Predicate>()
+            return PredicateRemapping(mapping).apply(ps)
+        }
+
+        data class InstanceOfCondition(val arg: Term, var upperBound: Int = UNKNOWN, var lowerBound: Int = UNKNOWN) {
+            fun typeIdx() = lowerBound + 1
+            fun isUnknown() = upperBound == UNKNOWN || lowerBound == UNKNOWN || upperBound != lowerBound + 2
+            fun findUnknownBound(conditions: List<InstanceOfCondition>) {
+                if (lowerBound == UNKNOWN && upperBound != UNKNOWN) {
+                    val other = conditions.find { it.lowerBound + 1 == upperBound - 1 }
+                            ?: throw IllegalStateException("Unable to find lower bound")
+                    lowerBound = other.lowerBound
+                    other.upperBound = upperBound
+                }
+                if (lowerBound != UNKNOWN && upperBound == UNKNOWN) {
+                    val other = conditions.find { it.upperBound - 1 == lowerBound + 1 }
+                            ?: throw IllegalStateException("Unable to find upper bound")
+                    upperBound = other.upperBound
+                    other.lowerBound = lowerBound
+                }
+            }
+
+            companion object {
+                const val UNKNOWN = -10
+            }
+        }
+
+        private fun normalize(predicate: EqualityPredicate): InstanceOfCondition {
+            val isTrue = (predicate.rhv as ConstBoolTerm).value
+            val cmp = predicate.lhv as CmpTerm
+            val bound = (cmp.rhv as ConstIntTerm).value
+            val arg = (cmp.lhv as InstanceOfTerm).operand
+            return when {
+                isTrue && cmp.opcode is CmpOpcode.Gt -> InstanceOfCondition(arg, lowerBound = bound)
+                isTrue && cmp.opcode is CmpOpcode.Lt -> InstanceOfCondition(arg, upperBound = bound)
+                !isTrue && cmp.opcode is CmpOpcode.Le -> InstanceOfCondition(arg, lowerBound = bound)
+                !isTrue && cmp.opcode is CmpOpcode.Ge -> InstanceOfCondition(arg, upperBound = bound)
+                else -> TODO("Unexpected cmp term: $cmp")
+            }
+        }
+    }
+
     fun apply(expr: Expr): PredicateState = expr.simplify()
             .let { convert(it) }
+            .let { InstanceOfCorrector().apply(it) }
             .let { ConstantPropagator.apply(it) }
             .let { Optimizer().apply(it) }
             .simplify()
@@ -145,9 +230,8 @@ class FixpointModelConverter(
             term { obj.field(field.type.kexType, field.name).load() }
         }
         else -> when {
-            obj.type is KexArray && property.fullName == "length" -> {
-                ArrayLengthTerm(KexInt(), obj)
-            }
+            property.fullName == Z3Context.TYPE_PROPERTY -> InstanceOfTerm(UnknownType, obj)
+            obj.type is KexArray && property.fullName == "length" -> ArrayLengthTerm(KexInt(), obj)
             else -> TODO("Unknown property $property")
         }
 

@@ -57,17 +57,6 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
                 .simplify()
     }
 
-    val fullState: PredicateState by lazy {
-        transform(methodRawFullState()) {
-            +MethodInliner(psa)
-            +Optimizer()
-            +ConstantPropagator
-            +BoolTypeAdapter(cm.type)
-            +ArrayBoundsAdapter()
-            +Optimizer()
-        }.let { state -> MemorySpacer(state).apply(state) }
-    }
-
     fun methodRawFullState(): PredicateState = (returnInstructions + throwInstructions)
             .mapNotNull { builder.getInstructionState(it) }
             .let { ChoiceState(it) }

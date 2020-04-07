@@ -2,7 +2,6 @@ package org.jetbrains.research.kex.refinements
 
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.ExecutionContext
-import org.jetbrains.research.kex.KexRunnerTest
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement

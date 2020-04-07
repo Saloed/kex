@@ -37,14 +37,20 @@ object MethodManager {
             else -> false
         }
 
-        fun isInlinable(method: Method): Boolean = when {
-            !inliningEnabled -> false
-            isIgnored(method) -> false
-            method.isStatic -> true
-            method.isConstructor -> true
-            !method.isFinal && !method.`class`.isFinal -> false
-            method.flatten().all { it !is ReturnInst } -> false
-            else -> true
+
+        enum class InlineStatus {
+            INLINE, NO_INLINE, MAY_INLINE;
+            fun toBool() = this == INLINE
+        }
+
+        fun isInlinable(method: Method): InlineStatus = when {
+            !inliningEnabled -> InlineStatus.NO_INLINE
+            isIgnored(method) -> InlineStatus.NO_INLINE
+            method.isStatic -> InlineStatus.INLINE
+            method.isConstructor -> InlineStatus.INLINE
+            !method.isFinal && !method.`class`.isFinal -> InlineStatus.MAY_INLINE
+            method.flatten().all { it !is ReturnInst } -> InlineStatus.NO_INLINE
+            else -> InlineStatus.INLINE
         }
 
         fun methodArguments(predicate: CallPredicate): Map<Term, Term> {

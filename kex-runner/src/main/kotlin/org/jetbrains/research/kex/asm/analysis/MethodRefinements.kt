@@ -3,23 +3,14 @@ package org.jetbrains.research.kex.asm.analysis
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
-import org.jetbrains.research.kex.asm.analysis.refinements.*
+import org.jetbrains.research.kex.asm.analysis.refinements.MethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.RecursiveMethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.SimpleMethodAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
-import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
-import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.PredicateType
-import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
-import org.jetbrains.research.kex.state.transformer.PredicateCollector
-import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 import org.jetbrains.research.kfg.visitor.MethodVisitor
-import ru.spbstu.ktuples.zip
 
 
 class MethodRefinements(

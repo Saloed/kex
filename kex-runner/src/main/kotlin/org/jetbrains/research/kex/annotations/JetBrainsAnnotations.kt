@@ -127,7 +127,7 @@ class Contract(val value: String = ""/*, pure: Boolean = false*/) : AnnotationIn
         val result = StateBuilder()
 
         val inlineEnabled = kexConfig.getBooleanValue("smt", "ps-inlining", true)
-                && MethodManager.InlineManager.isInlinable(call.method)
+                && MethodManager.InlineManager.isInlinable(call.method).toBool()
 
         // New statement insertion
         if (!inlineEnabled && records.any { it.result == Constraints.New }) {

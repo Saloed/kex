@@ -130,12 +130,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
         }
         state = transform(state) {
-            +Optimizer()
-            +ConstantPropagator
-            +BoolTypeAdapter(cm.type)
-            +ArrayBoundsAdapter()
-            +StateReducer()
-            +Optimizer()
+            applyAdapters()
         }
         return memspaceWithRecursionInfo(state)
     }

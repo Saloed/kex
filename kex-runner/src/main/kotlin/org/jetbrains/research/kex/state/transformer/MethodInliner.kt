@@ -25,7 +25,7 @@ class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransformer<M
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
         val call = predicate.call as CallTerm
         val calledMethod = call.method
-        if (!im.isInlinable(calledMethod)) return predicate
+        if (!im.isInlinable(calledMethod).toBool()) return predicate
 
         val mappings = im.methodArguments(predicate)
 

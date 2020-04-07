@@ -6,8 +6,7 @@ import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
-import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
-import org.jetbrains.research.kex.state.transformer.PredicateCollector
+import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
@@ -17,11 +16,19 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     abstract fun analyze(): Refinements
 
-    fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
+    fun Transformation.applyAdapters() {
+        +Optimizer()
+        +ConstantPropagator
+        +BoolTypeAdapter(cm.type)
+        +ArrayBoundsAdapter()
+        +Optimizer()
+    }
+
+    open fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
 
     fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
         val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
-        val refinements = calls.map { refinementsManager.getOrComputeRefinement(it.method) }
+        val refinements = calls.map { findRefinement(it.method) }
         val exceptionalPaths = buildRefinementSources(calls, refinements, ignoredCalls)
         val normalPath = buildNormalPaths(calls, refinements)
         return normalPath to exceptionalPaths

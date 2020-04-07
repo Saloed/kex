@@ -31,6 +31,7 @@ class $self : ${solver}SMTContext {
     companion object {
         const val MEMORY_NAME = "__memory__"
         const val PROPERTY_NAME = "__property__"
+        const val TYPE_PROPERTY = "__type__"
 
         const val BASE_LOCAL_PTR = (1 shl 10) + 1
         const val BASE_STATIC_PTR = (1 shl 24) + 1
@@ -148,4 +149,6 @@ class $self : ${solver}SMTContext {
         this.staticPointer = merged.staticPointer
         return this
     }
+    fun readType(ptr: Ptr_, memspace: Int): Int_ = readProperty(ptr, memspace, TYPE_PROPERTY, Int_::class)
+    fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type))
 }

@@ -23,21 +23,30 @@ class MethodFunctionalInliner(
     private var inlineIndex = 0
 
     inner class TransformationState(val predicate: CallPredicate) {
-        val calledMethod: Method = (predicate.call as CallTerm).method
+        val call: CallTerm  = predicate.call as CallTerm
+        val calledMethod: Method = call.method
         var currentResult: Predicate = nothing()
 
-        fun getStateForInlining(): PredicateState? {
-            if (!im.isInlinable(calledMethod)) return null
-            if (calledMethod.isEmpty()) return null
-            val builder = psa.builder(calledMethod)
-            return builder.methodState
+        fun getStateForInlining(): PredicateState? = when (im.isInlinable(calledMethod)) {
+            MethodManager.InlineManager.InlineStatus.NO_INLINE -> null
+            MethodManager.InlineManager.InlineStatus.MAY_INLINE -> null
+            MethodManager.InlineManager.InlineStatus.INLINE -> when {
+                calledMethod.isEmpty() -> null
+                else -> psa.builder(calledMethod).methodState
+            }
+        }
+
+        fun inliningIsPossible() = when (im.isInlinable(calledMethod)) {
+            MethodManager.InlineManager.InlineStatus.INLINE -> true
+            MethodManager.InlineManager.InlineStatus.MAY_INLINE -> true
+            MethodManager.InlineManager.InlineStatus.NO_INLINE -> false
         }
 
         fun fixPathPredicatesOnTopLevelBeforeInlining(ps: PredicateState): PredicateState = PathPredicatesOnTopLevelBeforeInliningFixer(predicate).apply(ps)
 
         fun prepareForInline(body: PredicateState): PredicateState {
             val mappings = im.methodArguments(predicate)
-            return TermRenamer("inlined_var_${inlineIndex++}", mappings).apply(body)
+            return TermRenamer("inlined${inlineIndex++}", mappings).apply(body)
         }
 
         fun inline(body: PredicateState) {
