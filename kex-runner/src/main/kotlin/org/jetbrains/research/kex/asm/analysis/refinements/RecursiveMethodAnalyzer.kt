@@ -69,7 +69,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
                 .filterRecursiveCalls()
                 .optimize()
 
-        log.info("State:\n$state\nRecursion:\n$recursionPaths\nNormal:\n$allNormal\nSources:\n$allSources")
+        log.debug("State:\n$state\nRecursion:\n$recursionPaths\nNormal:\n$allNormal\nSources:\n$allSources")
 
         val refinements = allSources.value.map {
             computeRefinement(state, rootCall, recursiveCalls, recursionPaths, allNormal, it)

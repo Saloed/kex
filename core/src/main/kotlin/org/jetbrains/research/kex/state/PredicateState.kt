@@ -122,6 +122,11 @@ inline fun choice(left: StateBuilder.() -> Unit, right: StateBuilder.() -> Unit)
     return StateBuilder().apply { this += listOf(lhv, rhv) }.apply()
 }
 
+inline fun choice(vararg builders: StateBuilder.() -> Unit): PredicateState{
+    val states = builders.map { StateBuilder().apply { it() }.apply() }
+    return StateBuilder().apply { this += states }.apply()
+}
+
 operator fun PredicateState.not() = NegationState(this)
 
 @BaseType("State")

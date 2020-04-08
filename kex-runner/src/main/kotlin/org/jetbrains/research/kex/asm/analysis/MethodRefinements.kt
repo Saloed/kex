@@ -45,18 +45,18 @@ class MethodRefinements(
     private fun analyzeMethod(method: Method): Refinements {
         log.info("Start analysis: $method")
         if (method in methodAnalysisStack) {
-            knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyzeSafely()
+            knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
             throw SkipRecursion(method)
         }
         methodAnalysisStack.addLast(method)
-        val result = SimpleMethodAnalyzer(cm, psa, this, method).analyzeSafely()
+        val result = SimpleMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
         methodAnalysisStack.removeLast()
         log.info("Result $method:\n$result")
         return result
     }
 
     private fun MethodAnalyzer.analyzeAndTrackRecursion() = try {
-        analyze()
+        analyzeSafely()
     } catch (skip: SkipRecursion) {
         if (methodAnalysisStack.isEmpty()) throw IllegalStateException("Empty recursion stack")
         if (methodAnalysisStack.last != skip.method) {
@@ -67,7 +67,9 @@ class MethodRefinements(
     }
 
     private fun MethodAnalyzer.analyzeSafely() = try {
-        analyzeAndTrackRecursion()
+        analyze()
+    } catch (skip: SkipRecursion) {
+        throw skip
     } catch (ex: Exception) {
         log.error("Error in analysis: method $method", ex)
         Refinements.unknown(method)

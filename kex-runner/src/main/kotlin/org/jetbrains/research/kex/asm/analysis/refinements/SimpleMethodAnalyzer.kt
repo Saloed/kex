@@ -16,6 +16,7 @@ import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
+import org.jetbrains.research.kfg.ir.OuterClass
 
 class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: MethodRefinements, method: Method) : MethodAnalyzer(cm, psa, mr, method) {
 
@@ -32,7 +33,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         val allNormal = ChainState(normalPaths, nestedNormal).optimize()
 
         log.info("Analyze: $method")
-        log.info("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
+        log.debug("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
         val (trivialRefinements, sourcesToQuery) = searchForDummySolution(allNormal, allSources)
         val otherRefinements = queryRefinementSources(state, allNormal, sourcesToQuery)
@@ -99,6 +100,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
     }
 
     private fun collectInheritors(root: Class): Set<Class> {
+        if (root is OuterClass) return emptySet()
         val inheritors = hashSetOf(root)
         val queue = dequeOf(root)
         while (queue.isNotEmpty()) {

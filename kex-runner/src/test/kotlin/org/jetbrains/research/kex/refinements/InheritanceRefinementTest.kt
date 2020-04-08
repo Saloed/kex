@@ -17,6 +17,10 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
         refinement(IllegalArgumentException()) {
             choice({
                 path {
+                    arg(KexInt(), 1) eq const(0) equality const(true)
+                }
+            }, {
+                path {
                     tf.getInstanceOf(KexClass(positiveCheck), arg(KexClass(checker), 0)) equality const(true)
                 }
                 path {
