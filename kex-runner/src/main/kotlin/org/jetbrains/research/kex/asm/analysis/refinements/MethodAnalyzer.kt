@@ -20,7 +20,6 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         +Optimizer()
         +ConstantPropagator
         +BoolTypeAdapter(cm.type)
-        +ArrayBoundsAdapter()
         +Optimizer()
     }
 
