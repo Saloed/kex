@@ -44,7 +44,8 @@ class Optimizer : Transformer<Optimizer> {
             val newRhv = term { const(!rhv.value) }
             EqualityPredicate(it.lhv, newRhv, it.type, it.location)
         }
-        return BasicState(simplifiedPredicates)
+        val newState = ChoiceState(simplifiedPredicates.map { it.wrap() })
+        return transform(newState)
     }
 
     override fun transformChoice(ps: ChoiceState): PredicateState {
