@@ -52,8 +52,8 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
                 .map { getRefinementCriteria(it) to builder.getInstructionState(it) }
                 .filter { it.second != null }
                 .map { it.first to it.second!!.path }
-                .map { RefinementSource(it.first, it.second) }
-                .let { RefinementSources((it)) }
+                .map { RefinementSource.create(it.first, it.second) }
+                .let { RefinementSources.create(it) }
                 .simplify()
     }
 

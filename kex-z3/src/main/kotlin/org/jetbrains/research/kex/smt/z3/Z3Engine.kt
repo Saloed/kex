@@ -6,14 +6,17 @@ import com.microsoft.z3.*
 import org.jetbrains.research.kex.smt.SMTEngine
 
 object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
+    private val intSortSize = hashMapOf<IntSort, Int>()
+
     override fun makeBound(ctx: Context, size: Int, sort: Sort): Expr = ctx.mkBound(size, sort)
     override fun makePattern(ctx: Context, expr: Expr): Pattern = ctx.mkPattern(expr)
 
     override fun getSort(ctx: Context, expr: Expr): Sort = expr.sort
     override fun getBoolSort(ctx: Context): Sort = ctx.boolSort
     override fun getBVSort(ctx: Context, size: Int): Sort = when (size) {
-        32 -> ctx.mkIntSort()
-        else -> ctx.mkBitVecSort(size)
+        WORD -> ctx.mkIntSort().also { intSortSize[it] = WORD }
+        DWORD -> ctx.mkIntSort().also { intSortSize[it] = DWORD }
+        else -> throw IllegalStateException("Unexpected BV size $size")
     }
     override fun getFloatSort(ctx: Context): Sort = ctx.mkFPSortSingle()
     override fun getDoubleSort(ctx: Context): Sort = ctx.mkFPSortDouble()
@@ -22,13 +25,13 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     override fun getArrayRange(ctx: Context, array: Sort): Sort = (array as ArraySort).range
 
     override fun isBoolSort(ctx: Context, sort: Sort): Boolean = sort is BoolSort
-    override fun isBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort || sort is IntSort
+    override fun isBVSort(ctx: Context, sort: Sort): Boolean = sort is IntSort
     override fun isArraySort(ctx: Context, sort: Sort): Boolean = sort is ArraySort
     override fun isFloatSort(ctx: Context, sort: Sort): Boolean = sort is FPSort && sort == ctx.mkFPSortSingle()
     override fun isDoubleSort(ctx: Context, sort: Sort): Boolean = sort is FPSort && sort == ctx.mkFPSortDouble()
 
     override fun bvBitsize(ctx: Context, sort: Sort): Int = when (sort) {
-        is IntSort -> 32
+        is IntSort -> intSortSize[sort] ?: WORD
         is BitVecSort -> sort.size
         else -> throw IllegalStateException("Unexpected sort $sort")
     }
@@ -101,87 +104,118 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         else -> unreachable { log.error("Unimplemented operation negate") }
     }
 
-    override fun binary(ctx: Context, opcode: Opcode, lhv: Expr, rhv: Expr): Expr = when (opcode) {
-        Opcode.EQ -> eq(ctx, lhv, rhv)
-        Opcode.NEQ -> neq(ctx, lhv, rhv)
-        Opcode.ADD -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> add(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> add(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> add(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
+    override fun binary(ctx: Context, opcode: Opcode, lhv: Expr, rhv: Expr): Expr {
+        val (lhv, rhv) = when {
+            lhv is IntExpr && rhv is BitVecExpr -> ctx.mkInt2BV(intSortSize[lhv.sort] ?: rhv.sortSize, lhv) to rhv
+            lhv is BitVecExpr && rhv is IntExpr -> lhv to ctx.mkInt2BV(intSortSize[rhv.sort] ?: lhv.sortSize, rhv)
+            else -> lhv to rhv
         }
-        Opcode.SUB -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> sub(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> sub(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> sub(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
+        return when (opcode) {
+            Opcode.EQ -> eq(ctx, lhv, rhv)
+            Opcode.NEQ -> neq(ctx, lhv, rhv)
+            Opcode.ADD -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> add(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> add(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> add(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.SUB -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> sub(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> sub(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> sub(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.MUL -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> mul(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> mul(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> mul(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.DIVIDE -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> sdiv(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> sdiv(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> sdiv(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.MOD -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> smod(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> fmod(ctx, lhv, rhv)
+                lhv is IntExpr && rhv is IntExpr -> smod(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.GT -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> gt(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> gt(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> gt(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.GE -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> ge(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> ge(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> ge(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.LT -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> lt(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> lt(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> lt(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.LE -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> {
+                    le(ctx, lhv, rhv)
+                }
+                lhv is ArithExpr && rhv is ArithExpr -> le(ctx, lhv, rhv)
+                lhv is FPExpr && rhv is FPExpr -> le(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.SHL -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> shl(ctx, lhv, rhv)
+                lhv is IntExpr && rhv is IntExpr -> shl(ctx, ctx.mkInt2BV(WORD, lhv), ctx.mkInt2BV(WORD, rhv))
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.SHR -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> lshr(ctx, lhv, rhv)
+                lhv is IntExpr && rhv is IntExpr -> lshr(ctx, ctx.mkInt2BV(WORD, lhv), ctx.mkInt2BV(WORD, rhv))
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.ASHR -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> ashr(ctx, lhv, rhv)
+                lhv is IntExpr && rhv is IntExpr -> ashr(ctx, ctx.mkInt2BV(WORD, lhv), ctx.mkInt2BV(WORD, rhv))
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.AND -> when {
+                lhv is BoolExpr && rhv is BoolExpr -> and(ctx, lhv, rhv)
+                lhv is BitVecExpr && rhv is BitVecExpr -> and(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> and(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
+            Opcode.OR -> when {
+                lhv is BoolExpr && rhv is BoolExpr -> or(ctx, lhv, rhv)
+                lhv is BitVecExpr && rhv is BitVecExpr -> or(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> or(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv or $rhv") }
+            }
+            Opcode.XOR -> when {
+                lhv is BoolExpr && rhv is BoolExpr -> xor(ctx, lhv, rhv)
+                lhv is BitVecExpr && rhv is BitVecExpr -> xor(ctx, lhv, rhv)
+                lhv is ArithExpr && rhv is ArithExpr -> xor(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv xor $rhv") }
+            }
+            Opcode.IMPLIES -> when {
+                lhv is BoolExpr && rhv is BoolExpr -> implies(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv xor $rhv") }
+            }
+            Opcode.IFF -> when {
+                lhv is BoolExpr && rhv is BoolExpr -> iff(ctx, lhv, rhv)
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv xor $rhv") }
+            }
+            Opcode.CONCAT -> when {
+                lhv is BitVecExpr && rhv is BitVecExpr -> concat(ctx, lhv, rhv)
+                lhv is IntExpr && rhv is IntExpr -> concat(ctx, ctx.mkInt2BV(WORD, lhv), ctx.mkInt2BV(WORD, rhv))
+                else -> unreachable { log.error("Unexpected $opcode arguments: $lhv and $rhv") }
+            }
         }
-        Opcode.MUL -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> mul(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> mul(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> mul(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.DIVIDE -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> sdiv(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> sdiv(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> sdiv(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.MOD -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> smod(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> fmod(ctx, lhv, rhv)
-            lhv is IntExpr && rhv is IntExpr -> smod(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected mod arguments: $lhv and $rhv") }
-        }
-        Opcode.GT -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> gt(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> gt(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> gt(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.GE -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> ge(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> ge(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> ge(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.LT -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> lt(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> lt(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> lt(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.LE -> when {
-            lhv is BitVecExpr && rhv is BitVecExpr -> le(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> le(ctx, lhv, rhv)
-            lhv is FPExpr && rhv is FPExpr -> le(ctx, lhv, rhv)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.SHL -> shl(ctx, lhv as BitVecExpr, rhv as BitVecExpr)
-        Opcode.SHR -> lshr(ctx, lhv as BitVecExpr, rhv as BitVecExpr)
-        Opcode.ASHR -> ashr(ctx, lhv as BitVecExpr, rhv as BitVecExpr)
-        Opcode.AND -> when {
-            lhv is BoolExpr && rhv is BoolExpr -> and(ctx, lhv, rhv)
-            lhv is BitVecExpr && rhv is BitVecExpr -> and(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> and(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
-            else -> unreachable { log.error("Unexpected and arguments: $lhv and $rhv") }
-        }
-        Opcode.OR -> when {
-            lhv is BoolExpr && rhv is BoolExpr -> or(ctx, lhv, rhv)
-            lhv is BitVecExpr && rhv is BitVecExpr -> or(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> or(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
-            else -> unreachable { log.error("Unexpected or arguments: $lhv or $rhv") }
-        }
-        Opcode.XOR -> when {
-            lhv is BoolExpr && rhv is BoolExpr -> xor(ctx, lhv, rhv)
-            lhv is BitVecExpr && rhv is BitVecExpr -> xor(ctx, lhv, rhv)
-            lhv is ArithExpr && rhv is ArithExpr -> xor(ctx, bv2bool(ctx, lhv) as BoolExpr, bv2bool(ctx, rhv) as BoolExpr)
-            else -> unreachable { log.error("Unexpected xor arguments: $lhv xor $rhv") }
-        }
-        Opcode.IMPLIES -> implies(ctx, lhv as BoolExpr, rhv as BoolExpr)
-        Opcode.IFF -> iff(ctx, lhv as BoolExpr, rhv as BoolExpr)
-        Opcode.CONCAT -> concat(ctx, lhv as BitVecExpr, rhv as BitVecExpr)
     }
 
     private fun eq(ctx: Context, lhv: Expr, rhv: Expr) = ctx.mkEq(lhv, rhv)
@@ -250,13 +284,23 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     }
 
     override fun sext(ctx: Context, n: Int, expr: Expr): Expr {
+        val expr: BitVecExpr = when (expr) {
+            is BitVecExpr -> expr
+            is IntExpr -> ctx.mkInt2BV(WORD, expr)
+            else -> unreachable { log.error("Unexpected sext argument: $expr") }
+        }
         val exprBitsize = bvBitsize(ctx, getSort(ctx, expr))
-        return if (exprBitsize < n) ctx.mkSignExt(n - exprBitsize, expr as BitVecExpr) else expr
+        return if (exprBitsize < n) ctx.mkSignExt(n - exprBitsize, expr) else expr
     }
 
     override fun zext(ctx: Context, n: Int, expr: Expr): Expr {
+        val expr: BitVecExpr = when (expr) {
+            is BitVecExpr -> expr
+            is IntExpr -> ctx.mkInt2BV(WORD, expr)
+            else -> unreachable { log.error("Unexpected zext argument: $expr") }
+        }
         val exprBitsize = bvBitsize(ctx, getSort(ctx, expr))
-        return if (exprBitsize < n) ctx.mkZeroExt(n - exprBitsize, expr as BitVecExpr) else expr
+        return if (exprBitsize < n) ctx.mkZeroExt(n - exprBitsize, expr) else expr
     }
 
     override fun load(ctx: Context, array: Expr, index: Expr): Expr = ctx.mkSelect(array as ArrayExpr, index)
@@ -287,4 +331,8 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
         val patterns = patternGenerator(bounds).toTypedArray()
         return ctx.mkForall(sortsRaw, names, realBody, 0, patterns, arrayOf(), null, null)
     }
+
+    override fun isRawBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort
+    override fun rawBv2bv(ctx: Context, expr: Expr): Expr =
+            ctx.mkBV2Int(expr as BitVecExpr, true).also { intSortSize[it.sort as IntSort] = expr.sortSize }
 }

@@ -14,7 +14,9 @@ class Optimizer : Transformer<Optimizer> {
         return when {
             base.evaluatesToFalse || curr.evaluatesToFalse -> falseState()
             base.evaluatesToTrue && curr.evaluatesToTrue -> trueState()
-            else -> merge(base, curr)
+            base.evaluatesToTrue -> curr
+            curr.evaluatesToTrue -> base
+            else -> mergeChain(base, curr)
         }
     }
 
@@ -53,10 +55,10 @@ class Optimizer : Transformer<Optimizer> {
         if (choices.any { it.evaluatesToTrue }) return trueState()
         val nonFalseChoices = choices.filterNot { it.evaluatesToFalse }
         if (nonFalseChoices.isEmpty()) return falseState()
-        return ChoiceState(nonFalseChoices)
+        return mergeChoices(nonFalseChoices.toSet())
     }
 
-    private fun merge(first: PredicateState, second: PredicateState): PredicateState = when {
+    private fun mergeChain(first: PredicateState, second: PredicateState): PredicateState = when {
         first is BasicState && second is BasicState -> BasicState(first.predicates + second.predicates)
         first is ChainState && first.curr is BasicState && second is BasicState -> {
             val merged = BasicState(first.curr.predicates + second.predicates)
@@ -68,4 +70,14 @@ class Optimizer : Transformer<Optimizer> {
         }
         else -> ChainState(first, second)
     }
+
+    private fun mergeChoices(choices: Set<PredicateState>) = when {
+        choices.any { it is ChoiceState } -> choices.flatMap {
+             when (it) {
+                 is ChoiceState -> it.choices
+                 else -> listOf(it)
+             }
+         }.toSet()
+        else -> choices
+    }.let { ChoiceState(it.toList()) }
 }

@@ -72,8 +72,8 @@ class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
             val callTerm = callee.call(inst.method, args)
 
             when {
-                inst.isNameDefined -> value(inst).call(callTerm)
-                else -> call(callTerm)
+                inst.isNameDefined -> value(inst).call(callTerm).withInstructionInfo(inst)
+                else -> call(callTerm).withInstructionInfo(inst)
             }
         }
     }

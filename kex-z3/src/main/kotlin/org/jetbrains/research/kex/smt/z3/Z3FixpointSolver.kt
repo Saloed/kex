@@ -27,7 +27,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val converter = Z3Converter(tf)
 
         val options = Z3OptionBuilder()
-                .timeout(100 * 1000 )
+                .timeout(100 * 1000)
                 .produceUnsatCores(true)
                 .fp.engine("spacer")
                 .fp.generateProofTrace(true)
@@ -45,30 +45,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 .fp.spacer.q3(false)
                 .fp.spacer.simplifyPob(true)
 
-
-        val solver: Solver
-            get() {
-                Z3Params.load().forEach { (name, value) ->
-                    Global.setParameter(name, value.toString())
-                }
-                val ctx = ef.ctx
-                val tactic = Z3Tactics.load().map {
-                    val tactic = ctx.mkTactic(it.type)
-                    val params = ctx.mkParams()
-                    it.params.forEach { (name, value) ->
-                        when (value) {
-                            is Value.BoolValue -> params.add(name, value.value)
-                            is Value.IntValue -> params.add(name, value.value)
-                            is Value.DoubleValue -> params.add(name, value.value)
-                            is Value.StringValue -> params.add(name, value.value)
-                        }
-                    }
-                    ctx.with(tactic, params)
-                }.reduce { a, b -> ctx.andThen(a, b) }
-                return ctx.tryFor(tactic, 10 * 1000).solver
-                        ?: throw IllegalStateException("Unable to build solver")
-            }
-
         val fixpointSolver: Solver
             get() = context.mkSolver("HORN")
                     .apply {
@@ -78,12 +54,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                     ?: throw IllegalStateException("Unable to build solver")
 
         @OptIn(ExperimentalTime::class)
-        inline fun <reified T> withSolver(fixpoint: Boolean = false, query: Solver.() -> T): T {
+        inline fun <reified T> withSolver(query: Solver.() -> T): T {
             val result = measureTimedValue {
-                when (fixpoint) {
-                    true -> query(fixpointSolver)
-                    else -> query(solver)
-                }
+                query(fixpointSolver)
             }
             log.info("Run solver for ${result.duration}")
             return result.value
@@ -100,7 +73,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         infix fun BoolExpr.or(other: BoolExpr) = context.mkOr(this, other)
         infix fun BoolExpr.implies(other: BoolExpr) = context.mkImplies(this, other)
         fun BoolExpr.not() = context.mkNot(this)
-
         fun BoolExpr.forall(variables: List<Expr>): Quantifier = when {
             variables.isEmpty() -> {
                 val dummy = context.mkFreshConst("dummy", context.mkBoolSort())
@@ -151,23 +123,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 return idxRegex.find(name)?.groupValues?.get(1)?.toInt()
                         ?: throw IllegalStateException("No predicate idx")
             }
-        }
-    }
-
-    fun checkEquality(first: PredicateState, second: PredicateState): Boolean {
-        val ctx = CallCtx(tf)
-        val z3First = ctx.build {
-            convert(first).asAxiom() as BoolExpr
-        }
-        val z3Second = ctx.build {
-            convert(second).asAxiom() as BoolExpr
-        }
-        val query = ctx.build {
-            context.mkEq(z3First, z3Second).forall(ctx.knownDeclarations.map { it.expr })
-        }
-        return ctx.withSolver(fixpoint = false) {
-            add(query)
-            Status.SATISFIABLE == check()
         }
     }
 
@@ -228,13 +183,17 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val positivePaths = unknownCallsProcessor.apply(positivePaths)
         val query = unknownCallsProcessor.apply(query)
 
-        val z3State = ctx.convert(state).asAxiom() as BoolExpr
-        val z3positive = positivePaths.map { ctx.convert(it).expr as BoolExpr }
-        val z3query = ctx.convert(query).expr as BoolExpr
+        val z3State = ctx.build {
+            convert(state).asAxiom() as BoolExpr
+        }
+        val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
+        val z3query = ctx.convert(query).asAxiom() as BoolExpr
+
+        log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
         val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
-        val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state)
+        val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
         unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
 
         val predicates = z3positive.indices.map { idx -> Predicate(idx) }
@@ -259,7 +218,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             mapper: ModelDeclarationMapping,
             positives: List<BoolExpr>,
             query: BoolExpr
-    ) = withSolver(fixpoint = true) {
+    ) = withSolver {
         for (statement in positives) {
             add(statement)
         }
@@ -268,17 +227,17 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(this))
 
         val status = check()
-            when (status) {
-                Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
-                Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
-                Status.SATISFIABLE -> {
-                    val result = convertModel(model, mapper, predicates)
-                    FixpointResult.Sat(result)
+        when (status) {
+            Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
+            Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
+            Status.SATISFIABLE -> {
+                val result = convertModel(model, mapper, predicates)
+                FixpointResult.Sat(result)
             }
         }
     }
 
-    private fun convertModel(
+    private fun CallCtx.convertModel(
             model: Model,
             mapping: ModelDeclarationMapping,
             predicates: List<Predicate>
@@ -287,9 +246,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         return predicates.map {
             val predicate = modelPredicates[it.idx] ?: return@map falseState()
             val predicateInterpretation = model.getFuncInterp(predicate)
-            val modelConverter = FixpointModelConverter(mapping, tf)
+            val modelConverter = FixpointModelConverter(mapping, tf, z3Context)
             if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
             val elseEntry = predicateInterpretation.`else`
+            log.debug("\n$elseEntry")
+            log.debug("\n${mapping.declarations}")
+            log.debug("\n${z3Context.getTypeMapping()}")
             modelConverter.apply(elseEntry)
         }
     }

@@ -14,8 +14,10 @@ import org.jetbrains.research.kex.smt.*
 import org.jetbrains.research.kex.smt.Solver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.term.FieldTerm
+import org.jetbrains.research.kex.state.term.InstanceOfTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kex.state.transformer.TermCollector
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.collectVariables
 import org.jetbrains.research.kex.state.transformer.memspace
@@ -57,6 +59,19 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
             Status.UNSATISFIABLE -> Result.UnsatResult
             Status.UNKNOWN -> Result.UnknownResult(result.second as String)
             Status.SATISFIABLE -> Result.SatResult(collectModel(ctx, result.second as Model, state))
+        }
+    }
+
+    fun isAlwaysEqual(first: PredicateState, second: PredicateState): Result {
+        val ctx = Z3Context.create(ef)
+        val converter = Z3Converter(tf)
+        val z3First = converter.convert(first, ef, ctx)
+        val z3Second = converter.convert(second, ef, ctx)
+        val result = check(z3First neq z3Second, ctx.factory.makeTrue())
+        return when (result.first) {
+            Status.UNSATISFIABLE -> Result.UnsatResult
+            Status.UNKNOWN -> Result.UnknownResult(result.second as String)
+            Status.SATISFIABLE -> Result.SatResult(collectModel(ctx, result.second as Model, first, second, evaluateAllTerms = true))
         }
     }
 
@@ -128,9 +143,15 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
         return ctx.tryFor(tactic, timeout)
     }
 
-    private fun collectModel(ctx: Z3Context, model: Model, vararg states: PredicateState): SMTModel {
+    private fun collectModel(ctx: Z3Context, model: Model, vararg states: PredicateState, evaluateAllTerms: Boolean = false): SMTModel {
+        val termCollector = { ps: PredicateState ->
+            when {
+                evaluateAllTerms -> TermCollector.getFullTermSet(ps)
+                else -> collectVariables(ps)
+            }
+        }
         val (ptrs, vars) = states.fold(setOf<Term>() to setOf<Term>()) { acc, ps ->
-            acc.first + collectPointers(ps) to acc.second + collectVariables(ps)
+            acc.first + collectPointers(ps) to acc.second + termCollector(ps)
         }
 
         val assignments = vars.map {

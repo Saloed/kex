@@ -2,10 +2,7 @@ package org.jetbrains.research.kex.state.transformer
 
 import com.abdullin.kthelper.assert.unreachable
 import com.abdullin.kthelper.logging.log
-import org.jetbrains.research.kex.ktype.KexBool
-import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.ktype.KexIntegral
-import org.jetbrains.research.kex.ktype.mergeTypes
+import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.predicate
@@ -60,6 +57,7 @@ class BoolTypeAdapter(val types: TypeFactory) : Transformer<BoolTypeAdapter> {
 
     override fun transformCmpTerm(term: CmpTerm): Term = when {
         term.lhv.type == term.rhv.type -> term
+        term.lhv.type is KexPointer || term.rhv.type is KexPointer -> term
         term.lhv.type is KexIntegral || term.rhv.type is KexIntegral -> {
             val lhv = when {
                 term.lhv.type is KexBool -> term { term.lhv `as` KexInt() }

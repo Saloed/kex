@@ -6,6 +6,7 @@ import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.util.write
 import org.jetbrains.research.kfg.visitor.ClassVisitor
 import java.nio.file.Path
+import java.nio.file.Paths
 
 class ClassWriter(val ctx: ExecutionContext, val target: Path) : ClassVisitor {
     override val cm: ClassManager
@@ -14,7 +15,7 @@ class ClassWriter(val ctx: ExecutionContext, val target: Path) : ClassVisitor {
     override fun cleanup() {}
 
     override fun visit(`class`: Class) {
-        val classFilePath = Path.of("$target", "${`class`.fullname}.class")
+        val classFilePath = Paths.get("$target", "${`class`.fullname}.class")
         val classFileName = "${classFilePath.toAbsolutePath()}"
         `class`.write(cm, ctx.loader, classFileName)
     }

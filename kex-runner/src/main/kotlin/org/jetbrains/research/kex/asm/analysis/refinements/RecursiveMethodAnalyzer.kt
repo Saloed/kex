@@ -52,11 +52,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         val directRecursiveCalls = recursiveTraces.map { it.last() }
 
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
-        val (state, recursiveCalls) = buildMethodState(methodPaths)
-        if (recursiveCalls.isEmpty()) {
-            throw IllegalArgumentException("No recursive calls to analyze")
-        }
-
+        val state = buildMethodState(methodPaths, skipInlining = { it == method })
         val (nestedNormal, nestedRefinementSources) = inlineRefinements(ignoredCalls = directRecursiveCalls)
 
         val rootCall = createRootCall()
@@ -68,14 +64,21 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal)
                 .filterRecursiveCalls()
                 .optimize()
-
-        log.debug("State:\n$state\nRecursion:\n$recursionPaths\nNormal:\n$allNormal\nSources:\n$allSources")
-
-        val refinements = allSources.value.map {
-            computeRefinement(state, rootCall, recursiveCalls, recursionPaths, allNormal, it)
+        val forMemspacing = MemspacingArguments(state, recursionPaths, allNormal, allSources)
+        val (afterMemspace, recursiveCalls) = memspaceWithRecursionInfo(forMemspacing)
+        if (recursiveCalls.isEmpty()) {
+            throw IllegalArgumentException("No recursive calls to analyze")
         }
-        return Refinements(refinements, method)
+
+        log.debug("State:\n${afterMemspace.state}\nRecursion:\n${afterMemspace.recursion}\nNormal:\n${afterMemspace.normal}\nSources:\n${afterMemspace.sources}")
+
+        val refinements = afterMemspace.sources.value.map {
+            computeRefinement(afterMemspace.state, rootCall, recursiveCalls, afterMemspace.recursion, afterMemspace.normal, it)
+        }
+        return Refinements.create(method, refinements).fmap { transform(it) { applyAdapters() } }
     }
+
+    private data class MemspacingArguments(val state: PredicateState, val recursion: PredicateState, val normal: PredicateState, val sources: RefinementSources)
 
     private fun PredicateState.filterRecursiveCalls(): PredicateState =
             filterNot { it is CallPredicate && (it.callTerm as CallTerm).method == method }
@@ -118,25 +121,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         returnTerm.call(methodCall)
     } as CallPredicate
 
-
-    private fun buildMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, Map<CallPredicate, Map<Field, FieldLoadTerm>>> {
-        val (preparedState, otherExecutionPaths) = prepareMethodState(builder)
-        val transformedTopChoices = prepareMethodOtherExecutionPaths(otherExecutionPaths)
-        val interestingTopChoices = transformedTopChoices
-                .map { it.optimize() }
-                .filterNot { it.evaluatesToTrue || it.evaluatesToFalse }
-        var state = when {
-            interestingTopChoices.isEmpty() -> preparedState
-            else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
-        }
-        state = transform(state) {
-            applyAdapters()
-        }
-        return memspaceWithRecursionInfo(state)
-    }
-
-
-    private fun memspaceWithRecursionInfo(state: PredicateState): Pair<PredicateState, Map<CallPredicate, Map<Field, FieldLoadTerm>>> {
+    private fun memspaceWithRecursionInfo(forMemspacing: MemspacingArguments): Pair<MemspacingArguments, Map<CallPredicate, Map<Field, FieldLoadTerm>>> {
+        val state = forMemspacing.state
         val recursiveCalls = stateRecursiveCalls(state)
         val callProperties = recursiveCalls.map { callMemoryProperties(it) }
         var expandedState = state
@@ -144,16 +130,21 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             val dummyEqualities = properties.values.map { state { it equality it } }
             expandedState = expandedState.insertBefore(callPredicate, BasicState(dummyEqualities))
         }
-        val memorySpacer = MemorySpacer(expandedState)
-        val resultState = memorySpacer.apply(state)
-
+        val allStates = listOf(expandedState) + forMemspacing.sources.value.map { it.condition } + listOf(forMemspacing.normal, forMemspacing.recursion)
+        val memorySpacer = MemorySpacer(ChoiceState(allStates))
+        val result = MemspacingArguments(
+                memorySpacer.apply(forMemspacing.state),
+                memorySpacer.apply(forMemspacing.recursion),
+                memorySpacer.apply(forMemspacing.normal),
+                forMemspacing.sources.fmap { memorySpacer.apply(it) }
+        )
         val callInfo = mutableMapOf<CallPredicate, Map<Field, FieldLoadTerm>>()
         for ((callPredicate, properties) in recursiveCalls.zip(callProperties)) {
             val propertiesWithMemspace = properties.mapValues { (_, term) -> memorySpacer.transform(term) as FieldLoadTerm }
             val callWithMemspace = memorySpacer.transform(callPredicate) as CallPredicate
             callInfo[callWithMemspace] = propertiesWithMemspace
         }
-        return resultState to callInfo
+        return result to callInfo
     }
 
     private fun callMemoryProperties(callPredicate: CallPredicate): Map<Field, FieldLoadTerm> {
@@ -205,45 +196,12 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         else -> emptyList()
     }
 
-    private fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
+    override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
         val refinement = findRefinement(calledMethod).expanded()
         val methodState = getStateForInlining()
         if (refinement.isUnknown() && methodState == null) skip()
         val state = methodState ?: BasicState()
         return refinement to state
-    }
-
-    private fun prepareMethodOtherExecutionPaths(otherExecutionPaths: List<PredicateState>): List<PredicateState> =
-            otherExecutionPaths.map {
-                MethodFunctionalInliner(psa) {
-                    if (calledMethod == method) skip()
-                    val (refinement, methodState) = getMethodStateAndRefinement()
-                    val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
-                    val state = ChainState(refinement.allStates().not(), fixedState)
-                    inline(state)
-                }.apply(it)
-            }
-
-    private fun prepareMethodState(builder: MethodRefinementSourceAnalyzer): Pair<PredicateState, List<PredicateState>> {
-        val otherExecutionPaths = mutableListOf<PredicateState>()
-        val state = transform(builder.methodRawFullState()) {
-            +MethodFunctionalInliner(psa) {
-                if (calledMethod == method) skip()
-                val instruction = psa.builder(method).findInstructionsForPredicate(predicate)
-                        ?: throw IllegalStateException("No instruction for predicate")
-                val instructionState = psa.builder(method).getInstructionState(instruction)
-                        ?: throw IllegalStateException("No state for call")
-                val (refinement, methodState) = getMethodStateAndRefinement()
-                val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
-                val state = ChainState(refinement.allStates().not(), fixedState)
-                inline(state)
-                val inlinedNegative = prepareForInline(refinement.allStates())
-                val withoutCurrentCall = instructionState.filterNot { it == predicate }
-                val negativeExecution = ChainState(withoutCurrentCall, inlinedNegative)
-                otherExecutionPaths.add(negativeExecution)
-            }
-        }
-        return state to otherExecutionPaths
     }
 
     private fun findPathsLeadsToRecursion(calls: List<CallInst>, psb: PredicateStateBuilder) = calls

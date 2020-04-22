@@ -19,4 +19,19 @@ object Unknowns {
         if (x.first() == 99) return x.first()
         return recursiveUnknownFunction(x + x.size)
     }
+
+    interface MyList<T> {
+        fun isEmpty(): Boolean
+        fun get(idx: Int): T
+    }
+
+    private fun <T> MyList<T>.first(): T {
+        if (isEmpty()) throw IllegalArgumentException("Empty")
+        return get(0)
+    }
+
+    fun unknownInterfaceMethods(x: MyList<String>): String {
+        return x.first()
+    }
+
 }

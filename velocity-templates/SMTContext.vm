@@ -1,6 +1,7 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContext
 import kotlin.math.max
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
 class VersionedMemory(val memory: Memory_, val version: Long = 0) {
@@ -35,6 +36,8 @@ class $self : ${solver}SMTContext {
 
         const val BASE_LOCAL_PTR = (1 shl 10) + 1
         const val BASE_STATIC_PTR = (1 shl 24) + 1
+        const val BASE_TYPE_IDX = 100
+        const val TYPE_IDX_MULTIPLIER = 10
 
         fun memoryName(memspace: Int) = "${ MEMORY_NAME }${ memspace }"
         fun propertyName(memspace: Int, name: String) = "${ PROPERTY_NAME }${ name }__${ memspace }"
@@ -53,7 +56,12 @@ class $self : ${solver}SMTContext {
                 val alternatives = choices.map { it.key to it.value.get(id) }
                 id to VersionedMemory.merge(name, default.get(id), alternatives)
             }.toMap()
-            return $self(default.factory, maxLocal, maxStatic, memArrays)
+
+            if (choices.any { it.value.typeIndex != default.typeIndex } || choices.any { it.value.typeMap != default.typeMap }) {
+                return unreachable("Incosistent type info")
+            }
+
+            return $self(default.factory, maxLocal, maxStatic, memArrays, default.typeIndex, default.typeMap)
         }
 
         fun create(factory: $factory) = $self(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
@@ -63,23 +71,29 @@ class $self : ${solver}SMTContext {
     val factory: $factory
     private var localPointer: Int
     private var staticPointer: Int
+    private val typeIndex: AtomicInteger
+    private val typeMap: MutableMap< KexType, Int >
     private var initialMemories = hashMapOf< String, VersionedMemory >()
     private var memories: MutableMap< String, VersionedMemory >
 
     constructor(factory: $factory, localPointer: Int, staticPointer: Int,
-                memories: Map< String, VersionedMemory >) {
+                memories: Map< String, VersionedMemory >,
+                typeIndex: AtomicInteger, typeMap: MutableMap< KexType, Int >) {
         this.factory = factory
         this.localPointer = localPointer
         this.staticPointer = staticPointer
         this.memories = memories.toMutableMap()
 
+        this.typeIndex = typeIndex
+        this.typeMap = typeMap
+
         initialMemories[MEMORY_NAME] = VersionedMemory(factory.makeEmptyMemory(MEMORY_NAME))
     }
 
     constructor(factory: $factory, localPointer: Int, staticPointer: Int)
-                : this(factory, localPointer, staticPointer, mapOf())
+                : this(factory, localPointer, staticPointer, mapOf(), AtomicInteger(BASE_TYPE_IDX), hashMapOf())
 
-    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories)
+    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories, ctx.typeIndex, ctx.typeMap)
 
     constructor() : this($factory(), 0, 0)
 
@@ -149,6 +163,11 @@ class $self : ${solver}SMTContext {
         this.staticPointer = merged.staticPointer
         return this
     }
+
+    fun getTypeIdx(type: KexType) = typeMap.getOrPut(type) { typeIndex.addAndGet(TYPE_IDX_MULTIPLIER) }
+    fun getTypeByIdx(idx: Int): KexType? = typeMap.entries.firstOrNull { it.value == idx }?.key
+    fun getTypeMapping(): Map< KexType, Int > = typeMap.toMap()
+
     fun readType(ptr: Ptr_, memspace: Int): Int_ = readProperty(ptr, memspace, TYPE_PROPERTY, Int_::class)
     fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type))
 }

@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
@@ -32,11 +33,13 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
     fun addToDeclarationMapping(declarationMapping: ModelDeclarationMapping) {
         val calls = declarationMapping.declarations.filterIsInstance<DeclarationTracker.Declaration.Call>()
         for (call in calls) {
-            declarationMapping.setTerm(call, unknownCalls[call.index]!!.call)
+            val unknownCall = unknownCalls[call.index]
+                    ?: throw IllegalStateException("No call for index ${call.index}")
+            declarationMapping.setTerm(call, unknownCall.call)
         }
     }
 
-    fun hasUnknownCalls() = unknownCalls.isNotEmpty()
+    fun hasUnknownCalls() = replacement.values.any { it !is ConstantPredicate }
 
     fun unknownCalls(): List<UnknownCall> = unknownCalls.values.toList()
 
@@ -54,13 +57,17 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
     private fun analyzeState(ps: PredicateState) {
         val calls = collectCalls(ps).filterNot { it in replacement }
         for (call in calls) {
-            if (!call.hasLhv) {
-                replacement[call] = ConstantPredicate(true, call.type, call.location)
-                continue
-            }
             val index = replacement.size
-            val callVariable = term { value(call.lhv.type, "call__$index") }
-            replacement[call] = EqualityPredicate(call.lhv, callVariable, call.type, call.location)
+            val callType = when {
+                call.hasLhv -> call.lhv.type
+                else -> (call.call as CallTerm).method.returnType.kexType
+            }
+            val callVariable = term { value(callType, "call__$index") }
+            val callReplacement = when {
+                call.hasLhv -> EqualityPredicate(call.lhv, callVariable, call.type, call.location)
+                else -> ConstantPredicate(true, call.type, call.location)
+            }
+            replacement[call] = callReplacement
             unknownCalls[index] = UnknownCall(index, call.call as CallTerm, callVariable)
         }
     }

@@ -5,7 +5,6 @@ import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.memspace
-import org.jetbrains.research.kex.state.transformer.typeIdx
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
@@ -306,8 +305,8 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     fun convert(instanceof: InstanceOfTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
         val arg = convert(instanceof.operand, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr ref in instance of") }
         val argType = ctx.readType(arg, instanceof.operand.memspace)
-        val checkedType = ef.makeIntConst(instanceof.checkedType.typeIdx)
-        return argType eq checkedType
+        val typeIndex = ctx.getTypeIdx(instanceof.checkedType)
+        return argType eq ef.makeIntConst(typeIndex)
     }
 
     fun convert(neg: NegTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {

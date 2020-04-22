@@ -113,17 +113,6 @@ class PredicateStateBuilder(val method: Method) {
         }
     }
 
-    fun findInstructionsForPredicate(predicate: Predicate): Instruction? =
-            predicateBuilder.predicateMap
-                    .filter { it.value == predicate }
-                    .let {
-                        when (it.size) {
-                            0 -> null
-                            1 -> it.entries.first().key
-                            else -> throw IllegalStateException("Too many instructions for predicate")
-                        }
-                    }
-
     fun findPredicateForInstruction(inst: Instruction): Predicate? =
             predicateBuilder.predicateMap[inst]
 }

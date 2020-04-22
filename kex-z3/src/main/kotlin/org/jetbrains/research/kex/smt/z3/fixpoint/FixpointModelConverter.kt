@@ -6,23 +6,30 @@ import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.predicate.EqualityPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.predicate.state
+import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.state.transformer.ConstantPropagator
-import org.jetbrains.research.kex.state.transformer.Optimizer
 import org.jetbrains.research.kex.state.transformer.Transformer
-import org.jetbrains.research.kex.state.transformer.TypeIndex
+import org.jetbrains.research.kex.util.join
+import org.jetbrains.research.kfg.ir.Class
+import org.jetbrains.research.kfg.ir.ConcreteClass
+import org.jetbrains.research.kfg.ir.Field
+import org.jetbrains.research.kfg.ir.OuterClass
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
+import ru.spbstu.ktuples.zip
 
 class FixpointModelConverter(
         private val mapping: ModelDeclarationMapping,
-        private val tf: TypeFactory
+        private val tf: TypeFactory,
+        private val z3Context: Z3Context
 ) {
+
+    fun apply(expr: Expr): PredicateState = expr.simplify()
+            .let { convert(it) }
+            .let { InstanceOfCorrector(z3Context).apply(it) }
+            .simplify()
 
     object UnknownType : KexType() {
         override val name: String = "Unknown"
@@ -30,7 +37,7 @@ class FixpointModelConverter(
         override fun getKfgType(types: TypeFactory): Type = throw IllegalStateException("type is unknown")
     }
 
-    class InstanceOfCorrector : Transformer<InstanceOfCorrector> {
+    class InstanceOfCorrector(private val z3Context: Z3Context) : Transformer<InstanceOfCorrector> {
         class UnknownInstanceOfCollector : Transformer<UnknownInstanceOfCollector> {
             val predicatesToCorrect = arrayListOf<EqualityPredicate>()
             override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {
@@ -40,7 +47,7 @@ class FixpointModelConverter(
                 return super.transformEqualityPredicate(predicate)
             }
 
-            fun instanceOfPattern(predicate: EqualityPredicate): Boolean {
+            private fun instanceOfPattern(predicate: EqualityPredicate): Boolean {
                 if (predicate.rhv !is ConstBoolTerm) return false
                 val lhv = predicate.lhv as? CmpTerm ?: return false
                 val instanceOf = lhv.lhv as? InstanceOfTerm ?: return false
@@ -48,71 +55,126 @@ class FixpointModelConverter(
             }
         }
 
-        class PredicateRemapping(val mapping: Map<Predicate, Predicate>) : Transformer<PredicateRemapping> {
-            override fun transformPredicate(predicate: Predicate) = mapping[predicate]
-                    ?: super.transformPredicate(predicate)
-        }
-
         override fun apply(ps: PredicateState): PredicateState {
             val unknownInstanceOf = UnknownInstanceOfCollector().apply { apply(ps) }.predicatesToCorrect
             if (unknownInstanceOf.isEmpty()) return ps
-            val normalized = unknownInstanceOf.map { normalize(it) }
-            for (condition in normalized) {
-                condition.findUnknownBound(normalized)
-            }
-            if (normalized.any { it.isUnknown() }) throw IllegalStateException("Unable to restore types")
-            val instanceOfTerms = normalized.map { InstanceOfTerm(TypeIndex.findType(it.typeIdx()), it.arg) }
-            val predicates = unknownInstanceOf.zip(instanceOfTerms).map { (predicate, term) ->
-                EqualityPredicate(term, ConstBoolTerm(true), predicate.type, predicate.location)
-            }
-            val mapping = unknownInstanceOf.zip(predicates).toMap<Predicate, Predicate>()
-            return PredicateRemapping(mapping).apply(ps)
+            val knownTypes = z3Context.getTypeMapping()
+            val typeSets = unknownInstanceOf.map { findTypeSet(it) }
+            val reifiedTypeSets = typeSets.map { it.reify(typeSets) }
+            val typeCandidates = reifiedTypeSets.map { it.candidates(knownTypes) }
+            val mapping = zip(reifiedTypeSets, typeCandidates, unknownInstanceOf)
+                    .map { (ts, candi, originalPredicate) ->
+                        originalPredicate to generateInstanceOf(ts, candi, originalPredicate)
+                    }.toMap<Predicate, PredicateState>()
+            return replaceWithPredicateState(ps, mapping)
         }
 
-        data class InstanceOfCondition(val arg: Term, var upperBound: Int = UNKNOWN, var lowerBound: Int = UNKNOWN) {
-            fun typeIdx() = lowerBound + 1
-            fun isUnknown() = upperBound == UNKNOWN || lowerBound == UNKNOWN || upperBound != lowerBound + 2
-            fun findUnknownBound(conditions: List<InstanceOfCondition>) {
-                if (lowerBound == UNKNOWN && upperBound != UNKNOWN) {
-                    val other = conditions.find { it.lowerBound + 1 == upperBound - 1 }
-                            ?: throw IllegalStateException("Unable to find lower bound")
-                    lowerBound = other.lowerBound
-                    other.upperBound = upperBound
+        private fun generateInstanceOf(typeSet: TypeSet, candidate: KexType, original: Predicate): PredicateState =
+                predicate(original.type, original.location) {
+                    InstanceOfTerm(candidate, typeSet.instanceOfArg) equality const(true)
+                }.wrap()
+
+        private fun generateInstanceOf(typeSet: TypeSet, candidates: Set<KexType>, original: Predicate): PredicateState = when (candidates.size) {
+            0 -> throw IllegalStateException("No type candidates for $typeSet")
+            1 -> generateInstanceOf(typeSet, candidates.first(), original)
+            else -> candidates.map { generateInstanceOf(typeSet, it, original) }.let { ChoiceState(it) }
+        }
+
+        private fun replaceWithPredicateState(ps: PredicateState, replacement: Map<Predicate, PredicateState>): PredicateState = when (ps) {
+            is BasicState -> when {
+                ps.predicates.any { it in replacement }.not() -> ps
+                else -> {
+                    val builder = StateBuilder()
+                    for (predicate in ps.predicates) {
+                        when (val replaceWith = replacement[predicate]) {
+                            null -> builder += predicate
+                            else -> builder += replaceWith
+                        }
+                    }
+                    builder.apply()
                 }
-                if (lowerBound != UNKNOWN && upperBound == UNKNOWN) {
-                    val other = conditions.find { it.upperBound - 1 == lowerBound + 1 }
-                            ?: throw IllegalStateException("Unable to find upper bound")
-                    upperBound = other.upperBound
-                    other.lowerBound = lowerBound
-                }
+            }
+            else -> ps.fmap { replaceWithPredicateState(it, replacement) }
+        }
+
+        enum class TypeSearchDirection(val predicate: (Int, Int) -> Boolean) {
+            EQ({ a, b -> a == b }),
+            NEQ({ a, b -> a != b }),
+            LT({ a, b -> a < b }),
+            GT({ a, b -> a > b }),
+            LE({ a, b -> a <= b }),
+            GE({ a, b -> a >= b });
+
+            fun invert() = when (this) {
+                EQ -> NEQ
+                NEQ -> EQ
+                LT -> GE
+                GT -> LE
+                LE -> GT
+                GE -> LT
             }
 
             companion object {
-                const val UNKNOWN = -10
+                fun from(opcode: CmpOpcode) = when (opcode) {
+                    is CmpOpcode.Eq -> EQ
+                    is CmpOpcode.Neq -> NEQ
+                    is CmpOpcode.Lt -> LT
+                    is CmpOpcode.Gt -> GT
+                    is CmpOpcode.Le -> LE
+                    is CmpOpcode.Ge -> GE
+                    else -> TODO("Unexpected cmp opcode: $opcode")
+                }
             }
         }
 
-        private fun normalize(predicate: EqualityPredicate): InstanceOfCondition {
+        data class TypeSet(val instanceOfArg: Term, val bound: Int, val direction: TypeSearchDirection) {
+            fun candidates(types: Map<KexType, Int>) = types.entries
+                    .filter { direction.predicate(it.value, bound) }
+                    .map { it.key }
+                    .toSet()
+
+            private val needReification = bound % Z3Context.TYPE_IDX_MULTIPLIER != 0
+
+            fun reify(typeSets: List<TypeSet>): TypeSet = when {
+                !needReification -> this
+                direction == TypeSearchDirection.EQ -> this
+                direction == TypeSearchDirection.NEQ -> this
+                else -> {
+                    val myClosesIdx = closestPossibleIndex
+                    val possibleReifications = typeSets.filter { it.closestPossibleIndex == myClosesIdx }
+                    when (possibleReifications.size) {
+                        1 -> TypeSet(instanceOfArg, myClosesIdx, TypeSearchDirection.EQ)
+                        else -> this
+                    }
+                }
+            }
+
+            private val closestPossibleIndex by lazy {
+                when {
+                    !needReification -> bound
+                    direction == TypeSearchDirection.LE || direction == TypeSearchDirection.LT -> {
+                        (bound / Z3Context.TYPE_IDX_MULTIPLIER) * Z3Context.TYPE_IDX_MULTIPLIER
+                    }
+                    direction == TypeSearchDirection.GE || direction == TypeSearchDirection.GT -> {
+                        (bound / Z3Context.TYPE_IDX_MULTIPLIER) * Z3Context.TYPE_IDX_MULTIPLIER + Z3Context.TYPE_IDX_MULTIPLIER
+                    }
+                    else -> throw IllegalArgumentException("No nearest index from $bound in direction $direction")
+                }
+            }
+        }
+
+        private fun findTypeSet(predicate: EqualityPredicate): TypeSet {
             val isTrue = (predicate.rhv as ConstBoolTerm).value
             val cmp = predicate.lhv as CmpTerm
             val bound = (cmp.rhv as ConstIntTerm).value
             val arg = (cmp.lhv as InstanceOfTerm).operand
-            return when {
-                isTrue && cmp.opcode is CmpOpcode.Gt -> InstanceOfCondition(arg, lowerBound = bound)
-                isTrue && cmp.opcode is CmpOpcode.Lt -> InstanceOfCondition(arg, upperBound = bound)
-                !isTrue && cmp.opcode is CmpOpcode.Le -> InstanceOfCondition(arg, lowerBound = bound)
-                !isTrue && cmp.opcode is CmpOpcode.Ge -> InstanceOfCondition(arg, upperBound = bound)
-                else -> TODO("Unexpected cmp term: $cmp")
+            val direction = when {
+                isTrue -> TypeSearchDirection.from(cmp.opcode)
+                else -> TypeSearchDirection.from(cmp.opcode).invert()
             }
+            return TypeSet(arg, bound, direction)
         }
     }
-
-    fun apply(expr: Expr): PredicateState = expr.simplify()
-            .let { convert(it) }
-            .let { InstanceOfCorrector().apply(it) }
-            .let { ConstantPropagator.apply(it) }
-            .let { Optimizer().apply(it) }
-            .simplify()
 
     private fun convert(expr: Expr): PredicateState = when (expr) {
         is BoolExpr -> convert(expr)
@@ -120,27 +182,26 @@ class FixpointModelConverter(
     }
 
     private fun convertTerm(expr: Expr): TermWithAxiom = when {
-        expr.isVar -> variableTerm(expr)
-        expr is BoolExpr -> convertTerm(expr)
-        expr is IntExpr -> convertTerm(expr)
-        expr is BitVecExpr -> convertTerm(expr)
-        expr is FPExpr -> convertTerm(expr)
+        expr.isVar -> convertVariableTerm(expr)
+        expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
+        expr is BoolExpr -> convertBoolTerm(expr)
+        expr is IntExpr -> convertIntTerm(expr)
+        expr is BitVecExpr -> convertBVTerm(expr)
+        expr is FPExpr -> convertFPTerm(expr)
         else -> TODO()
     }
 
-    private fun variableTerm(expr: Expr): TermWithAxiom {
-        val term = mapping.getTerm(expr.index)
-        return when {
-            term is CallTerm -> {
-                val value = term { value(term.type, "call__${expr.index}") }
-                val axiom = basic {
-                    state { value.call(term) }
+    private fun convertVariableTerm(expr: Expr): TermWithAxiom =
+            when (val term = mapping.getTerm(expr.index)) {
+                is CallTerm -> {
+                    val value = term { value(term.type, "call__${expr.index}") }
+                    val axiom = basic {
+                        state { value.call(term) }
+                    }
+                    TermWithAxiom(value, axiom)
                 }
-                TermWithAxiom(value, axiom)
+                else -> TermWithAxiom(term)
             }
-            else -> TermWithAxiom(term)
-        }
-    }
 
     private fun convert(expr: BoolExpr): PredicateState = when {
         expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
@@ -153,7 +214,7 @@ class FixpointModelConverter(
         else -> convertTerm(expr).equality { const(true) }
     }
 
-    private fun convertTerm(expr: BoolExpr): TermWithAxiom = when {
+    private fun convertBoolTerm(expr: BoolExpr): TermWithAxiom = when {
         expr.isAnd -> expr.convertArgs().combine { a, b -> a and b }
         expr.isOr -> expr.convertArgs().combine { a, b -> a or b }
         expr.isNot && expr.numArgs == 1 -> expr.convertArgs().first().transformTerm { it.not() }
@@ -167,23 +228,28 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertTerm(expr: IntExpr): TermWithAxiom = when {
-        expr.isIntNum -> TermWithAxiom.wrap { const((expr as IntNum).int) }
+    private fun convertIntTerm(expr: IntExpr): TermWithAxiom = when {
+        expr.isIntNum -> TermWithAxiom.wrap {
+            val intExpr = expr as IntNum
+            val longValue = intExpr.int64
+            when {
+                longValue >= Int.MIN_VALUE.toLong() || longValue <= Int.MAX_VALUE.toLong() -> const(longValue.toInt())
+                else -> const(longValue)
+            }
+        }
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
-        expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
         else -> TODO()
     }
 
-    private fun convertTerm(expr: BitVecExpr): TermWithAxiom = when {
+    private fun convertBVTerm(expr: BitVecExpr): TermWithAxiom = when {
         expr is BitVecNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
         expr.isBVAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isBVMul -> expr.convertArgs().combine { a, b -> a mul b }
-        expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
         else -> TODO()
     }
 
-    private fun convertTerm(expr: FPExpr): TermWithAxiom = when {
+    private fun convertFPTerm(expr: FPExpr): TermWithAxiom = when {
         expr is FPNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
         else -> TODO()
     }
@@ -192,12 +258,7 @@ class FixpointModelConverter(
         if (!memory.isVar) throw IllegalStateException("Memory is not var $memory")
         val decl = mapping.declarations[memory.index]
         return when {
-            decl is DeclarationTracker.Declaration.Property -> when {
-                location.isVar -> {
-                    variableTerm(location).transformTerm { readProperty(it, decl) }
-                }
-                else -> TODO("Property location is not var")
-            }
+            decl is DeclarationTracker.Declaration.Property -> readProperty(convertTerm(location), decl)
             decl is DeclarationTracker.Declaration.Memory && mapping.isArrayMemory(decl) -> {
                 if (!(location.isAdd && location.args.size == 2)) {
                     throw IllegalStateException("Unexpected array memory location $location")
@@ -215,32 +276,60 @@ class FixpointModelConverter(
         }
     }
 
-    private fun readProperty(obj: Term, property: DeclarationTracker.Declaration.Property): Term = when (property) {
+    private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {
         is DeclarationTracker.Declaration.ClassProperty -> {
-            val kType = obj.type.getKfgType(tf)
+            val kType = obj.term.type.getKfgType(tf)
             if (kType !is ClassType) {
                 TODO("Only class types supported")
             }
-            val kfgClass = kType.`class`
-            if (kfgClass.fullname != property.className) {
-                throw IllegalArgumentException("Class $kfgClass doesn't match property $property")
-            }
-            val field = kfgClass.fields.find { it.name == property.propertyName }
-                    ?: throw IllegalArgumentException("Class $kfgClass has no property $property")
-            term { obj.field(field.type.kexType, field.name).load() }
+            val fieldLoad = getFieldLoad(obj.term, tf.cm[property.className], property.propertyName)
+            obj.binaryOperation(fieldLoad) { _, load -> load }
         }
         else -> when {
-            property.fullName == Z3Context.TYPE_PROPERTY -> InstanceOfTerm(UnknownType, obj)
-            obj.type is KexArray && property.fullName == "length" -> ArrayLengthTerm(KexInt(), obj)
+            property.fullName == Z3Context.TYPE_PROPERTY -> obj.transformTerm { InstanceOfTerm(UnknownType, it) }
+            obj.term.type is KexArray && property.fullName == "length" -> obj.transformTerm { ArrayLengthTerm(KexInt(), it) }
             else -> TODO("Unknown property $property")
         }
 
     }
 
+    private fun getFieldLoad(owner: Term, cls: Class, fieldName: String): TermWithAxiom {
+        val field = cls.findField(fieldName)
+        if (field != null) {
+            return TermWithAxiom.wrap { owner.field(field.type.kexType, field.name).load() }
+        }
+        val fields = tf.cm.concreteClasses
+                .filter { it.isInheritorOf(cls) }
+                .mapNotNull { it.findField(fieldName) }
+                .toSet()
+        if (fields.isEmpty()) throw IllegalArgumentException("Class $cls and it inheritors has no field $fieldName")
+        val fieldType = fields.map { it.type.kexType }.groupBy({ it }, { 1 }).maxBy { (_, cnt) -> cnt.sum() }?.key
+                ?: throw IllegalStateException("No types")
+        val resultFiledLoad = term { value(fieldType, "load_${cls.name}.$fieldName") }
+        val axioms = fields.map {
+            basic {
+                path {
+                    owner.instanceOf(it.`class`) equality const(true)
+                }
+                state {
+                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner).field(it.type.kexType, it.name).load()
+                }
+            }
+        }
+        return TermWithAxiom(resultFiledLoad, ChoiceState(axioms))
+    }
+
+    private fun Term.instanceOf(cls: Class): Term = cls.allInheritors()
+            .map { it.kexType }
+            .map { term { tf.getInstanceOf(it, this@instanceOf) } }
+            .join { t1, t2 -> term { t1 or t2 } }
+
+    private fun Class.allInheritors() = cm.concreteClasses.filter { it.isInheritorOf(this) }.toSet()
+
     private data class TermWithAxiom(val term: Term, val axiom: PredicateState? = null) {
 
         fun equality(other: TermWithAxiom): PredicateState {
-            val predicate = state { term equality other.term }
+            val predicate = path { term equality other.term }
             val axiom = mergeAxiom(other)
             return withAxiom(predicate, axiom)
         }
@@ -279,5 +368,28 @@ class FixpointModelConverter(
     private fun List<PredicateState>.combine(combiner: (PredicateState, PredicateState) -> PredicateState): PredicateState = when (size) {
         0 -> BasicState()
         else -> drop(1).fold(first(), combiner)
+    }
+
+    private fun Class.findFieldConcrete(name: String): Field? {
+        return fields.find { it.name == name } ?: superClass?.findFieldConcrete(name)
+    }
+
+    private fun Class.findField(name: String): Field? {
+        val myField = fields.find { it.name == name }
+        if (myField != null) return myField
+        var parents = (listOf(superClass) + interfaces).filterNotNull()
+
+        var result = parents.mapNotNull { it as? ConcreteClass }.mapNotNull { it.findFieldConcrete(name) }.firstOrNull()
+        while (parents.isNotEmpty()) {
+            if (result != null) break
+            parents = parents
+                    .map { (listOf(it.superClass) + it.interfaces).filterNotNull() }
+                    .flatten()
+            result = parents.mapNotNull { it as? ConcreteClass }.mapNotNull { it.findFieldConcrete(name) }.firstOrNull()
+        }
+
+        return result
+                ?: (listOf(superClass) + interfaces).filterNotNull().mapNotNull { it as? OuterClass }.map { it.findFieldConcrete(name) }.firstOrNull()
+
     }
 }

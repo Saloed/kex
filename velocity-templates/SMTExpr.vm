@@ -207,10 +207,15 @@ $modifiers class $fullname : $parent {
     open fun extract(high: Int, low: Int) = $self(ctx, engine.extract(ctx, expr, high, low), axiom)
 
     open fun binary(opcode: SMTEngine.Opcode, other: $self): $valexpr {
-        val maxsize = max(getBitsize(), other.getBitsize())
-        val lhv = engine.sext(ctx, maxsize, expr)
-        val rhv = engine.sext(ctx, maxsize, other.expr)
-
+        val (lhv, rhv) = when {
+            getBitsize() == other.getBitsize() -> expr to other.expr
+            else -> {
+                val maxsize = max(getBitsize(), other.getBitsize())
+                val lhv = engine.sext(ctx, maxsize, expr)
+                val rhv = engine.sext(ctx, maxsize, other.expr)
+                lhv to rhv
+            }
+        }
         val nexpr = engine.binary(ctx, opcode, lhv, rhv)
         val nax = spliceAxioms(ctx, axiom, other.axiom)
         return $valexpr(ctx, nexpr, nax)
@@ -403,6 +408,7 @@ fun ${valexpr}.toBV(sort: $sort): $Bitvector {
 fun ${valexpr}.toBV(): $Bitvector {
     val newExpr = when {
         engine.isBool(ctx, expr) -> engine.bool2bv(ctx, expr, engine.getBVSort(ctx, SMTEngine.WORD))
+        engine.isRawBV(ctx, expr) -> engine.rawBv2bv(ctx, expr)
         engine.isBV(ctx, expr) -> this.expr
         engine.isFloat(ctx, expr) -> engine.float2bv(ctx, expr, engine.getBVSort(ctx, SMTEngine.WORD))
         engine.isDouble(ctx, expr) -> engine.float2bv(ctx, expr, engine.getBVSort(ctx, SMTEngine.DWORD))

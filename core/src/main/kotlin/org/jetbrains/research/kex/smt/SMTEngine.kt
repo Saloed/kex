@@ -46,12 +46,14 @@ abstract class SMTEngine<in Context_t : Any, Expr_t : Any, Sort_t : Any, Functio
     abstract fun getArrayRange(ctx: Context_t, array: Sort_t): Sort_t
     abstract fun isBoolSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isBVSort(ctx: Context_t, sort: Sort_t): Boolean
+    abstract fun isRawBVSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isFloatSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isDoubleSort(ctx: Context_t, sort: Sort_t): Boolean
     abstract fun isArraySort(ctx: Context_t, sort: Sort_t): Boolean
 
     fun isBool(ctx: Context_t, expr: Expr_t) = isBoolSort(ctx, getSort(ctx, expr))
     fun isBV(ctx: Context_t, expr: Expr_t) = isBVSort(ctx, getSort(ctx, expr))
+    fun isRawBV(ctx: Context_t, expr: Expr_t) = isRawBVSort(ctx, getSort(ctx, expr))
     fun isFloat(ctx: Context_t, expr: Expr_t) = isFloatSort(ctx, getSort(ctx, expr))
     fun isDouble(ctx: Context_t, expr: Expr_t) = isDoubleSort(ctx, getSort(ctx, expr))
     fun isFP(ctx: Context_t, expr: Expr_t) = isFloat(ctx, expr) || isDouble(ctx, expr)
@@ -72,6 +74,7 @@ abstract class SMTEngine<in Context_t : Any, Expr_t : Any, Sort_t : Any, Functio
     abstract fun bool2bv(ctx: Context_t, expr: Expr_t, sort: Sort_t): Expr_t
     abstract fun bv2bool(ctx: Context_t, expr: Expr_t): Expr_t
     abstract fun bv2bv(ctx: Context_t, expr: Expr_t, sort: Sort_t): Expr_t
+    abstract fun rawBv2bv(ctx: Context_t, expr: Expr_t): Expr_t
     abstract fun bv2float(ctx: Context_t, expr: Expr_t, sort: Sort_t): Expr_t
     abstract fun float2bv(ctx: Context_t, expr: Expr_t, sort: Sort_t): Expr_t
     abstract fun float2float(ctx: Context_t, expr: Expr_t, sort: Sort_t): Expr_t

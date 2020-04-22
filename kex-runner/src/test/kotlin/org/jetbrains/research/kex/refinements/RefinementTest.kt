@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
+import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexTest
@@ -11,9 +12,10 @@ import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.random.easyrandom.EasyRandomDriver
 import org.jetbrains.research.kex.serialization.KexSerializer
+import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.smt.z3.Z3Solver
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
@@ -25,7 +27,11 @@ import java.net.URLClassLoader
 import kotlin.test.assertEquals
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-abstract class RefinementTest(val suiteName: String) : KexTest() {
+abstract class RefinementTest(
+        val suiteName: String,
+        includeStdlib: Boolean = false,
+        failOnError: Boolean = true
+) : KexTest(includeStdlib, failOnError) {
     val refinementsPackageName = "$packageName/refinements"
     val refinementsPackage = Package("$refinementsPackageName/*")
     val `class`: Class
@@ -66,8 +72,21 @@ abstract class RefinementTest(val suiteName: String) : KexTest() {
 
     private fun assertPredicateStateEquals(expected: PredicateState, actual: PredicateState) {
         if (expected == actual) return
-        val solver = Z3FixpointSolver(cm.type)
-        val equality = solver.checkEquality(expected, actual)
+        val solver = Z3Solver(cm.type)
+        val solution = solver.isAlwaysEqual(actual, expected)
+        val equality = when (solution) {
+            is Result.UnsatResult -> true
+            is Result.SatResult -> {
+                log.debug("Check failed: $solution")
+                log.debug("${solution.model}")
+                false
+            }
+            is Result.UnknownResult -> {
+                log.debug("Check failed: $solution")
+                log.debug(solution.reason)
+                false
+            }
+        }
         if (!equality) {
             assertEquals(expected, actual, "Refinement states not equal")
         }
@@ -76,9 +95,8 @@ abstract class RefinementTest(val suiteName: String) : KexTest() {
     private fun findMethod(name: String) = `class`.methods.find { it.name == name }
             ?: throw IllegalStateException("Method $name not found in $`class`")
 
-    private fun refinementsForMethod(method: Method): Refinements {
+    fun refinementsForMethod(method: Method): Refinements {
         val refinements = MethodRefinements(analysisContext, psa)
-        refinements.visit(method)
         return refinements.getOrComputeRefinement(method)
     }
 
@@ -101,7 +119,7 @@ abstract class RefinementTest(val suiteName: String) : KexTest() {
             values.add(Refinement.create(criteria, ps))
         }
 
-        fun refinements() = Refinements(values, method)
+        fun refinements() = Refinements.create(method, values)
 
         private fun criteriaForException(exception: Exception): RefinementCriteria {
             val cls = cm[exception::class.java.name.replace('.', '/')]

@@ -70,6 +70,7 @@ open class $factory : ${solver}SMTExprFactory() {
 #foreach($type in $types)
         is Kex${type} -> make${type}(name, fresh)
 #end
+        is KexByte -> makeInt(name, fresh)
         is KexClass -> makePtr(name, fresh)
         is KexArray -> makePtr(name, fresh)
         is KexNull -> makePtr(name, fresh)

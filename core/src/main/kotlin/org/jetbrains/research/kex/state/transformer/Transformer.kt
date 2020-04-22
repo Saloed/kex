@@ -25,24 +25,135 @@ interface Transformer<T : Transformer<T>> {
 
     fun nothing(): Predicate = Stub
 
-    private inline fun <reified T : TypeInfo> delegate(argument: T, type: String): T {
-        // this is fucked up, but at least it's not nullable
+    private inline fun <reified T : TypeInfo> delegate(argument: T): T {
         if (argument is Stub) return argument
-
-        val subtypeName = argument.reverseMapping.getValue(argument.javaClass)
-        val subtype = argument.inheritors.getValue(subtypeName)
-
-        val transformName = this.javaClass.getDeclaredMethod("transform$subtypeName", subtype)
-
-        val res = transformName.invoke(this, argument) as? T
-                ?: unreachable { log.debug("Unexpected null in transformer invocation") }
+        val res = delegate0(argument)
         if (res is Stub) return res
+        return delegate1(res)
+    }
+    private inline fun <reified T : TypeInfo> delegate0(argument: T): T = when (argument) {
 
-        val newSubtypeName = res.reverseMapping.getValue(res.javaClass)
-        val newSubtype = res.inheritors.getValue(newSubtypeName)
-        val transformClass = this.javaClass.getDeclaredMethod("transform$newSubtypeName$type", newSubtype)
-        return transformClass.invoke(this, res) as? T
-                ?: unreachable { log.debug("Unexpected null in transformer invocation") }
+        is PredicateState -> when (argument) {
+            is NegationState -> transformNegation(argument) as T
+            is ChoiceState -> transformChoice(argument) as T
+            is ChainState -> transformChain(argument) as T
+            is BasicState -> transformBasic(argument) as T
+            else -> unreachable { log.error("No PredicateState transformer for $argument") }
+        }
+
+
+        is Predicate -> when (argument) {
+            is ThrowPredicate -> transformThrow(argument) as T
+            is NewPredicate -> transformNew(argument) as T
+            is CatchPredicate -> transformCatch(argument) as T
+            is NewArrayPredicate -> transformNewArray(argument) as T
+            is InequalityPredicate -> transformInequality(argument) as T
+            is ArrayStorePredicate -> transformArrayStore(argument) as T
+            is ConstantPredicate -> transformConstant(argument) as T
+            is CallPredicate -> transformCall(argument) as T
+            is EqualityPredicate -> transformEquality(argument) as T
+            is FieldStorePredicate -> transformFieldStore(argument) as T
+            is DefaultSwitchPredicate -> transformDefaultSwitch(argument) as T
+            is BoundStorePredicate -> transformBoundStore(argument) as T
+            else -> unreachable { log.error("No Predicate transformer for $argument") }
+        }
+
+
+        is Term -> when (argument) {
+            is ConstByteTerm -> transformConstByte(argument) as T
+            is FieldLoadTerm -> transformFieldLoad(argument) as T
+            is ArgumentTerm -> transformArgument(argument) as T
+            is ReturnValueTerm -> transformReturnValue(argument) as T
+            is ConstFloatTerm -> transformConstFloat(argument) as T
+            is ConstStringTerm -> transformConstString(argument) as T
+            is ConstShortTerm -> transformConstShort(argument) as T
+            is ArrayLoadTerm -> transformArrayLoad(argument) as T
+            is ConstDoubleTerm -> transformConstDouble(argument) as T
+            is ArrayLengthTerm -> transformArrayLength(argument) as T
+            is CmpTerm -> transformCmp(argument) as T
+            is ConstClassTerm -> transformConstClass(argument) as T
+            is FieldTerm -> transformField(argument) as T
+            is ConstIntTerm -> transformConstInt(argument) as T
+            is NegTerm -> transformNeg(argument) as T
+            is ValueTerm -> transformValue(argument) as T
+            is NullTerm -> transformNull(argument) as T
+            is ConstCharTerm -> transformConstChar(argument) as T
+            is ArrayIndexTerm -> transformArrayIndex(argument) as T
+            is ConstBoolTerm -> transformConstBool(argument) as T
+            is UndefTerm -> transformUndef(argument) as T
+            is BoundTerm -> transformBound(argument) as T
+            is CastTerm -> transformCast(argument) as T
+            is CallTerm -> transformCall(argument) as T
+            is BinaryTerm -> transformBinary(argument) as T
+            is ConstLongTerm -> transformConstLong(argument) as T
+            is InstanceOfTerm -> transformInstanceOf(argument) as T
+            else -> unreachable { log.error("No Term transformer for $argument") }
+        }
+
+        else -> unreachable { log.error("No transformer for $argument") }
+    }
+
+
+    private inline fun <reified T : TypeInfo> delegate1(argument: T): T = when (argument) {
+
+        is PredicateState -> when (argument) {
+            is NegationState -> transformNegationState(argument) as T
+            is ChoiceState -> transformChoiceState(argument) as T
+            is ChainState -> transformChainState(argument) as T
+            is BasicState -> transformBasicState(argument) as T
+            else -> unreachable { log.error("No PredicateState transformer for $argument") }
+        }
+
+
+        is Predicate -> when (argument) {
+            is ThrowPredicate -> transformThrowPredicate(argument) as T
+            is NewPredicate -> transformNewPredicate(argument) as T
+            is CatchPredicate -> transformCatchPredicate(argument) as T
+            is NewArrayPredicate -> transformNewArrayPredicate(argument) as T
+            is InequalityPredicate -> transformInequalityPredicate(argument) as T
+            is ArrayStorePredicate -> transformArrayStorePredicate(argument) as T
+            is ConstantPredicate -> transformConstantPredicate(argument) as T
+            is CallPredicate -> transformCallPredicate(argument) as T
+            is EqualityPredicate -> transformEqualityPredicate(argument) as T
+            is FieldStorePredicate -> transformFieldStorePredicate(argument) as T
+            is DefaultSwitchPredicate -> transformDefaultSwitchPredicate(argument) as T
+            is BoundStorePredicate -> transformBoundStorePredicate(argument) as T
+            else -> unreachable { log.error("No Predicate transformer for $argument") }
+        }
+
+
+        is Term -> when (argument) {
+            is ConstByteTerm -> transformConstByteTerm(argument) as T
+            is FieldLoadTerm -> transformFieldLoadTerm(argument) as T
+            is ArgumentTerm -> transformArgumentTerm(argument) as T
+            is ReturnValueTerm -> transformReturnValueTerm(argument) as T
+            is ConstFloatTerm -> transformConstFloatTerm(argument) as T
+            is ConstStringTerm -> transformConstStringTerm(argument) as T
+            is ConstShortTerm -> transformConstShortTerm(argument) as T
+            is ArrayLoadTerm -> transformArrayLoadTerm(argument) as T
+            is ConstDoubleTerm -> transformConstDoubleTerm(argument) as T
+            is ArrayLengthTerm -> transformArrayLengthTerm(argument) as T
+            is CmpTerm -> transformCmpTerm(argument) as T
+            is ConstClassTerm -> transformConstClassTerm(argument) as T
+            is FieldTerm -> transformFieldTerm(argument) as T
+            is ConstIntTerm -> transformConstIntTerm(argument) as T
+            is NegTerm -> transformNegTerm(argument) as T
+            is ValueTerm -> transformValueTerm(argument) as T
+            is NullTerm -> transformNullTerm(argument) as T
+            is ConstCharTerm -> transformConstCharTerm(argument) as T
+            is ArrayIndexTerm -> transformArrayIndexTerm(argument) as T
+            is ConstBoolTerm -> transformConstBoolTerm(argument) as T
+            is UndefTerm -> transformUndefTerm(argument) as T
+            is BoundTerm -> transformBoundTerm(argument) as T
+            is CastTerm -> transformCastTerm(argument) as T
+            is CallTerm -> transformCallTerm(argument) as T
+            is BinaryTerm -> transformBinaryTerm(argument) as T
+            is ConstLongTerm -> transformConstLongTerm(argument) as T
+            is InstanceOfTerm -> transformInstanceOfTerm(argument) as T
+            else -> unreachable { log.error("No Term transformer for $argument") }
+        }
+
+        else -> unreachable { log.error("No transformer for $argument") }
     }
 
     fun apply(ps: PredicateState) = transform(ps).simplify()
@@ -53,7 +164,7 @@ interface Transformer<T : Transformer<T>> {
     fun transform(ps: PredicateState) = transformBase(ps)
 
     fun transformBase(ps: PredicateState): PredicateState {
-        val res = delegate(ps, "State")
+        val res = delegate(ps)
         return transformPredicateState(res)
     }
 
@@ -71,7 +182,7 @@ interface Transformer<T : Transformer<T>> {
 
     fun transform(predicate: Predicate) = transformBase(predicate)
     fun transformBase(predicate: Predicate): Predicate {
-        val res = delegate(predicate, "Predicate")
+        val res = delegate(predicate)
         return transformPredicate(res)
     }
 
@@ -112,7 +223,7 @@ interface Transformer<T : Transformer<T>> {
     fun transform(term: Term) = transformBase(term)
 
     fun transformBase(term: Term): Term {
-        val res = delegate(term, "Term")
+        val res = delegate(term)
         return transformTerm(res)
     }
 

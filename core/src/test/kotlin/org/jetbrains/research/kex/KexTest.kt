@@ -13,8 +13,9 @@ import org.jetbrains.research.kfg.analysis.LoopAnalysis
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.util.Flags
+import java.nio.file.Paths
 
-abstract class KexTest {
+abstract class KexTest(includeStdlib: Boolean = false, failOnError: Boolean = true) {
     val packageName = "org/jetbrains/research/kex/test"
     val `package` = Package("$packageName/*")
     val jarPath: String
@@ -32,8 +33,16 @@ abstract class KexTest {
         jarPath = "$rootDir/kex-test/target/kex-test-$version-jar-with-dependencies.jar"
         val jar = Jar(jarPath, `package`)
         loader = jar.classLoader
-        cm = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = true))
-        cm.initialize(jar)
+        val jarsToAnalyze = when {
+            includeStdlib -> listOf(
+                    jar,
+                    Jar(Paths.get("$rootDir/lib/rt-mock.jar"), Package.defaultPackage),
+                    Jar(jarPath, Package("kotlin/*"))
+            )
+            else -> listOf(jar)
+        }
+        cm = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = failOnError))
+        cm.initialize(*jarsToAnalyze.toTypedArray())
     }
 
     protected fun getPSA(method: Method): PredicateStateAnalysis {

@@ -33,6 +33,56 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         return normalPath to exceptionalPaths
     }
 
+    fun buildMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean = { false }): PredicateState {
+        val (preparedState, otherExecutionPaths) = prepareMethodState(builder, skipInlining)
+        val transformedTopChoices = prepareMethodOtherExecutionPaths(otherExecutionPaths, skipInlining)
+        val interestingTopChoices = transformedTopChoices
+                .map { it.optimize() }
+                .filterNot { it.evaluatesToTrue || it.evaluatesToFalse }
+        val state = when {
+            interestingTopChoices.isEmpty() -> preparedState
+            else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
+        }
+        return transform(state) {
+            applyAdapters()
+        }
+    }
+
+    private fun prepareMethodOtherExecutionPaths(otherExecutionPaths: List<PredicateState>, skipInlining: (Method) -> Boolean): List<PredicateState> =
+            otherExecutionPaths.map {
+                MethodFunctionalInliner(psa) {
+                    if (skipInlining(calledMethod)) skip()
+                    val (refinement, methodState) = getMethodStateAndRefinement()
+                    val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
+                    val state = ChainState(refinement.allStates().negateWRTStatePredicates(), fixedState)
+                    inline(state)
+                }.apply(it)
+            }
+
+    private fun prepareMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean): Pair<PredicateState, List<PredicateState>> {
+        val otherExecutionPaths = mutableListOf<PredicateState>()
+        val inlinedState = transform(builder.methodRawFullState()) {
+            +MethodFunctionalInliner(psa) {
+                if (skipInlining(calledMethod)) skip()
+                val instruction = predicate.instruction
+                        ?: throw IllegalStateException("No instruction for predicate")
+                val instructionState = psa.builder(method).getInstructionState(instruction)
+                        ?: throw IllegalStateException("No state for call")
+                val (refinement, methodState) = getMethodStateAndRefinement()
+                val fixedState = fixPathPredicatesOnTopLevelBeforeInlining(methodState)
+                val state = ChainState(refinement.allStates().negateWRTStatePredicates(), fixedState)
+                inline(state)
+                val inlinedNegative = prepareForInline(refinement.allStates())
+                val withoutCurrentCall = instructionState.filterNot { it == predicate }
+                val negativeExecution = ChainState(withoutCurrentCall, inlinedNegative)
+                otherExecutionPaths.add(negativeExecution)
+            }
+        }
+        return inlinedState to otherExecutionPaths
+    }
+
+    abstract fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState>
+
     private fun buildRefinementSources(calls: List<CallInst>, refinements: List<Refinements>, ignoredCalls: List<CallInst>): RefinementSources {
         val builder = psa.builder(method)
         val result = arrayListOf<RefinementSource>()
@@ -40,15 +90,15 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         for ((call, refinement) in zip(calls, refinements)) {
             val otherCalls = refinementMap
                     .filterKeys { it != call }
-                    .mapValues { it.value.allStates().not() }
+                    .mapValues { it.value.allStates().negateWRTStatePredicates() }
             val (state, callInstructions) = nestedMethodCallStates(builder, call)
-            for ((criteria, refState) in refinement.expanded().value) {
-                val mapping = otherCalls + (call to refState)
-                val refSource = buildRefinementSource(criteria, state, mapping, callInstructions, ignoredCalls)
+            for (reft in refinement.expanded().value) {
+                val mapping = otherCalls + (call to reft.state)
+                val refSource = buildRefinementSource(reft.criteria, state, mapping, callInstructions, ignoredCalls)
                 result.add(refSource)
             }
         }
-        return RefinementSources(result).simplify()
+        return RefinementSources.create(result).simplify()
     }
 
     private fun buildRefinementSource(
@@ -67,7 +117,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
             inline(predicateState)
         }
         val resultPath = inliner.apply(state)
-        return RefinementSource(criteria, resultPath)
+        return RefinementSource.create(criteria, resultPath)
     }
 
     private fun buildNormalPaths(calls: List<CallInst>, refinements: List<Refinements>): PredicateState {
@@ -79,7 +129,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
             val inliner = MethodFunctionalInliner(psa) { inline(refinement.allStates()) }
             inliner.apply(predicate.wrap())
         }
-        return ChoiceState(allInlined).not()
+        return ChoiceState(allInlined).negateWRTStatePredicates()
     }
 
     private fun nestedMethodCallStates(psb: PredicateStateBuilder, call: CallInst): Pair<PredicateState, Map<CallPredicate, CallInst>> {
@@ -87,13 +137,12 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
                 .filter { it is CallPredicate || it.type == PredicateType.Path() }
         val callPredicates = PredicateCollector.collectIsInstance<CallPredicate>(state)
         val callInstructions = callPredicates.map {
-            psb.findInstructionsForPredicate(it) as? CallInst
+            it.instruction as? CallInst
                     ?: throw IllegalStateException("Cant find instruction for call")
         }
         val callMap = callPredicates.zip(callInstructions).toMap()
         return state to callMap
     }
-
     override fun toString() = "Analyzer: $method"
 
 }

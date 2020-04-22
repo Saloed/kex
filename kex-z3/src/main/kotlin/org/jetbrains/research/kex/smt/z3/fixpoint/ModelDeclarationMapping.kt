@@ -1,17 +1,20 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.term.ArgumentTerm
 import org.jetbrains.research.kex.state.term.ArrayIndexTerm
 import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.ValueTerm
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.memspace
+import org.jetbrains.research.kex.util.join
 
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
     private val terms = hashMapOf<DeclarationTracker.Declaration, Term>()
     private val arrayMemories = mutableSetOf<DeclarationTracker.Declaration>()
 
-    fun initializeTerms(ps: PredicateState) {
+    fun initializeTerms(vararg ps: PredicateState) {
         val (thisArg, otherArgs) = collectArguments(ps)
         declarations.filterIsInstance<DeclarationTracker.Declaration.This>().forEach { declaration ->
             terms[declaration] = thisArg
@@ -23,10 +26,10 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         }
     }
 
-    fun initializeArrays(ps: PredicateState) {
+    fun initializeArrays(vararg ps: PredicateState) {
         val memories = declarations.filterIsInstance<DeclarationTracker.Declaration.Memory>()
         if (memories.isEmpty()) return
-        val pointers = collectPointers(ps)
+        val pointers = ps.map { collectPointers(it) }.join { acc, curr -> acc + curr }
         val memoryPointers = memories.map { mem -> pointers.filter { it.memspace == mem.memspace } }
         val memoriesUnderArray = memoryPointers.zip(memories).filter { it.first.all { it is ArrayIndexTerm } }.map { it.second }
         arrayMemories.addAll(memoriesUnderArray)
@@ -41,11 +44,18 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
 
     fun isArrayMemory(declaration: DeclarationTracker.Declaration) = declaration in arrayMemories
 
+    private fun collectArguments(ps: Array<out PredicateState>): Pair<ValueTerm?, Map<Int, ArgumentTerm>> {
+        val collected = ps.map { collectArguments(it) }
+        val thisArg = collected.mapNotNull { it.first }.firstOrNull()
+        val args = collected.map { it.second }.join { acc, current -> acc + current }
+        return thisArg to args
+    }
+
     companion object {
-        fun create(declarations: List<DeclarationTracker.Declaration>, ps: PredicateState): ModelDeclarationMapping {
+        fun create(declarations: List<DeclarationTracker.Declaration>, vararg ps: PredicateState): ModelDeclarationMapping {
             val mapping = ModelDeclarationMapping(declarations)
-            mapping.initializeTerms(ps)
-            mapping.initializeArrays(ps)
+            mapping.initializeTerms(*ps)
+            mapping.initializeArrays(*ps)
             return mapping
         }
     }
