@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import com.abdullin.kthelper.collection.dequeOf
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.*
@@ -8,6 +9,8 @@ import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
+import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
+import org.jetbrains.research.kex.state.transformer.TermCollector
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ir.Class
@@ -31,148 +34,62 @@ class FixpointModelConverter(
             .let { InstanceOfCorrector(z3Context).apply(it) }
             .simplify()
 
-    object UnknownType : KexType() {
+    private object UnknownType : KexType() {
         override val name: String = "Unknown"
         override val bitsize: Int = 0
         override fun getKfgType(types: TypeFactory): Type = throw IllegalStateException("type is unknown")
     }
 
-    class InstanceOfCorrector(private val z3Context: Z3Context) : Transformer<InstanceOfCorrector> {
-        class UnknownInstanceOfCollector : Transformer<UnknownInstanceOfCollector> {
-            val predicatesToCorrect = arrayListOf<EqualityPredicate>()
-            override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {
-                if (instanceOfPattern(predicate)) {
-                    predicatesToCorrect.add(predicate)
-                }
-                return super.transformEqualityPredicate(predicate)
-            }
+    private class InstanceOfCorrector(private val z3Context: Z3Context) : RecollectingTransformer<InstanceOfCorrector> {
 
-            private fun instanceOfPattern(predicate: EqualityPredicate): Boolean {
-                if (predicate.rhv !is ConstBoolTerm) return false
-                val lhv = predicate.lhv as? CmpTerm ?: return false
-                val instanceOf = lhv.lhv as? InstanceOfTerm ?: return false
-                return instanceOf.checkedType is UnknownType
+        override val builders = dequeOf(StateBuilder())
+
+        override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {
+            val unknownInstanceOfTerms = TermCollector { it is InstanceOfTerm && it.checkedType is UnknownType }.apply { transform(predicate) }.terms
+            when {
+                unknownInstanceOfTerms.isEmpty() -> return super.transformEqualityPredicate(predicate)
+                unknownInstanceOfTerms.size != 1 -> throw IllegalStateException("To many unknown instance of checks")
             }
+            val rhv = predicate.rhv as? ConstBoolTerm
+                    ?: throw IllegalStateException("Unexpected term in $predicate")
+            val lhv = predicate.lhv as? CmpTerm
+                    ?: throw IllegalStateException("Unexpected term in $predicate")
+            val instanceOfTerm = lhv.lhv as? InstanceOfTerm
+                    ?: throw IllegalStateException("Unexpected term in $predicate")
+            val typeBound = lhv.rhv as? ConstIntTerm
+                    ?: throw IllegalStateException("Unexpected term in $predicate")
+            val constraints = generateInstanceOfConstraints(instanceOfTerm.operand, lhv.opcode, typeBound.value, predicate)
+            val resultConstraint = when (rhv.value) {
+                true -> constraints
+                false -> NegationState(constraints)
+            }
+            currentBuilder += resultConstraint
+            return nothing()
         }
 
-        override fun apply(ps: PredicateState): PredicateState {
-            val unknownInstanceOf = UnknownInstanceOfCollector().apply { apply(ps) }.predicatesToCorrect
-            if (unknownInstanceOf.isEmpty()) return ps
-            val knownTypes = z3Context.getTypeMapping()
-            val typeSets = unknownInstanceOf.map { findTypeSet(it) }
-            val reifiedTypeSets = typeSets.map { it.reify(typeSets) }
-            val typeCandidates = reifiedTypeSets.map { it.candidates(knownTypes) }
-            val mapping = zip(reifiedTypeSets, typeCandidates, unknownInstanceOf)
-                    .map { (ts, candi, originalPredicate) ->
-                        originalPredicate to generateInstanceOf(ts, candi, originalPredicate)
-                    }.toMap<Predicate, PredicateState>()
-            return replaceWithPredicateState(ps, mapping)
-        }
-
-        private fun generateInstanceOf(typeSet: TypeSet, candidate: KexType, original: Predicate): PredicateState =
-                predicate(original.type, original.location) {
-                    InstanceOfTerm(candidate, typeSet.instanceOfArg) equality const(true)
-                }.wrap()
-
-        private fun generateInstanceOf(typeSet: TypeSet, candidates: Set<KexType>, original: Predicate): PredicateState = when (candidates.size) {
-            0 -> throw IllegalStateException("No type candidates for $typeSet")
-            1 -> generateInstanceOf(typeSet, candidates.first(), original)
-            else -> candidates.map { generateInstanceOf(typeSet, it, original) }.let { ChoiceState(it) }
-        }
-
-        private fun replaceWithPredicateState(ps: PredicateState, replacement: Map<Predicate, PredicateState>): PredicateState = when (ps) {
-            is BasicState -> when {
-                ps.predicates.any { it in replacement }.not() -> ps
-                else -> {
-                    val builder = StateBuilder()
-                    for (predicate in ps.predicates) {
-                        when (val replaceWith = replacement[predicate]) {
-                            null -> builder += predicate
-                            else -> builder += replaceWith
-                        }
-                    }
-                    builder.apply()
-                }
-            }
-            else -> ps.fmap { replaceWithPredicateState(it, replacement) }
-        }
-
-        enum class TypeSearchDirection(val predicate: (Int, Int) -> Boolean) {
-            EQ({ a, b -> a == b }),
-            NEQ({ a, b -> a != b }),
-            LT({ a, b -> a < b }),
-            GT({ a, b -> a > b }),
-            LE({ a, b -> a <= b }),
-            GE({ a, b -> a >= b });
-
-            fun invert() = when (this) {
-                EQ -> NEQ
-                NEQ -> EQ
-                LT -> GE
-                GT -> LE
-                LE -> GT
-                GE -> LT
-            }
-
-            companion object {
-                fun from(opcode: CmpOpcode) = when (opcode) {
-                    is CmpOpcode.Eq -> EQ
-                    is CmpOpcode.Neq -> NEQ
-                    is CmpOpcode.Lt -> LT
-                    is CmpOpcode.Gt -> GT
-                    is CmpOpcode.Le -> LE
-                    is CmpOpcode.Ge -> GE
-                    else -> TODO("Unexpected cmp opcode: $opcode")
-                }
-            }
-        }
-
-        data class TypeSet(val instanceOfArg: Term, val bound: Int, val direction: TypeSearchDirection) {
-            fun candidates(types: Map<KexType, Int>) = types.entries
-                    .filter { direction.predicate(it.value, bound) }
+        private fun generateInstanceOfConstraints(term: Term, cmp: CmpOpcode, typeBound: Int, original: Predicate): PredicateState {
+            val predicate = cmp.predicate()
+            return z3Context.getTypeMapping().entries
+                    .filter { predicate(it.value, typeBound) }
                     .map { it.key }
                     .toSet()
-
-            private val needReification = bound % Z3Context.TYPE_IDX_MULTIPLIER != 0
-
-            fun reify(typeSets: List<TypeSet>): TypeSet = when {
-                !needReification -> this
-                direction == TypeSearchDirection.EQ -> this
-                direction == TypeSearchDirection.NEQ -> this
-                else -> {
-                    val myClosesIdx = closestPossibleIndex
-                    val possibleReifications = typeSets.filter { it.closestPossibleIndex == myClosesIdx }
-                    when (possibleReifications.size) {
-                        1 -> TypeSet(instanceOfArg, myClosesIdx, TypeSearchDirection.EQ)
-                        else -> this
-                    }
-                }
-            }
-
-            private val closestPossibleIndex by lazy {
-                when {
-                    !needReification -> bound
-                    direction == TypeSearchDirection.LE || direction == TypeSearchDirection.LT -> {
-                        (bound / Z3Context.TYPE_IDX_MULTIPLIER) * Z3Context.TYPE_IDX_MULTIPLIER
-                    }
-                    direction == TypeSearchDirection.GE || direction == TypeSearchDirection.GT -> {
-                        (bound / Z3Context.TYPE_IDX_MULTIPLIER) * Z3Context.TYPE_IDX_MULTIPLIER + Z3Context.TYPE_IDX_MULTIPLIER
-                    }
-                    else -> throw IllegalArgumentException("No nearest index from $bound in direction $direction")
-                }
-            }
+                    .map { generateInstanceOf(term, it, original) }
+                    .let { ChoiceState(it) }
         }
 
-        private fun findTypeSet(predicate: EqualityPredicate): TypeSet {
-            val isTrue = (predicate.rhv as ConstBoolTerm).value
-            val cmp = predicate.lhv as CmpTerm
-            val bound = (cmp.rhv as ConstIntTerm).value
-            val arg = (cmp.lhv as InstanceOfTerm).operand
-            val direction = when {
-                isTrue -> TypeSearchDirection.from(cmp.opcode)
-                else -> TypeSearchDirection.from(cmp.opcode).invert()
-            }
-            return TypeSet(arg, bound, direction)
+        private fun generateInstanceOf(term: Term, candidate: KexType, original: Predicate): PredicateState =
+                predicate(original.type, original.location) {
+                    InstanceOfTerm(candidate, term) equality const(true)
+                }.wrap()
+
+        private fun CmpOpcode.predicate(): (Int, Int) -> Boolean = when (this) {
+            is CmpOpcode.Eq -> { a, b -> a == b }
+            is CmpOpcode.Neq -> { a, b -> a != b }
+            is CmpOpcode.Lt -> { a, b -> a < b }
+            is CmpOpcode.Gt -> { a, b -> a > b }
+            is CmpOpcode.Le -> { a, b -> a <= b }
+            is CmpOpcode.Ge -> { a, b -> a >= b }
+            else -> throw IllegalStateException("Unsupported $this")
         }
     }
 
