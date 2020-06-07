@@ -62,7 +62,7 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
                 call.hasLhv -> call.lhv.type
                 else -> (call.call as CallTerm).method.returnType.kexType
             }
-            val callVariable = term { value(callType, "call__$index") }
+            val callVariable = term { value(callType, "call__${index}!") }
             val callReplacement = when {
                 call.hasLhv -> EqualityPredicate(call.lhv, callVariable, call.type, call.location)
                 else -> ConstantPredicate(true, call.type, call.location)

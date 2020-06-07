@@ -93,7 +93,7 @@ class DeclarationTracker {
             private val memoryRegexp = Regex("${Z3Context.MEMORY_NAME}(\\d+)")
             private val classPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}([A-Za-z0-9_/\$]+)\\.(\\w+)__(\\d+)")
             private val otherPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}(\\w+)__(\\d+)")
-            private val callRegexp = Regex("call__(\\d+)")
+            private val callRegexp = Regex("call__(\\d+)!")
 
             fun create(name: String, sort: Sort, expr: Expr): Declaration {
                 val matchArgument = argRegexp.find(name)
