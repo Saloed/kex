@@ -16,7 +16,7 @@ import kotlin.time.measureTimedValue
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
-    private class CallCtx(tf: TypeFactory, recursionConverter: CallPredicateConverterWithRecursion? = null) {
+    private class CallCtx(tf: TypeFactory, recursionConverter: CallPredicateConverterWithRecursion? = null) : AutoCloseable {
         val declarationTracker = DeclarationTracker()
         val ef = when {
             recursionConverter != null -> FixpointExprFactory.withDeclarationsTrackingAndRecursiveCallConverter(declarationTracker, recursionConverter)
@@ -101,6 +101,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 (get-info :reason-unknown)
 
                 """.trimIndent()
+
+        override fun close() = context.close()
     }
 
     private fun BoolExpr.optimize(ctx: CallCtx): BoolExpr = Optimizer(ctx.context).apply(typedSimplify())
@@ -138,80 +140,79 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, rootCall, recursionPredicate.name)
         val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys) + state + recursionPath + positive + query
         if (unknownCallsProcessor.hasUnknownCalls()) throw IllegalArgumentException("Recursive with unknowns")
+        return CallCtx(tf, recursionConverter).use { ctx ->
+            val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
 
-        val ctx = CallCtx(tf, recursionConverter)
-        val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr
-
-        val z3State = ctx.build {
-            convert(state).asAxiom() as BoolExpr
-        }
-        val z3Recursion = ctx.build {
-            convert(recursionPath).asAxiom() as BoolExpr
-        }
-        val z3Positive = ctx.build {
-            val path = convert(positive).asAxiom() as BoolExpr
-            path or z3Recursion
-        }
-        val z3Query = ctx.build {
-            val path = convert(query).asAxiom() as BoolExpr
-            path and z3Recursion.not()
-        }
-
-        val declarationExprs = ctx.knownDeclarations.map { it.expr }
-
-        val recursionStmt = ctx.build {
-            val statement = (z3State and z3Positive) implies rootPredicate
-            statement.forall(declarationExprs)
-        }.optimize(ctx)
-
-        val queryStmt = ctx.build {
-            val statement = (z3State and z3Query and rootPredicate) implies context.mkFalse()
-            statement.forall(declarationExprs)
-        }.optimize(ctx)
-
-        log.debug("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
-        log.debug("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
-
-        return ctx.callSolver(listOf(recursionPredicate), recursionConverter.mapper, listOf(recursionStmt), queryStmt)
-    }
-
-    fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
-        val ctx = CallCtx(tf)
-
-        val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
-        val state = unknownCallsProcessor.apply(state)
-        val positivePaths = unknownCallsProcessor.apply(positivePaths)
-        val query = unknownCallsProcessor.apply(query)
-
-        val z3State = ctx.build {
-            convert(state).asAxiom() as BoolExpr
-        }
-        val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
-        val z3query = ctx.convert(query).asAxiom() as BoolExpr
-
-        log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
-
-        val declarationExprs = ctx.knownDeclarations.map { it.expr }
-        val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
-        val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
-        unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
-
-        val predicates = z3positive.indices.map { idx -> Predicate(idx) }
-        val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
-        val positiveStatements = z3positive.mapIndexed { idx, it ->
-            ctx.build {
-                val statement = (z3State and it) implies predicateApplications[idx]
-                statement.forall(declarationExprs).typedSimplify()
+            val z3State = ctx.build {
+                convert(state).asAxiom() as BoolExpr
             }
+            val z3Recursion = ctx.build {
+                convert(recursionPath).asAxiom() as BoolExpr
+            }
+            val z3Positive = ctx.build {
+                val path = convert(positive).asAxiom() as BoolExpr
+                path or z3Recursion
+            }
+            val z3Query = ctx.build {
+                val path = convert(query).asAxiom() as BoolExpr
+                path and z3Recursion.not()
+            }
+
+            val declarationExprs = ctx.knownDeclarations.map { it.expr }
+
+            val recursionStmt = ctx.build {
+                val statement = (z3State and z3Positive) implies rootPredicate
+                statement.forall(declarationExprs)
+            }.optimize(ctx)
+
+            val queryStmt = ctx.build {
+                val statement = (z3State and z3Query and rootPredicate) implies context.mkFalse()
+                statement.forall(declarationExprs)
+            }.optimize(ctx)
+
+            log.debug("State:\n$z3State\nRecursion:\n$z3Recursion\nPositive:\n$z3Positive\nQuery:\n$z3Query")
+            log.debug("Recursion:\n$recursionStmt\nQuery:\n$queryStmt")
+
+            ctx.callSolver(listOf(recursionPredicate), recursionConverter.mapper, listOf(recursionStmt), queryStmt)
         }
-        val queryStatement = ctx.build {
-            val applications = predicateApplications.toTypedArray()
-            val allApplications = context.mkOr(*applications)
-            val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
-            statement.forall(declarationExprs).typedSimplify()
-        }
-        return ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
     }
+
+    fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult =
+            CallCtx(tf).use { ctx ->
+                val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
+                val state = unknownCallsProcessor.apply(state)
+                val positivePaths = unknownCallsProcessor.apply(positivePaths)
+                val query = unknownCallsProcessor.apply(query)
+
+                val z3State = ctx.build {
+                    convert(state).asAxiom() as BoolExpr
+                }
+                val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
+                val z3query = ctx.convert(query).asAxiom() as BoolExpr
+
+                log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
+
+                val declarationExprs = ctx.knownDeclarations.map { it.expr }
+                val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+                val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+                unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
+
+                val predicates = z3positive.indices.map { idx -> Predicate(idx) }
+                val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
+                val positiveStatements = z3positive.mapIndexed { idx, it ->
+                    ctx.build {
+                        val statement = (z3State and it) implies predicateApplications[idx]
+                        statement.forall(declarationExprs).typedSimplify()
+                    }
+                }
+                val queryStatement = ctx.build {
+                    val applications = predicateApplications.toTypedArray()
+                    val allApplications = context.mkOr(*applications)
+                    val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
+                    statement.forall(declarationExprs).typedSimplify()
+                }
+                ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
+            }
 
     private fun CallCtx.callSolver(
             predicates: List<Predicate>,

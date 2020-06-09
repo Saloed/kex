@@ -50,6 +50,6 @@ class ChainState(val base: PredicateState, val curr: PredicateState) : Predicate
         }
     }
 
-    override val evaluatesToTrue: Boolean by lazy { base.evaluatesToTrue && curr.evaluatesToTrue }
-    override val evaluatesToFalse: Boolean by lazy { base.evaluatesToFalse || curr.evaluatesToFalse }
+    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { base.evaluatesToTrue && curr.evaluatesToTrue }
+    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { base.evaluatesToFalse || curr.evaluatesToFalse }
 }

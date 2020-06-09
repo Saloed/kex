@@ -1,22 +1,19 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.microsoft.z3.Context
 import com.microsoft.z3.Sort
-import org.jetbrains.research.kex.smt.z3.Z3Bool
-import org.jetbrains.research.kex.smt.z3.Z3Context
-import org.jetbrains.research.kex.smt.z3.Z3Converter
-import org.jetbrains.research.kex.smt.z3.Z3ExprFactory
+import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 
-class FixpointExprFactory private constructor(override val ctx: Context) : Z3ExprFactory() {
+class FixpointExprFactory private constructor(override val ctx: ContextWithIntSortSizeInfo) : Z3ExprFactory() {
     companion object {
-        fun original() = FixpointExprFactory(Context())
+        fun original() = FixpointExprFactory(createContext())
         fun withDeclarationsTracking(tracker: DeclarationTracker) = FixpointExprFactory(DeclarationTrackingContext(tracker))
         fun withDeclarationsTrackingAndRecursiveCallConverter(tracker: DeclarationTracker, converter: CallPredicateConverterWithRecursion) = FixpointExprFactory(ContextWithRecursiveCallSupport(converter, tracker))
     }
 }
 
-class ContextWithRecursiveCallSupport(
+
+open class ContextWithRecursiveCallSupport(
         val converter: CallPredicateConverterWithRecursion, tracker: DeclarationTracker
 ) : DeclarationTrackingContext(tracker) {
 
@@ -25,7 +22,7 @@ class ContextWithRecursiveCallSupport(
 
 }
 
-open class DeclarationTrackingContext(val tracker: DeclarationTracker) : Context() {
+open class DeclarationTrackingContext(val tracker: DeclarationTracker) : ContextWithIntSortSizeInfo() {
 
     override fun mkConst(p0: String?, p1: Sort?) = super.mkConst(p0, p1).apply {
         tracker.add("$this", sort, this)

@@ -48,7 +48,8 @@ class FixpointModelConverter(
             val unknownInstanceOfTerms = TermCollector { it is InstanceOfTerm && it.checkedType is UnknownType }.apply { transform(predicate) }.terms
             when {
                 unknownInstanceOfTerms.isEmpty() -> return super.transformEqualityPredicate(predicate)
-                unknownInstanceOfTerms.size != 1 -> throw IllegalStateException("To many unknown instance of checks")
+                unknownInstanceOfTerms.size != 1 ->
+                    throw IllegalStateException("To many unknown instance of checks")
             }
             val rhv = predicate.rhv as? ConstBoolTerm
                     ?: throw IllegalStateException("Unexpected term in $predicate")
@@ -105,6 +106,7 @@ class FixpointModelConverter(
         expr is IntExpr -> convertIntTerm(expr)
         expr is BitVecExpr -> convertBVTerm(expr)
         expr is FPExpr -> convertFPTerm(expr)
+        expr is RealExpr -> convertRealTerm(expr)
         else -> TODO()
     }
 
@@ -156,6 +158,7 @@ class FixpointModelConverter(
         }
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
+        expr.isRealToInt -> expr.convertArgs().first().transformTerm { it `as` KexInt() }
         else -> TODO()
     }
 
@@ -169,6 +172,15 @@ class FixpointModelConverter(
     private fun convertFPTerm(expr: FPExpr): TermWithAxiom = when {
         expr is FPNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
         else -> TODO()
+    }
+
+    private fun convertRealTerm(expr: RealExpr): TermWithAxiom = when{
+        expr is RatNum -> TermWithAxiom.wrap { const(expr.numerator.int64.toDouble() / expr.denominator.int64.toDouble()) }
+        expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
+        expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
+        expr.isIntToReal -> expr.convertArgs().first().transformTerm { it `as` KexDouble() }
+        expr.isApp && (expr.funcDecl.name as? StringSymbol)?.string == "fp.to_real" -> expr.convertArgs().first()
+        else -> TODO("Real: $expr")
     }
 
     private fun convertMemoryLoad(memory: Expr, location: Expr): TermWithAxiom {

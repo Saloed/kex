@@ -302,11 +302,16 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     fun convert(field: FieldTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ =
         convert(field.owner, ef, ctx)
 
-    fun convert(instanceof: InstanceOfTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
-        val arg = convert(instanceof.operand, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr ref in instance of") }
-        val argType = ctx.readType(arg, instanceof.operand.memspace)
-        val typeIndex = ctx.getTypeIdx(instanceof.checkedType)
-        return argType eq ef.makeIntConst(typeIndex)
+    fun convert(instanceof: InstanceOfTerm, ef: $factory, ctx: ${solver}Context): Dynamic_  = when {
+        instanceof.operand.type is KexIntegral -> ef.makeBoolConst(instanceof.operand.type == instanceof.checkedType)
+        instanceof.operand.type is KexReal -> ef.makeBoolConst(instanceof.operand.type == instanceof.checkedType)
+        else -> {
+            val arg = convert(instanceof.operand, ef, ctx) as? Ptr_
+                    ?: unreachable { log.error("Non-ptr ref in instance of") }
+            val argType = ctx.readType(arg, instanceof.operand.memspace)
+            val typeIndex = ctx.getTypeIdx(instanceof.checkedType)
+            argType eq ef.makeIntConst(typeIndex)
+        }
     }
 
     fun convert(neg: NegTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {

@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.smt.z3
 
 import com.microsoft.z3.BoolExpr
-import com.microsoft.z3.Context
 import com.microsoft.z3.Status
 import org.jetbrains.research.kex.KexTest
 import kotlin.test.*
@@ -95,7 +94,7 @@ class Z3SolverTest : KexTest() {
 
     @Test
     fun testLogic() {
-        val ctx = Context()
+        val ctx = createContext()
 
         val checkExpr = { expr: Bool_ ->
             val solver = ctx.mkSolver()

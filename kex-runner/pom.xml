@@ -97,7 +97,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.jetbrains.research</groupId>
+            <groupId>com.github.Saloed</groupId>
             <artifactId>kfg</artifactId>
             <version>${kfg.version}</version>
         </dependency>

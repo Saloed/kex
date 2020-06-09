@@ -50,6 +50,6 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
         }
     }
 
-    override val evaluatesToTrue: Boolean by lazy { choices.any { it.evaluatesToTrue } }
-    override val evaluatesToFalse: Boolean by lazy { choices.all { it.evaluatesToFalse } }
+    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { choices.any { it.evaluatesToTrue } }
+    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { choices.all { it.evaluatesToFalse } }
 }
