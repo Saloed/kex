@@ -146,6 +146,15 @@ abstract class PredicateState : TypeInfo {
         }
 
         val reverse = states.map { it.value to it.key }.toMap()
+
+        // fixme: implement as kex parameters
+        private const val DEBUG_PRINT = false
+        private const val STATE_SIZE_TO_PRINT = 10000
+
+        private fun printIfNotTooBig(ps: PredicateState): String = when {
+            DEBUG_PRINT || ps.size < STATE_SIZE_TO_PRINT -> ps.print()
+            else -> "PredicateState is too big to print."
+        }
     }
 
     abstract val size: Int
@@ -163,7 +172,7 @@ abstract class PredicateState : TypeInfo {
 
     abstract fun print(): String
 
-    override fun toString() = print()
+    override fun toString() = printIfNotTooBig(this)
 
     open fun map(transform: (Predicate) -> Predicate): PredicateState = fmap { it.map(transform) }
     open fun mapNotNull(transform: (Predicate) -> Predicate?): PredicateState = fmap { it.mapNotNull(transform) }
