@@ -8,8 +8,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 @InheritorOf("State")
 @Serializable
 class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterable<PredicateState> {
-    override val size: Int
-        get() = choices.fold(0) { acc, it -> acc + it.size }
+    override val size: Int by lazy(LazyThreadSafetyMode.NONE) { choices.fold(0) { acc, it -> acc + it.size } }
 
     override fun print() = buildString {
         appendln("(BEGIN")
@@ -39,7 +38,7 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
 
     override fun iterator() = choices.iterator()
 
-    override fun simplify(): PredicateState {
+    override fun performSimplify(): PredicateState {
         val simplifiedChoices = choices.map { it.simplify() }
         return when {
             simplifiedChoices.isEmpty() -> falseState()
@@ -50,6 +49,6 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
         }
     }
 
-    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { choices.any { it.evaluatesToTrue } }
-    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { choices.all { it.evaluatesToFalse } }
+    override fun checkEvaluationToTrue(): Boolean = choices.any { it.evaluatesToTrue }
+    override fun checkEvaluationToFalse(): Boolean = choices.all { it.evaluatesToFalse }
 }

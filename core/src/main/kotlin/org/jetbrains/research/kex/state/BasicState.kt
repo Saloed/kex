@@ -46,8 +46,7 @@ class BasicState(@Required val predicates: List<Predicate> = listOf()) : Predica
 
     override fun iterator() = predicates.iterator()
 
-    override fun simplify(): PredicateState = this
-
-    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { isEmpty || predicates.all { it is ConstantPredicate && it.value } }
-    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { predicates.any { it is ConstantPredicate && !it.value } }
+    override fun performSimplify(): PredicateState = this
+    override fun checkEvaluationToTrue(): Boolean = isEmpty || predicates.all { it is ConstantPredicate && it.value }
+    override fun checkEvaluationToFalse(): Boolean = predicates.any { it is ConstantPredicate && !it.value }
 }

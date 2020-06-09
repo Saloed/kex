@@ -41,8 +41,7 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
         return NegationState(sliced)
     }
 
-    override fun simplify(): PredicateState = NegationState(predicateState.simplify())
-
-    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { predicateState.evaluatesToFalse }
-    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { predicateState.evaluatesToTrue }
+    override fun performSimplify(): PredicateState = NegationState(predicateState.simplify())
+    override fun checkEvaluationToTrue(): Boolean = predicateState.evaluatesToFalse
+    override fun checkEvaluationToFalse(): Boolean = predicateState.evaluatesToTrue
 }

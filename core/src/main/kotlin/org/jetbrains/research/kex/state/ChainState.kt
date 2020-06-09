@@ -8,8 +8,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 @InheritorOf("State")
 @Serializable
 class ChainState(val base: PredicateState, val curr: PredicateState) : PredicateState() {
-    override val size: Int
-        get() = base.size + curr.size
+    override val size: Int by lazy(LazyThreadSafetyMode.NONE) { base.size + curr.size }
 
     override fun print() = buildString {
         append(base.print())
@@ -39,7 +38,7 @@ class ChainState(val base: PredicateState, val curr: PredicateState) : Predicate
         return null
     }
 
-    override fun simplify(): PredicateState {
+    override fun performSimplify(): PredicateState {
         val sbase = base.simplify()
         val scurr = curr.simplify()
         return when {
@@ -50,6 +49,6 @@ class ChainState(val base: PredicateState, val curr: PredicateState) : Predicate
         }
     }
 
-    override val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { base.evaluatesToTrue && curr.evaluatesToTrue }
-    override val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { base.evaluatesToFalse || curr.evaluatesToFalse }
+    override fun checkEvaluationToTrue(): Boolean = base.evaluatesToTrue && curr.evaluatesToTrue
+    override fun checkEvaluationToFalse(): Boolean = base.evaluatesToFalse || curr.evaluatesToFalse
 }

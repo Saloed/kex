@@ -229,12 +229,22 @@ abstract class PredicateState : TypeInfo {
 
     abstract fun sliceOn(state: PredicateState): PredicateState?
 
-    abstract fun simplify(): PredicateState
+    fun simplify(): PredicateState = simplifyIfNeeded()
 
     fun builder() = StateBuilder(this)
     operator fun plus(state: PredicateState) = (builder() + state).apply()
     operator fun plus(states: List<PredicateState>) = (builder() + states).apply()
 
-    abstract val evaluatesToTrue: Boolean
-    abstract val evaluatesToFalse: Boolean
+    val evaluatesToTrue: Boolean by lazy(LazyThreadSafetyMode.NONE) { checkEvaluationToTrue() }
+    val evaluatesToFalse: Boolean by lazy(LazyThreadSafetyMode.NONE) { checkEvaluationToFalse() }
+
+    private var simplified: Boolean = false
+    private fun simplifyIfNeeded(): PredicateState = when {
+        simplified -> this
+        else -> performSimplify().also { it.simplified = true }
+    }
+
+    protected abstract fun performSimplify(): PredicateState
+    protected abstract fun checkEvaluationToTrue(): Boolean
+    protected abstract fun checkEvaluationToFalse(): Boolean
 }
