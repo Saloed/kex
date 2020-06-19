@@ -32,6 +32,14 @@ Run all the tests:
 mvn clean verify
 ```
 
+# Kotlin refinement types inference
+
+Run inference for jar file with 
+
+`python refinements.py --jar <path to jar file>`
+
+Results are stored as a log file in a results directory at the same path as analyzed jar file.
+
 # Usage
 
 ```
