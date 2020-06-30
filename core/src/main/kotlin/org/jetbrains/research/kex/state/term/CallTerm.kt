@@ -6,6 +6,7 @@ import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.Method
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 
 @InheritorOf("Term")
 @Serializable
@@ -13,8 +14,9 @@ class CallTerm(
         override val type: KexType,
         val owner: Term,
         @ContextualSerialization val method: Method,
+        @ContextualSerialization val instruction: Instruction,
         val arguments: List<Term>) : Term() {
-    override val name = "$owner.${method.name}(${arguments.joinToString()})"
+    override val name = "$owner.${method.name}(${arguments.joinToString()})^${instruction.hashCode()}"
     override val subterms by lazy { listOf(owner) + arguments }
 
     val isStatic: Boolean
@@ -25,7 +27,7 @@ class CallTerm(
         val targuments = arguments.map { t.transform(it) }
         return when {
             towner == owner && targuments == arguments -> this
-            else -> term { tf.getCall(method, towner, targuments) }
+            else -> term { tf.getCall(method, instruction, towner, targuments) }
         }
     }
 }

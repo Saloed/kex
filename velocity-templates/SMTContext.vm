@@ -97,6 +97,8 @@ class $self : ${solver}SMTContext {
 
     constructor() : this($factory(), 0, 0)
 
+    fun accessRawMemories() = this.memories
+
     private fun getInitialMemory(id: String) = initialMemories.getOrPut(id) { VersionedMemory(factory.makeEmptyMemory(id)) }
     fun getMemory(memspace: Int) = memories.getOrPut(memoryName(memspace)) { getInitialMemory(memoryName(memspace)) }
     private fun setMemory(memspace: Int, mem: VersionedMemory) { memories[memoryName(memspace)] = mem }

@@ -1,23 +1,29 @@
 package org.jetbrains.research.kex.test.refinements
 
 object Inlining {
+
+    data class IntBox(val value: Int) {
+        inline fun transform(fn: (Int) -> Int) = IntBox(fn(value))
+    }
+
     fun deepInlining(a: Int): Int {
-        val res = inlineLvl1(a)
-        if (res == 0) throw IllegalArgumentException("Zero")
-        return res
+        val box = IntBox(a)
+        val res = inlineLvl1(box)
+        if (res.value == 0) throw IllegalArgumentException("Zero")
+        return res.value
     }
 
-    private fun inlineLvl1(x: Int): Int {
-        return inlineLvl2(x + 1) + 1
+    private fun inlineLvl1(x: IntBox): IntBox {
+        return inlineLvl2(x.transform { it + 1 }).transform { it + 1 }
     }
 
-    private fun inlineLvl2(x: Int): Int {
-        return inlineLvl3(x + 2) + 2
+    private fun inlineLvl2(x: IntBox): IntBox {
+        return inlineLvl3(x.transform { it + 2 }).transform { it + 2 }
     }
 
-    private fun inlineLvl3(x: Int): Int {
-        if (x < 0) throw IllegalArgumentException("Below zero")
-        return x + 3
+    private fun inlineLvl3(x: IntBox): IntBox {
+        if (x.value < 0) throw IllegalArgumentException("Below zero")
+        return x.transform { it + 1 }
     }
 
     class Failer {

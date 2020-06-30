@@ -3,10 +3,7 @@ package org.jetbrains.research.kex.asm.analysis
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
-import org.jetbrains.research.kex.asm.analysis.refinements.MethodAnalyzer
-import org.jetbrains.research.kex.asm.analysis.refinements.RecursiveMethodAnalyzer
-import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
-import org.jetbrains.research.kex.asm.analysis.refinements.SimpleMethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.*
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kfg.ClassManager
@@ -87,7 +84,7 @@ class MethodRefinements(
             }
             else -> {
                 methodAnalysisStack.addLast(method)
-                val result = SimpleMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
+                val result = NoInliningSimpleMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
                 methodAnalysisStack.removeLast()
                 log.info("Result $method:\n$result")
                 return result

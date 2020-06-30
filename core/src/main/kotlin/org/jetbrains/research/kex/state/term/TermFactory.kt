@@ -8,6 +8,7 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.*
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.UnaryOpcode
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
@@ -109,15 +110,15 @@ object TermFactory {
     fun getBound(ptr: Term) = getBound(KexInt(), ptr)
     fun getBound(type: KexType, ptr: Term) = BoundTerm(type, ptr)
 
-    fun getCall(method: Method, arguments: List<Term>) = getCall(method.returnType.kexType, method, arguments)
-    fun getCall(method: Method, objectRef: Term, arguments: List<Term>) =
-            getCall(method.returnType.kexType, objectRef, method, arguments)
+    fun getCall(method: Method, instruction: Instruction, arguments: List<Term>) = getCall(method.returnType.kexType, method, instruction, arguments)
+    fun getCall(method: Method, instruction: Instruction, objectRef: Term, arguments: List<Term>) =
+            getCall(method.returnType.kexType, objectRef, method, instruction, arguments)
 
-    fun getCall(type: KexType, method: Method, arguments: List<Term>) =
-            CallTerm(type, getClass(method.`class`), method, arguments)
+    fun getCall(type: KexType, method: Method, instruction: Instruction, arguments: List<Term>) =
+            CallTerm(type, getClass(method.`class`), method, instruction, arguments)
 
-    fun getCall(type: KexType, objectRef: Term, method: Method, arguments: List<Term>) =
-            CallTerm(type, objectRef, method, arguments)
+    fun getCall(type: KexType, objectRef: Term, method: Method, instruction: Instruction, arguments: List<Term>) =
+            CallTerm(type, objectRef, method, instruction, arguments)
 
     fun getCast(type: KexType, operand: Term) = CastTerm(type, operand)
     fun getCmp(opcode: CmpOpcode, lhv: Term, rhv: Term): Term {
@@ -259,7 +260,7 @@ abstract class TermBuilder {
 
     fun Term.bound() = tf.getBound(this)
 
-    fun Term.call(method: Method, arguments: List<Term>) = tf.getCall(method, this, arguments)
+    fun Term.call(method: Method, instruction: Instruction, arguments: List<Term>) = tf.getCall(method, instruction, this, arguments)
 
     fun Term.field(type: KexReference, name: Term) = tf.getField(type, this, name)
     fun Term.field(type: KexReference, name: String) = tf.getField(type, this, const(name))

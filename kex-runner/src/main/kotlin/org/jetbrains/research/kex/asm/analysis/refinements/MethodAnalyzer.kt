@@ -6,13 +6,21 @@ import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import ru.spbstu.ktuples.zip
 
 abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, val refinementsManager: MethodRefinements, val method: Method) {
+
+    val CallPredicate.calledMethod: Method
+        get() = (call as CallTerm).method
+
+    val CallPredicate.instruction: Instruction
+        get() = (call as CallTerm).instruction
 
     abstract fun analyze(): Refinements
 
@@ -25,7 +33,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     open fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
 
-    fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
+    open fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
         val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
         val refinements = calls.map { findRefinement(it.method) }
         val exceptionalPaths = buildRefinementSources(calls, refinements, ignoredCalls)
@@ -33,7 +41,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         return normalPath to exceptionalPaths
     }
 
-    fun buildMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean = { false }): PredicateState {
+    open fun buildMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean = { false }): PredicateState {
         val (preparedState, otherExecutionPaths) = prepareMethodState(builder, skipInlining)
         val transformedTopChoices = prepareMethodOtherExecutionPaths(otherExecutionPaths, skipInlining)
         val interestingTopChoices = transformedTopChoices
@@ -65,7 +73,6 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
             +MethodFunctionalInliner(psa) {
                 if (skipInlining(calledMethod)) skip()
                 val instruction = predicate.instruction
-                        ?: throw IllegalStateException("No instruction for predicate")
                 val instructionState = psa.builder(method).getInstructionState(instruction)
                         ?: throw IllegalStateException("No state for call")
                 val (refinement, methodState) = getMethodStateAndRefinement()

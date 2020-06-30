@@ -23,7 +23,9 @@ import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method
+import org.jetbrains.research.kfg.ir.value.StringName
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
+import org.jetbrains.research.kfg.ir.value.instruction.CallOpcode
 
 class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: MethodRefinements, method: Method) : MethodAnalyzer(cm, psa, mr, method) {
 
@@ -117,7 +119,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             method.isStatic -> term { `class`(method.`class`) }
             else -> term { value(method.`class`.kexType, "owner") }
         }
-        val methodCall = term { tf.getCall(method, owner, arguments) }
+        val instruction = CallInst(CallOpcode.Special(), StringName("recursion_root_call"), method, method.`class`, emptyArray())
+        val methodCall = term { tf.getCall(method, instruction, owner, arguments) }
         returnTerm.call(methodCall)
     } as CallPredicate
 

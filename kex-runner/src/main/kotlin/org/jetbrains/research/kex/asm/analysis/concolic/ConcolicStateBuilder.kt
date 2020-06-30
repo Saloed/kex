@@ -171,7 +171,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
                     inst.isStatic -> `class`(inst.method.`class`)
                     else -> mkValue(inst.callee)
                 }
-                val callTerm = callee.call(inst.method, args)
+                val callTerm = callee.call(inst.method, inst, args)
 
                 when {
                     inst.isNameDefined -> mkNewValue(inst).call(callTerm)

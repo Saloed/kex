@@ -100,10 +100,10 @@ class PredicateBuilderTest : KexTest() {
 
                 val args = inst.args.map { tf.getValue(it) }
                 val callTerm = if (inst.isStatic) {
-                    tf.getCall(inst.method, args)
+                    tf.getCall(inst.method, inst, args)
                 } else {
                     val callee = tf.getValue(inst.callee)
-                    tf.getCall(inst.method, callee, args)
+                    tf.getCall(inst.method, inst, callee, args)
                 }
                 assertEquals(callTerm, predicate.call)
             }
