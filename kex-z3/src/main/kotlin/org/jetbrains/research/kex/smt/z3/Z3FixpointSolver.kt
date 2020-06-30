@@ -138,7 +138,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     ): FixpointResult {
         val recursionPredicate = Predicate(0)
         val recursionConverter = CallPredicateConverterWithRecursion(recursiveCalls, rootCall, recursionPredicate.name)
-        val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys) + state + recursionPath + positive + query
+        val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys, replaceWithArray = false) + state + recursionPath + positive + query
         if (unknownCallsProcessor.hasUnknownCalls()) throw IllegalArgumentException("Recursive with unknowns")
         return CallCtx(tf, recursionConverter).use { ctx ->
             val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context, ctx.converter).expr as BoolExpr

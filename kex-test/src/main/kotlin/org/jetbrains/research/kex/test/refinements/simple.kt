@@ -61,4 +61,10 @@ object Simple {
         return test * x
     }
 
+    fun floatsAndDoubles(a: Float, b: Double): Int {
+        val x = a + 1 - b
+        if (x != 2.0) throw IllegalArgumentException("")
+        return 0
+    }
+
 }

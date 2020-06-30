@@ -107,7 +107,7 @@ class Kex(args: Array<String>) {
                 exitProcess(1)
             }
         }
-        jar = Jar(jarPath, `package`)
+        jar = Jar(jarPath, Package.defaultPackage)
         classManager = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false))
         origManager = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false))
         val analysisJars = listOfNotNull(

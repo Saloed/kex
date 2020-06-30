@@ -97,6 +97,13 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
 
 
     @Test
+    fun testFieldAccess() = run("testFieldAccess") {
+        refinement(IllegalStateException()) {
+            emptyState()
+        }
+    }
+
+    @Test
     fun testManyExceptionsSource() = run("first") {
         refinement(IllegalArgumentException()) {
             emptyState()

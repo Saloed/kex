@@ -6,11 +6,9 @@ import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.term.CallTerm
-import org.jetbrains.research.kex.state.term.Term
-import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kex.state.term.*
 
-class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
+class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet(), val replaceWithArray: Boolean = false) {
     data class UnknownCall(val idx: Int, val call: CallTerm, val variable: Term)
 
     private val replacement = hashMapOf<CallPredicate, Predicate>()
@@ -58,17 +56,26 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet()) {
         val calls = collectCalls(ps).filterNot { it in replacement }
         for (call in calls) {
             val index = replacement.size
-            val callType = when {
-                call.hasLhv -> call.lhv.type
-                else -> (call.call as CallTerm).method.returnType.kexType
-            }
+            val (callReplacement, callVariable) = createReplacement(call, index)
+            replacement[call] = callReplacement
+            unknownCalls[index] = UnknownCall(index, call.call as CallTerm, callVariable)
+        }
+    }
+
+    private fun createReplacement(call: CallPredicate, index: Int): Pair<Predicate, Term> {
+        val callType = when {
+            call.hasLhv -> call.lhv.type
+            else -> (call.call as CallTerm).method.returnType.kexType
+        }
+
+        if (!this.replaceWithArray) {
             val callVariable = term { value(callType, "call__${index}!") }
             val callReplacement = when {
                 call.hasLhv -> EqualityPredicate(call.lhv, callVariable, call.type, call.location)
                 else -> ConstantPredicate(true, call.type, call.location)
             }
-            replacement[call] = callReplacement
-            unknownCalls[index] = UnknownCall(index, call.call as CallTerm, callVariable)
+            return callReplacement to callVariable
         }
+        TODO()
     }
 }

@@ -21,6 +21,7 @@ import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.ClassType
+import org.jetbrains.research.kfg.type.NullType
 import org.jetbrains.research.kfg.visitor.executePipeline
 import org.junit.jupiter.api.TestInstance
 import java.net.URLClassLoader
@@ -103,7 +104,7 @@ abstract class RefinementTest(
     inner class RefinementBuilder(val method: Method) {
         val values = arrayListOf<Refinement>()
 
-        fun refinement(exception: Exception, psBuilder: StateBuilder.() -> PredicateState) {
+        fun refinement(exception: Exception?, psBuilder: StateBuilder.() -> PredicateState) {
             val criteria = criteriaForException(exception)
             val ps = StateBuilder().psBuilder()
             values.add(Refinement.create(criteria, ps))
@@ -121,7 +122,8 @@ abstract class RefinementTest(
 
         fun refinements() = Refinements.create(method, values)
 
-        private fun criteriaForException(exception: Exception): RefinementCriteria {
+        private fun criteriaForException(exception: Exception?): RefinementCriteria {
+            if (exception == null) return RefinementCriteria(NullType)
             val cls = cm[exception::class.java.name.replace('.', '/')]
             val kfgType = ClassType(cls)
             return RefinementCriteria(kfgType)

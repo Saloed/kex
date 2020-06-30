@@ -4,6 +4,7 @@ import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.choice
+import org.jetbrains.research.kex.state.emptyState
 import kotlin.test.Test
 
 class ArraysRefinementTest : RefinementTest("Arrays") {
@@ -30,5 +31,10 @@ class ArraysRefinementTest : RefinementTest("Arrays") {
                 }
             }
         }
+    }
+
+    @Test
+    fun testManyArrays() = run("arrayTest2"){
+        refinement(IllegalArgumentException()) { emptyState()}
     }
 }

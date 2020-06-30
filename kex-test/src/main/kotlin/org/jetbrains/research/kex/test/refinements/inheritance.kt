@@ -97,4 +97,14 @@ object Inheritance {
         return x.exceptionIfEmpty()
     }
 
+    fun testFieldAccess(x: MyListA2): Int {
+        val casted = x as MyListA
+        val first = x.size
+        val second = casted.size
+        if (first != second) {
+            throw IllegalStateException("WTF")
+        }
+        return 0
+    }
+
 }
