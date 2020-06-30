@@ -191,6 +191,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
              val declarationExprs = ctx.knownDeclarations.map { it.expr }
              val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
              val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+
+             log.debug("$argumentDeclarations")
+
              val predicates = z3positive.indices.map { idx -> Predicate(idx) }
              val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
              val positiveStatements = z3positive.mapIndexed { idx, it ->
@@ -205,7 +208,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                  val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
                  statement.forall(declarationExprs).typedSimplify()
              }
-             log.debug("$declarationMapping")
              ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
          }
      }

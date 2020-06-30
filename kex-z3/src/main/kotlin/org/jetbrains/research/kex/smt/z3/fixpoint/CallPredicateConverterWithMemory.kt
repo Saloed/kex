@@ -43,7 +43,7 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
     private fun Z3Context.cleanupMemory(idx: Int) {
         val memories = accessRawMemories()
         for ((name, _) in memories) {
-            memories[name] = VersionedMemory(factory.makeEmptyMemory("${name}${idx}"))
+            memories[name] = VersionedMemory(factory.makeEmptyMemory("call__${idx}__${name}"))
         }
     }
 
@@ -56,7 +56,7 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
             call.hasLhv -> call.lhv.type
             else -> (call.call as CallTerm).method.returnType.kexType
         }
-        val callVariable = term { value(callType, "call__${callIdx}!") }
+        val callVariable = term { value(callType, "call__${callIdx}__result") }
         val callReplacement = when {
             call.hasLhv -> EqualityPredicate(call.lhv, callVariable, call.type, call.location)
             else -> ConstantPredicate(true, call.type, call.location)
