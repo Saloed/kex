@@ -13,6 +13,7 @@ import org.jetbrains.research.kex.util.join
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
     private val terms = hashMapOf<DeclarationTracker.Declaration, Term>()
     private val arrayMemories = mutableSetOf<DeclarationTracker.Declaration>()
+    private val calls = hashMapOf<Int, CallPredicateConverterWithMemory.CallInfo>()
 
     fun initializeTerms(vararg ps: PredicateState) {
         val (thisArg, otherArgs) = collectArguments(ps)
@@ -35,12 +36,23 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         arrayMemories.addAll(memoriesUnderArray)
     }
 
+    fun initializeCalls(calls: List<CallPredicateConverterWithMemory.CallInfo>) {
+        calls.map { it.index to it }.toMap(this.calls)
+    }
+
     fun setTerm(declaration: DeclarationTracker.Declaration, term: Term) {
         terms[declaration] = term
     }
 
-    fun getTerm(idx: Int): Term = terms[declarations[idx]]
-            ?: throw IllegalArgumentException("No term for declaration $idx: ${declarations[idx]}")
+    fun getTerm(idx: Int): Term {
+        val declaration = declarations[idx]
+        if (declaration is DeclarationTracker.Declaration.Call) {
+            val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
+            TODO("Term for unknown call")
+        }
+        return terms[declaration]
+                ?: throw IllegalArgumentException("No term for declaration $idx: ${declarations[idx]}")
+    }
 
     fun isArrayMemory(declaration: DeclarationTracker.Declaration) = declaration in arrayMemories
 

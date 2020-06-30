@@ -23,6 +23,8 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
     val callInfo = hashMapOf<CallPredicate, CallInfo>()
 
 
+    fun getCallsInfo(): List<CallInfo> = callInfo.values.toList()
+
     override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool {
         if (call !in callInfo) {
             callInfo[call] = processCall(call, ef, ctx, converter)

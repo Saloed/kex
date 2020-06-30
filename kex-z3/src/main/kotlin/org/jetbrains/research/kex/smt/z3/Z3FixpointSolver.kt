@@ -208,6 +208,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                  val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
                  statement.forall(declarationExprs).typedSimplify()
              }
+
+             declarationMapping.initializeCalls(callPredicateConverter.getCallsInfo())
+
              ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
          }
      }

@@ -75,6 +75,9 @@
                 <version>${kotlin.version}</version>
                 <configuration>
                     <jvmTarget>${jvm.version}</jvmTarget>
+                    <args>
+                        <arg>-Xinline-classes</arg>
+                    </args>
                 </configuration>
 
                 <dependencies>
