@@ -1,12 +1,5 @@
 package org.jetbrains.research.kex.test.refinements
 
-import java.io.File
-import java.net.Socket
-import java.nio.ByteBuffer
-import java.nio.channels.AsynchronousFileChannel
-import java.nio.channels.Channel
-import java.util.concurrent.Future
-
 object Inlining {
     fun deepInlining(a: Int): Int {
         val res = inlineLvl1(a)
