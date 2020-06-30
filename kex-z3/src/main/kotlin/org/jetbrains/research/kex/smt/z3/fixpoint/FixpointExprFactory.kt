@@ -8,13 +8,13 @@ class FixpointExprFactory private constructor(override val ctx: ContextWithIntSo
     companion object {
         fun original() = FixpointExprFactory(createContext())
         fun withDeclarationsTracking(tracker: DeclarationTracker) = FixpointExprFactory(DeclarationTrackingContext(tracker))
-        fun withDeclarationsTrackingAndRecursiveCallConverter(tracker: DeclarationTracker, converter: CallPredicateConverterWithRecursion) = FixpointExprFactory(ContextWithRecursiveCallSupport(converter, tracker))
+        fun withDeclarationsTrackingAndCallConverter(tracker: DeclarationTracker, converter: CallPredicateConverter) = FixpointExprFactory(ContextWithCallSupport(converter, tracker))
     }
 }
 
 
-open class ContextWithRecursiveCallSupport(
-        val converter: CallPredicateConverterWithRecursion, tracker: DeclarationTracker
+open class ContextWithCallSupport(
+        val converter: CallPredicateConverter, tracker: DeclarationTracker
 ) : DeclarationTrackingContext(tracker) {
 
     fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =

@@ -51,6 +51,8 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         return thisArg to args
     }
 
+    override fun toString(): String = "ModelDeclarationMappings($declarations)"
+
     companion object {
         fun create(declarations: List<DeclarationTracker.Declaration>, vararg ps: PredicateState): ModelDeclarationMapping {
             val mapping = ModelDeclarationMapping(declarations)

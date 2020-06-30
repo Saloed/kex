@@ -158,7 +158,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
 
     private fun queryFixpointSolver(state: PredicateState, normal: PredicateState, exceptions: List<PredicateState>): List<PredicateState> =
             try {
-                val result = Z3FixpointSolver(cm.type).mkFixpointQuery(state, exceptions, normal)
+                val result = Z3FixpointSolver(cm.type).mkFixpointQueryV2(state, exceptions, normal)
                 when (result) {
                     is FixpointResult.Sat -> result.result
                     is FixpointResult.Unknown -> {

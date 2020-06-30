@@ -13,7 +13,7 @@ import org.jetbrains.research.kfg.ir.Field
 class CallPredicateConverterWithRecursion(
         private val recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
         callPrototype: CallPredicate,
-        private val predicateName: String) {
+        private val predicateName: String) : CallPredicateConverter {
 
     private val orderedDeclarations: MutableList<DeclarationTracker.Declaration>
     private val orderedProperties: List<DeclarationTracker.Declaration.Property>
@@ -35,7 +35,7 @@ class CallPredicateConverterWithRecursion(
         mapper.setTerm(receiverDecl, receiver)
     }
 
-    fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =
+    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =
             when {
                 call in recursiveCalls -> buildPredicate(call, ef, ctx, converter)
                 else -> ef.makeTrue()

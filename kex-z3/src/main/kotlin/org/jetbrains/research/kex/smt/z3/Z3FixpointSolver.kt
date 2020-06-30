@@ -16,10 +16,10 @@ import kotlin.time.measureTimedValue
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
-    private class CallCtx(tf: TypeFactory, recursionConverter: CallPredicateConverterWithRecursion? = null) : AutoCloseable {
+    private class CallCtx(tf: TypeFactory, callConverter: CallPredicateConverter? = null) : AutoCloseable {
         val declarationTracker = DeclarationTracker()
         val ef = when {
-            recursionConverter != null -> FixpointExprFactory.withDeclarationsTrackingAndRecursiveCallConverter(declarationTracker, recursionConverter)
+            callConverter != null -> FixpointExprFactory.withDeclarationsTrackingAndCallConverter(declarationTracker, callConverter)
             else -> FixpointExprFactory.withDeclarationsTracking(declarationTracker)
         }
         val context = ef.ctx
@@ -177,6 +177,39 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
+     fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
+         val callPredicateConverter = CallPredicateConverterWithMemory()
+         return CallCtx(tf, callPredicateConverter).use { ctx ->
+             val z3State = ctx.build {
+                 convert(state).asAxiom() as BoolExpr
+             }
+             val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
+             val z3query = ctx.convert(query).asAxiom() as BoolExpr
+
+             log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
+
+             val declarationExprs = ctx.knownDeclarations.map { it.expr }
+             val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+             val predicates = z3positive.indices.map { idx -> Predicate(idx) }
+             val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
+             val positiveStatements = z3positive.mapIndexed { idx, it ->
+                 ctx.build {
+                     val statement = (z3State and it) implies predicateApplications[idx]
+                     statement.forall(declarationExprs).typedSimplify()
+                 }
+             }
+             val queryStatement = ctx.build {
+                 val applications = predicateApplications.toTypedArray()
+                 val allApplications = context.mkOr(*applications)
+                 val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
+                 statement.forall(declarationExprs).typedSimplify()
+             }
+             log.debug("$declarationMapping")
+             ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
+         }
+     }
+
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult =
             CallCtx(tf).use { ctx ->
                 val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
@@ -225,6 +258,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
         add(query)
 
+        log.debug(debugFixpointSmtLib(this))
         File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(this))
 
         val status = check()
