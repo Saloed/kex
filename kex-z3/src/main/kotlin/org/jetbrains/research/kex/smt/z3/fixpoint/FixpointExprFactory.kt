@@ -12,7 +12,6 @@ class FixpointExprFactory private constructor(override val ctx: ContextWithIntSo
     }
 }
 
-
 open class ContextWithCallSupport(
         val converter: CallPredicateConverter, tracker: DeclarationTracker
 ) : DeclarationTrackingContext(tracker) {

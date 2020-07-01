@@ -180,6 +180,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
      fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
          val callPredicateConverter = CallPredicateConverterWithMemory()
          return CallCtx(tf, callPredicateConverter).use { ctx ->
+             ContextMemoryInitializer(state, query, *positivePaths.toTypedArray()).apply(ctx.z3Context)
+
              val z3State = ctx.build {
                  convert(state).asAxiom() as BoolExpr
              }

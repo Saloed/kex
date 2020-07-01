@@ -43,9 +43,6 @@ class $self : ${solver}SMTContext {
         fun propertyName(memspace: Int, name: String) = "${ PROPERTY_NAME }${ name }__${ memspace }"
 
         fun mergeContexts(name: String, default: $self, choices: Map< Bool_, $self >): $self {
-            val maxLocal = max(default.localPointer, choices.map { it.value.localPointer }.max() ?: 0)
-            val maxStatic = max(default.staticPointer, choices.map { it.value.staticPointer }.max() ?: 0)
-
             val ids = hashSetOf< String >()
             ids.addAll(default.memories.keys)
             choices.values.forEach { ctx ->
@@ -57,11 +54,14 @@ class $self : ${solver}SMTContext {
                 id to VersionedMemory.merge(name, default.get(id), alternatives)
             }.toMap()
 
+            if (choices.any { it.value.localPointer != default.localPointer } || choices.any { it.value.localTypes != default.localTypes }) {
+                return unreachable("Incosistent local ptr info")
+            }
             if (choices.any { it.value.typeIndex != default.typeIndex } || choices.any { it.value.typeMap != default.typeMap }) {
                 return unreachable("Incosistent type info")
             }
 
-            return $self(default.factory, maxLocal, maxStatic, memArrays, default.typeIndex, default.typeMap)
+            return $self(default.factory, default.localPointer, default.staticPointer, memArrays, default.localTypes, default.typeIndex, default.typeMap)
         }
 
         fun create(factory: $factory) = $self(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
@@ -69,20 +69,23 @@ class $self : ${solver}SMTContext {
     }
 
     val factory: $factory
-    private var localPointer: Int
-    private var staticPointer: Int
+    private val localPointer: AtomicInteger
+    private val staticPointer: AtomicInteger
+    private val localTypes: MutableMap < Int, KexType >
     private val typeIndex: AtomicInteger
     private val typeMap: MutableMap< KexType, Int >
     private var initialMemories = hashMapOf< String, VersionedMemory >()
     private var memories: MutableMap< String, VersionedMemory >
 
-    constructor(factory: $factory, localPointer: Int, staticPointer: Int,
+    constructor(factory: $factory, localPointer: AtomicInteger, staticPointer: AtomicInteger,
                 memories: Map< String, VersionedMemory >,
+                localTypes: MutableMap< Int, KexType >,
                 typeIndex: AtomicInteger, typeMap: MutableMap< KexType, Int >) {
         this.factory = factory
         this.localPointer = localPointer
         this.staticPointer = staticPointer
         this.memories = memories.toMutableMap()
+        this.localTypes = localTypes
 
         this.typeIndex = typeIndex
         this.typeMap = typeMap
@@ -91,9 +94,9 @@ class $self : ${solver}SMTContext {
     }
 
     constructor(factory: $factory, localPointer: Int, staticPointer: Int)
-                : this(factory, localPointer, staticPointer, mapOf(), AtomicInteger(BASE_TYPE_IDX), hashMapOf())
+                 : this(factory, AtomicInteger(localPointer), AtomicInteger(staticPointer), mapOf(), hashMapOf(), AtomicInteger(BASE_TYPE_IDX), hashMapOf())
 
-    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories, ctx.typeIndex, ctx.typeMap)
+    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories, ctx.localTypes, ctx.typeIndex, ctx.typeMap)
 
     constructor() : this($factory(), 0, 0)
 
@@ -135,34 +138,37 @@ class $self : ${solver}SMTContext {
         setProperties(memspace, name, mem)
     }
 
+       @Suppress("UNUSED_PARAMETER")
+    fun getLocalPtr(memspace: Int, size: TypeSize, type: KexType): Ptr_ {
+        val ptr = localPointer.getAndAdd(size.int)
+        localTypes[ptr] = type
+        return factory.makePtrConst(ptr)
+    }
+
+    fun getLocalArray(memspace: Int, length: Int, elementSize: TypeSize, type: KexType): Ptr_ {
+        val ptr = localPointer.getAndAdd(length * elementSize.int)
+        localTypes[ptr] = type
+        return factory.makePtrConst(ptr).also {
+            writeProperty(it, memspace, "length", factory.makeIntConst(length))
+        }
+    }
+
     @Suppress("UNUSED_PARAMETER")
-    fun getLocalPtr(memspace: Int, size: TypeSize): Ptr_ =
-            factory.makePtrConst(localPointer).also { localPointer += size.int }
+    fun getStaticPtr(memspace: Int, size: TypeSize): Ptr_ {
+        val ptr = staticPointer.getAndAdd(size.int)
+        return factory.makePtrConst(ptr)
+    }
 
-    fun getLocalArray(memspace: Int, length: Int, elementSize: TypeSize): Ptr_ =
-            factory.makePtrConst(localPointer).also {
-                val totalSize = length * elementSize.int
-                localPointer += totalSize
-                writeProperty(it, memspace, "length", factory.makeIntConst(length))
-            }
-
-
-    @Suppress("UNUSED_PARAMETER")
-    fun getStaticPtr(memspace: Int, size: TypeSize): Ptr_ =
-            factory.makePtrConst(localPointer).also { localPointer += size.int }
-
-    fun getStaticArray(memspace: Int, length: Int, elementSize: TypeSize): Ptr_ =
-            factory.makePtrConst(localPointer).also {
-                val totalSize = length * elementSize.int
-                localPointer += totalSize
-                writeProperty(it, memspace, "length", factory.makeIntConst(length))
-            }
+    fun getStaticArray(memspace: Int, length: Int, elementSize: TypeSize): Ptr_ {
+        val ptr = staticPointer.getAndAdd(length * elementSize.int)
+        return factory.makePtrConst(ptr).also {
+            writeProperty(it, memspace, "length", factory.makeIntConst(length))
+        }
+    }
 
     fun switchOn(name: String, contexts: Map< Bool_, ${solver}Context >): ${solver}Context {
         val merged =  mergeContexts(name, this, contexts)
         this.memories = merged.memories
-        this.localPointer = merged.localPointer
-        this.staticPointer = merged.staticPointer
         return this
     }
 
@@ -172,4 +178,6 @@ class $self : ${solver}SMTContext {
 
     fun readType(ptr: Ptr_, memspace: Int): Int_ = readProperty(ptr, memspace, TYPE_PROPERTY, Int_::class)
     fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type))
+
+    fun getLocalsTypeMapping() = localTypes.toMap()
 }

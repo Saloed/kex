@@ -67,7 +67,7 @@ class DeclarationTracker {
         }
 
         companion object {
-            private val thisRegex = Regex("this")
+            private val thisRegex = Regex("^this$")
             private val argRegexp = Regex("arg\\$(\\d+)")
             private val memoryRegexp = Regex("${Z3Context.MEMORY_NAME}(\\d+)")
             private val classPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}([A-Za-z0-9_/\$]+)\\.(\\w+)__(\\d+)")
@@ -102,6 +102,6 @@ class DeclarationTracker {
 
 private inline fun <R> regexWhen(string: String, block: RegexWhen.() -> R): R = RegexWhen(string).block()
 private inline class RegexWhen(val regexWhenArg: String) {
-    inline fun <R : Any> like(expr: Regex, block: (MatchResult.Destructured) -> R): R? = expr.find(regexWhenArg)?.destructured?.let(block)
+    inline fun <R : Any> like(expr: Regex, block: (MatchResult.Destructured) -> R): R? = expr.matchEntire(regexWhenArg)?.destructured?.let(block)
     inline fun <R : Any> `else`(block: () -> R): R = block()
 }

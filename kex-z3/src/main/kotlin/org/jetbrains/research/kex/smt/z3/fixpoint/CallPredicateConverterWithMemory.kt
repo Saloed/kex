@@ -6,6 +6,7 @@ import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 
 class CallPredicateConverterWithMemory : CallPredicateConverter {
@@ -16,13 +17,12 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
             val predicate: CallPredicate,
             val subterms: List<Z3ValueExpr>,
             val result: Z3Bool,
+            val resultTerm: Term,
             val memoryBefore: Map<String, VersionedMemory>,
             val memoryAfter: Map<String, VersionedMemory>
     )
 
     val callInfo = hashMapOf<CallPredicate, CallInfo>()
-
-
     fun getCallsInfo(): List<CallInfo> = callInfo.values.toList()
 
     override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool {
@@ -65,7 +65,7 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
         }
         val result = converter.convert(callReplacement, ef, ctx)
         val afterMemory = ctx.currentMemory()
-        return CallInfo(callIdx, call, subterms, result, memoriesBefore, afterMemory)
+        return CallInfo(callIdx, call, subterms, result, callVariable, memoriesBefore, afterMemory)
     }
 
 }

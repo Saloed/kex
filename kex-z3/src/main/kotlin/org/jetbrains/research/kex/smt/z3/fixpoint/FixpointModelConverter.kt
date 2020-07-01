@@ -11,7 +11,6 @@ import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
 import org.jetbrains.research.kex.state.transformer.TermCollector
-import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.ConcreteClass
@@ -21,7 +20,6 @@ import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
-import ru.spbstu.ktuples.zip
 
 class FixpointModelConverter(
         private val mapping: ModelDeclarationMapping,
@@ -110,18 +108,7 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertVariableTerm(expr: Expr): TermWithAxiom =
-            when (val term = mapping.getTerm(expr.index)) {
-                is CallTerm -> {
-                    val value = term { value(term.type, "call__${expr.index}") }
-                    val axiom = basic {
-                        state { value.call(term) }
-                    }
-                    TermWithAxiom(value, axiom)
-                }
-                else -> TermWithAxiom(term)
-            }
-
+    private fun convertVariableTerm(expr: Expr): TermWithAxiom = mapping.getTerm(expr.index)
     private fun convert(expr: BoolExpr): PredicateState = when {
         expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
         expr.isOr -> ChoiceState(expr.args.map { convert(it) }).simplify()
@@ -174,7 +161,7 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertRealTerm(expr: RealExpr): TermWithAxiom = when{
+    private fun convertRealTerm(expr: RealExpr): TermWithAxiom = when {
         expr is RatNum -> TermWithAxiom.wrap { const(expr.numerator.int64.toDouble() / expr.denominator.int64.toDouble()) }
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
@@ -201,17 +188,41 @@ class FixpointModelConverter(
                 val arrayIndex = base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i) }
                 arrayIndex.transformTerm { tf.getArrayLoad(it) }
             }
+            decl is DeclarationTracker.Declaration.Call.CallProperty -> readCallProperty(convertTerm(location), decl)
             else -> throw IllegalStateException("Unexpected memory $memory : $decl")
         }
     }
 
+    private fun readCallProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Call.CallProperty): TermWithAxiom {
+        val callInfo = mapping.calls[property.index]!!
+        if (property !is DeclarationTracker.Declaration.Call.CallClassProperty) TODO("Not yet implemented")
+        val owner = when {
+            obj.term.type.getKfgType(tf) is ClassType -> obj.term
+            obj.term is ConstIntTerm -> {
+                val locals = z3Context.getLocalsTypeMapping()
+                val type = locals[obj.term.value] ?: throw IllegalStateException("No type info about local variable")
+                term { value(type, "local__${obj.term.value}") }
+            }
+            else -> throw IllegalArgumentException("Only class types supported")
+        }
+        val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
+        val loadTerm = obj.binaryOperation(fieldLoad) { _, load -> load }
+        return TermWithAxiom(ConstBoolTerm(true), callInfo.predicate.wrap()).binaryOperation(loadTerm) { _, load -> load }
+    }
+
     private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {
         is DeclarationTracker.Declaration.ClassProperty -> {
-            val kType = obj.term.type.getKfgType(tf)
-            if (kType !is ClassType) {
-                TODO("Only class types supported")
+            val owner = when {
+                obj.term.type.getKfgType(tf) is ClassType -> obj.term
+                obj.term is ConstIntTerm -> {
+                    val locals = z3Context.getLocalsTypeMapping()
+                    val type = locals[obj.term.value]
+                            ?: throw IllegalStateException("No type info about local variable")
+                    term { value(type, "local__${obj.term.value}") }
+                }
+                else -> throw IllegalArgumentException("Only class types supported")
             }
-            val fieldLoad = getFieldLoad(obj.term, tf.cm[property.className], property.propertyName)
+            val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
             obj.binaryOperation(fieldLoad) { _, load -> load }
         }
         else -> when {
@@ -254,39 +265,6 @@ class FixpointModelConverter(
             .join { t1, t2 -> term { t1 or t2 } }
 
     private fun Class.allInheritors() = cm.concreteClasses.filter { it.isInheritorOf(this) }.toSet()
-
-    private data class TermWithAxiom(val term: Term, val axiom: PredicateState? = null) {
-
-        fun equality(other: TermWithAxiom): PredicateState {
-            val predicate = path { term equality other.term }
-            val axiom = mergeAxiom(other)
-            return withAxiom(predicate, axiom)
-        }
-
-        fun equality(builder: TermBuilder.() -> Term): PredicateState = equality(wrap(builder))
-
-        fun binaryOperation(other: TermWithAxiom, operation: TermBuilder.(Term, Term) -> Term): TermWithAxiom =
-                TermWithAxiom(TermBuilder.Terms.operation(term, other.term), mergeAxiom(other))
-
-        fun transformTerm(operation: TermBuilder.(Term) -> Term) = copy(term = TermBuilder.Terms.operation(term))
-
-        private fun withAxiom(predicate: Predicate, axiom: PredicateState?): PredicateState {
-            val state = BasicState(listOf(predicate))
-            return when {
-                axiom != null -> ChainState(axiom, state)
-                else -> state
-            }
-        }
-
-        private fun mergeAxiom(other: TermWithAxiom) = when {
-            axiom != null && other.axiom != null -> ChainState(axiom, other.axiom)
-            else -> axiom ?: other.axiom
-        }
-
-        companion object {
-            fun wrap(builder: TermBuilder.() -> Term) = TermWithAxiom(TermBuilder.Terms.builder())
-        }
-    }
 
     private fun Expr.convertArgs() = args.map { convertTerm(it) }
     private fun List<TermWithAxiom>.combine(combiner: TermBuilder.(Term, Term) -> Term): TermWithAxiom = when (size) {

@@ -160,7 +160,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val totalSize = newarray.dimentions.fold(1) { acc: Int, term: Term ->
             acc * ((term as? ConstIntTerm)?.value ?: defaultAllocSize)
         }
-        val ptr = ctx.getLocalArray(memspace, totalSize, elementSize)
+        val ptr = ctx.getLocalArray(memspace, totalSize, elementSize, KexArray(newarray.elementType, memspace))
         return lhv eq ptr
     }
 
@@ -168,7 +168,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val memspace = new.lhv.memspace
         val lhv = convert(new.lhv, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `new`") }
         val elementSize = ${factory}.getTypeSize(new.lhv.type)
-        return lhv eq ctx.getLocalPtr(memspace, elementSize)
+        return lhv eq ctx.getLocalPtr(memspace, elementSize, new.lhv.type)
     }
 
 #set($terms = ["Argument", "ArrayIndex", "ArrayLength", "ArrayLoad", "Binary", "Call", "Cast", "Cmp",

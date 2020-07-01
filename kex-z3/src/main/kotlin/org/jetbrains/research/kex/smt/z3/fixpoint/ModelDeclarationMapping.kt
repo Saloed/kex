@@ -1,19 +1,18 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.term.ArgumentTerm
-import org.jetbrains.research.kex.state.term.ArrayIndexTerm
-import org.jetbrains.research.kex.state.term.Term
-import org.jetbrains.research.kex.state.term.ValueTerm
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.memspace
+import org.jetbrains.research.kex.state.wrap
 import org.jetbrains.research.kex.util.join
 
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
     private val terms = hashMapOf<DeclarationTracker.Declaration, Term>()
     private val arrayMemories = mutableSetOf<DeclarationTracker.Declaration>()
-    private val calls = hashMapOf<Int, CallPredicateConverterWithMemory.CallInfo>()
+    val calls = hashMapOf<Int, CallPredicateConverterWithMemory.CallInfo>()
 
     fun initializeTerms(vararg ps: PredicateState) {
         val (thisArg, otherArgs) = collectArguments(ps)
@@ -44,14 +43,19 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         terms[declaration] = term
     }
 
-    fun getTerm(idx: Int): Term {
+    fun getTerm(idx: Int): TermWithAxiom {
         val declaration = declarations[idx]
         if (declaration is DeclarationTracker.Declaration.Call) {
             val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
+            if (declaration is DeclarationTracker.Declaration.Call.CallResult) {
+                return TermWithAxiom(callInfo.predicate.lhv, callInfo.predicate.wrap())
+            }
             TODO("Term for unknown call")
         }
-        return terms[declaration]
+        val term = terms[declaration]
                 ?: throw IllegalArgumentException("No term for declaration $idx: ${declarations[idx]}")
+        if (term is CallTerm) throw IllegalStateException("Unexpected CallTerm")
+        return TermWithAxiom(term)
     }
 
     fun isArrayMemory(declaration: DeclarationTracker.Declaration) = declaration in arrayMemories
