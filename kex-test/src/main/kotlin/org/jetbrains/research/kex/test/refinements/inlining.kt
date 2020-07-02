@@ -40,4 +40,29 @@ object Inlining {
         f.exceptionSource(a)
     }
 
+
+    data class SampleCls(val x: Int)
+
+    fun process1(arg: SampleCls): SampleCls {
+        return arg
+    }
+
+    fun process2(arg: SampleCls): SampleCls {
+        return SampleCls(5)
+    }
+
+    fun process3(arg: SampleCls): SampleCls {
+        return SampleCls(arg.x + 1)
+    }
+
+    fun sample(a: Int, b: SampleCls): SampleCls {
+        val result = when {
+            a > b.x -> process1(b)
+            else -> process2(b)
+        }
+        val updatedResult = process3(result)
+        if (updatedResult.x < a) throw IllegalStateException()
+        return result
+    }
+
 }

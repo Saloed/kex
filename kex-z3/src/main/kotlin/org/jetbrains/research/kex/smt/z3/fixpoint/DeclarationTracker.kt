@@ -66,6 +66,11 @@ class DeclarationTracker {
             else -> false
         }
 
+        fun isMemoryOrCall() = when (this) {
+            is Memory, is Property, is Call -> true
+            else -> false
+        }
+
         companion object {
             private val thisRegex = Regex("^this$")
             private val argRegexp = Regex("arg\\$(\\d+)")

@@ -14,7 +14,14 @@ class InliningRefinementTest : RefinementTest("Inlining") {
     }
 
     @Test
-    fun testExceptionSourceInlining() = run("inlineExceptionSource"){
+    fun testSample() = run("sample") {
+        refinement(IllegalStateException()) {
+            emptyState()
+        }
+    }
+
+    @Test
+    fun testExceptionSourceInlining() = run("inlineExceptionSource") {
         refinement(null) {
             trueState()
         }

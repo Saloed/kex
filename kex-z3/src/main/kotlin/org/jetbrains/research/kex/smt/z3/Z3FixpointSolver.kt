@@ -8,6 +8,7 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.io.File
@@ -177,45 +178,84 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-     fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
-         val callPredicateConverter = CallPredicateConverterWithMemory()
-         return CallCtx(tf, callPredicateConverter).use { ctx ->
-             ContextMemoryInitializer(state, query, *positivePaths.toTypedArray()).apply(ctx.z3Context)
+    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, nonMemoryArgs: List<Term>): FixpointResult {
+        val callPredicateConverter = CallPredicateConverterWithMemory()
+        return CallCtx(tf, callPredicateConverter).use { ctx ->
+            ContextMemoryInitializer(negative, positive).apply(ctx.z3Context)
 
-             val z3State = ctx.build {
-                 convert(state).asAxiom() as BoolExpr
-             }
-             val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
-             val z3query = ctx.convert(query).asAxiom() as BoolExpr
+            val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
+            val z3query = ctx.convert(negative).asAxiom() as BoolExpr
 
-             log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
+            log.debug("Refine:\nPositive:\n$z3positive\nQuery:\n$z3query")
 
-             val declarationExprs = ctx.knownDeclarations.map { it.expr }
-             val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
-             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+            val declarationExprs = ctx.knownDeclarations.map { it.expr }
+            val nonMemoryArgsDeclarations = nonMemoryArgs.map { term ->
+                val expr = ctx.converter.convert(term, ctx.ef, ctx.z3Context).expr
+                val declaration = ctx.knownDeclarations.first { it.expr == expr }
+                term to declaration
+            }.toMap()
+            val argumentDeclarations = ctx.knownDeclarations.filter { it.isMemoryOrCall() } + nonMemoryArgsDeclarations.values
+            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative)
+            nonMemoryArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
 
-             log.debug("$argumentDeclarations")
+            log.debug("$argumentDeclarations")
 
-             val predicates = z3positive.indices.map { idx -> Predicate(idx) }
-             val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
-             val positiveStatements = z3positive.mapIndexed { idx, it ->
-                 ctx.build {
-                     val statement = (z3State and it) implies predicateApplications[idx]
-                     statement.forall(declarationExprs).typedSimplify()
-                 }
-             }
-             val queryStatement = ctx.build {
-                 val applications = predicateApplications.toTypedArray()
-                 val allApplications = context.mkOr(*applications)
-                 val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
-                 statement.forall(declarationExprs).typedSimplify()
-             }
+            val predicate = Predicate(0)
+            val predicateApplication = predicate.call(ctx, argumentDeclarations)
+            val positiveStatement = ctx.build {
+                val statement = z3positive implies predicateApplication
+                statement.forall(declarationExprs).typedSimplify()
+            }
+            val queryStatement = ctx.build {
+                val statement = (z3query and predicateApplication) implies context.mkFalse()
+                statement.forall(declarationExprs).typedSimplify()
+            }
 
-             declarationMapping.initializeCalls(callPredicateConverter.getCallsInfo())
+            declarationMapping.initializeCalls(callPredicateConverter.getCallsInfo())
 
-             ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
-         }
-     }
+            ctx.callSolver(listOf(predicate), declarationMapping, listOf(positiveStatement), queryStatement)
+        }
+    }
+
+    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
+        val callPredicateConverter = CallPredicateConverterWithMemory()
+        return CallCtx(tf, callPredicateConverter).use { ctx ->
+            ContextMemoryInitializer(state, query, *positivePaths.toTypedArray()).apply(ctx.z3Context)
+
+            val z3State = ctx.build {
+                convert(state).asAxiom() as BoolExpr
+            }
+            val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
+            val z3query = ctx.convert(query).asAxiom() as BoolExpr
+
+            log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
+
+            val declarationExprs = ctx.knownDeclarations.map { it.expr }
+            val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+
+            log.debug("$argumentDeclarations")
+
+            val predicates = z3positive.indices.map { idx -> Predicate(idx) }
+            val predicateApplications = predicates.map { it.call(ctx, argumentDeclarations) }
+            val positiveStatements = z3positive.mapIndexed { idx, it ->
+                ctx.build {
+                    val statement = (z3State and it) implies predicateApplications[idx]
+                    statement.forall(declarationExprs).typedSimplify()
+                }
+            }
+            val queryStatement = ctx.build {
+                val applications = predicateApplications.toTypedArray()
+                val allApplications = context.mkOr(*applications)
+                val statement = ((z3State and z3query) and allApplications) implies context.mkFalse()
+                statement.forall(declarationExprs).typedSimplify()
+            }
+
+            declarationMapping.initializeCalls(callPredicateConverter.getCallsInfo())
+
+            ctx.callSolver(predicates, declarationMapping, positiveStatements, queryStatement)
+        }
+    }
 
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult =
             CallCtx(tf).use { ctx ->
