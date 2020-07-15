@@ -32,13 +32,15 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
         val refinementSources = methodPaths.refinementSources
         val normalPaths = methodPaths.normalExecutionPaths
-        val methodsUnderApproximations = hashMapOf<CallPredicate, MutableMap<PredicateState, PredicateState>>()
+        val methodsUnderApproximations = MethodApproximationManager()
         var result: List<Refinement>
         while (true) {
             val state = extendWithRefinements(methodPaths)
             val (nestedNormal, nestedRefinementSources) = inlineRefinementsV2(state)
 
-            val newState = extendStateWithUnderApproximations(state, methodsUnderApproximations)
+            log.debug("State before approx:\n$state")
+            val newState = methodsUnderApproximations.extendWithUnderApproximations(state)
+            log.debug("State after approx:\n$newState")
 
             val allSources = refinementSources.merge(nestedRefinementSources).fmap { it.optimize() }
             val allNormal = ChainState(normalPaths, nestedNormal).optimize()
@@ -47,30 +49,21 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
             log.debug("State:\n$state\nNew State:\n$newState\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
             val (trivialRefinements, sourcesToQuery) = searchForDummySolution(allNormal, allSources)
-            val (otherRefinements, solutionRefinements) = queryRefinementSources(newState, allNormal, sourcesToQuery, methodsUnderApproximations.keys)
+            val otherRefinements = queryRefinementSources(newState, allNormal, sourcesToQuery, emptySet())
             result = trivialRefinements.value + otherRefinements.value
+            if (result.all { refinementIsCorrect(it) }) break
 
-            log.debug("Solution:\n$result\nSolution Refinements:\n$solutionRefinements")
-
-            if (solutionRefinements.isEmpty()) break
-            for (solutionReft in solutionRefinements) {
-                val underApproximation = methodsUnderApproximations.getOrPut(solutionReft.call) { hashMapOf() }
-                underApproximation[solutionReft.precondition] = solutionReft.postCondition
+            val callResolver = CallResolver(this, methodsUnderApproximations)
+            result.forEach {
+                callResolver.resolveCalls(it.state)
             }
 
             log.debug("All approximations:\n$methodsUnderApproximations")
-
         }
         return Refinements.create(method, result).fmap { transform(it) { applyAdapters() } }
     }
 
-    private fun extendStateWithUnderApproximations(state: PredicateState, underApproximations: Map<CallPredicate, Map<PredicateState, PredicateState>>): PredicateState {
-        val approximationState = underApproximations
-                .flatMap { it.value.entries }.toSet()
-                .map { (pre, post) -> pre implies post }
-                .join(emptyState()) { a, b -> ChainState(a, b) }
-        return ChainState(state, approximationState)
-    }
+
 
     override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
         TODO("Not yet implemented")
@@ -83,15 +76,6 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         return zip(implementations, implementationsRefinements)
                 .map { (impl, reft) -> transformToMethodImplementation(method.`class`.kexType, impl, reft::fmap) }
                 .join { a, b -> a.merge(b) }
-    }
-
-    private fun applyMemspacing(state: PredicateState, allSources: RefinementSources, allNormal: PredicateState): Triple<PredicateState, RefinementSources, PredicateState> {
-        val allStates = listOf(state) + allSources.value.map { it.condition } + listOf(allNormal)
-        val memorySpacer = MemorySpacer(ChoiceState(allStates))
-        val newState = memorySpacer.apply(state)
-        val newSources = allSources.fmap { memorySpacer.apply(it) }
-        val newNormal = memorySpacer.apply(allNormal)
-        return Triple(newState, newSources, newNormal)
     }
 
     private inline fun <reified T> transformToMethodImplementation(type: KexType, implementation: Method, transformSource: ((PredicateState) -> PredicateState) -> T): T =
@@ -168,49 +152,19 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         else -> null
     }
 
-    private fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources, ignoredCalls: Set<CallPredicate>): Pair<Refinements, List<SolutionRefinement>> {
-        if (sources.value.isEmpty()) return Refinements.unknown(method) to emptyList()
+    private fun refinementIsCorrect(refinement: Refinement): Boolean {
+        if (PredicateCollector.collectIsInstance<CallPredicate>(refinement.state).isNotEmpty()) return false
+        // todo: maybe more checks
+        return true
+    }
+
+    private fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources, ignoredCalls: Set<CallPredicate>): Refinements {
+        if (sources.value.isEmpty()) return Refinements.unknown(method)
         val conditions = sources.value.map { it.condition }
         val fixpointAnswer = queryFixpointSolver(state, normals, conditions, ignoredCalls)
-        val solutionRefinements = fixpointAnswer.flatMap { refineSolution(it) }
 //        val fixpointAnswer = conditions.map { src -> queryFixpointSolver(state, normals, listOf(src)).first() }
         val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement.create(src.criteria, answer) }
-        return Refinements.create(method, refinements) to solutionRefinements
-    }
-
-    private fun refineSolution(solution: PredicateState): List<SolutionRefinement> {
-        val calls = PredicateCollector.collectIsInstance<CallPredicate>(solution)
-        if (calls.isEmpty()) return emptyList()
-        if (calls.size > 1) TODO("Too many calls to resolve")
-        val call = calls.last()
-        val callPrecondition = refineSolutionIteration(solution, call)
-        val callPostCondition = solution
-        return listOf(SolutionRefinement(call, callPrecondition, callPostCondition))
-    }
-
-    data class SolutionRefinement(val call: CallPredicate, val precondition: PredicateState, val postCondition: PredicateState)
-
-    private fun refineSolutionIteration(solution: PredicateState, call: CallPredicate): PredicateState {
-        val methodState = psa.builder(call.calledMethod).methodState ?: TODO("No state for method ${call.calledMethod}")
-        val callArguments = VariableCollector().apply { transform(call.call) }.variables.toList()
-        val (solutionThis, solutionOtherArgs) = collectArguments(solution)
-        val arguments = solutionOtherArgs.values + callArguments + listOfNotNull(solutionThis)
-        val negatedSolution = solution.negateWRTStatePredicates().optimize()
-        val positiveState = MethodInliner(psa).apply(solution) // todo: inheritance
-        val negativeState = MethodInliner(psa).apply(negatedSolution)
-        val solverResult = Z3FixpointSolver(cm.type).refineWithFixpointSolver(positiveState, negativeState, arguments)
-        val result = when (solverResult) {
-            is FixpointResult.Sat -> solverResult.result.first()
-            is FixpointResult.Unknown -> {
-                log.error("Unknown: ${solverResult.reason}")
-                falseState()
-            }
-            is FixpointResult.Unsat -> {
-                log.error("Unsat: ${solverResult.core.contentToString()}")
-                falseState()
-            }
-        }
-        return result
+        return Refinements.create(method, refinements)
     }
 
     private fun queryFixpointSolver(state: PredicateState, normal: PredicateState, exceptions: List<PredicateState>, ignoredCalls: Set<CallPredicate>): List<PredicateState> =

@@ -250,14 +250,14 @@ class ConcolicStateBuilder(val cm: ClassManager) {
             val lhv = mkNewValue(inst)
             val dimensions = inst.dimensions.map { mkValue(it) }
 
-            lhv.new(dimensions)
+            lhv.new(dimensions, inst)
         }
     }
 
     fun buildNewInst(inst: NewInst): List<Predicate> = listOf {
         state(inst.location) {
             val lhv = mkNewValue(inst)
-            lhv.new()
+            lhv.new(inst)
         }
     }
 

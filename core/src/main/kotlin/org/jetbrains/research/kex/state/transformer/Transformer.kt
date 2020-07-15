@@ -38,7 +38,7 @@ interface Transformer<T : Transformer<T>> {
             is ChoiceState -> transformChoice(argument) as T
             is ChainState -> transformChain(argument) as T
             is BasicState -> transformBasic(argument) as T
-            is ImpliesState -> transformImplies(argument) as T
+            is SwitchState -> transformSwitch(argument) as T
             else -> unreachable { log.error("No PredicateState transformer for $argument") }
         }
 
@@ -102,7 +102,7 @@ interface Transformer<T : Transformer<T>> {
             is ChoiceState -> transformChoiceState(argument) as T
             is ChainState -> transformChainState(argument) as T
             is BasicState -> transformBasicState(argument) as T
-            is ImpliesState -> transformImpliesState(argument) as T
+            is SwitchState -> transformSwitchState(argument) as T
             else -> unreachable { log.error("No PredicateState transformer for $argument") }
         }
 
@@ -176,13 +176,13 @@ interface Transformer<T : Transformer<T>> {
     fun transformChain(ps: ChainState): PredicateState = ps.fmap { e -> transformBase(e) }
     fun transformChoice(ps: ChoiceState): PredicateState = ps.fmap { e -> transformBase(e) }
     fun transformNegation(ps: NegationState): PredicateState = ps.fmap { e -> transformBase(e) }
-    fun transformImplies(ps: ImpliesState): PredicateState = ps.fmap { e -> transformBase(e) }
+    fun transformSwitch(ps: SwitchState): PredicateState = ps.fmap { e -> transformBase(e) }
 
     fun transformBasicState(ps: BasicState): PredicateState = ps
     fun transformChainState(ps: ChainState): PredicateState = ps
     fun transformChoiceState(ps: ChoiceState): PredicateState = ps
     fun transformNegationState(ps: NegationState): PredicateState = ps
-    fun transformImpliesState(ps: ImpliesState): PredicateState = ps
+    fun transformSwitchState(ps: SwitchState): PredicateState = ps
 
     fun transform(predicate: Predicate) = transformBase(predicate)
     fun transformBase(predicate: Predicate): Predicate {

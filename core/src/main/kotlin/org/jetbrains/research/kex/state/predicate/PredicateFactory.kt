@@ -8,6 +8,7 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.TermBuilder
 import org.jetbrains.research.kfg.ir.Location
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 
 object PredicateFactory {
     fun getBoundStore(ptr: Term, bound: Term, type: PredicateType = PredicateType.State(), location: Location = Location()) =
@@ -27,15 +28,15 @@ object PredicateFactory {
 
     fun getLoad(lhv: Term, loadTerm: Term, location: Location = Location()) = getEquality(lhv, loadTerm, location = location)
 
-    fun getNew(lhv: Term, type: PredicateType = PredicateType.State(), location: Location = Location()) =
-            NewPredicate(lhv, type, location)
+    fun getNew(lhv: Term, instruction: Instruction, type: PredicateType = PredicateType.State(), location: Location = Location()) =
+            NewPredicate(lhv, instruction, type, location)
 
-    fun getNewArray(lhv: Term, dimensions: List<Term>, type: PredicateType = PredicateType.State(), location: Location = Location()): Predicate {
+    fun getNewArray(lhv: Term, dimensions: List<Term>, instruction: Instruction, type: PredicateType = PredicateType.State(), location: Location = Location()): Predicate {
         var current = lhv.type
         dimensions.forEach { _ ->
             current = (current as? KexArray)?.element ?: unreachable { log.error("Trying to create new array predicate with non-array type") }
         }
-        return NewArrayPredicate(lhv, dimensions, current, type, location)
+        return NewArrayPredicate(lhv, dimensions, current, instruction, type, location)
     }
 
     fun getEquality(lhv: Term, rhv: Term, type: PredicateType = PredicateType.State(), location: Location = Location()) =
@@ -109,8 +110,8 @@ abstract class PredicateBuilder : TermBuilder() {
     infix fun Boolean.inequality(other: Term) =
             pf.getInequality(tf.getBool(this), other, this@PredicateBuilder.type, location)
 
-    fun Term.new() = pf.getNew(this, this@PredicateBuilder.type, location)
-    fun Term.new(dimensions: List<Term>) = pf.getNewArray(this, dimensions, this@PredicateBuilder.type, location)
+    fun Term.new(instruction: Instruction) = pf.getNew(this, instruction, this@PredicateBuilder.type, location)
+    fun Term.new(dimensions: List<Term>, instruction: Instruction) = pf.getNewArray(this, dimensions, instruction, this@PredicateBuilder.type, location)
 
     class Assume(override val location: Location = Location()) : PredicateBuilder() {
         override val type get() = PredicateType.Assume()

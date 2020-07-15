@@ -128,7 +128,6 @@ inline fun choice(vararg builders: StateBuilder.() -> Unit): PredicateState{
 }
 
 operator fun PredicateState.not() = NegationState(this)
-infix fun PredicateState.implies(other: PredicateState): PredicateState = ImpliesState(this, other)
 
 @BaseType("State")
 @Serializable

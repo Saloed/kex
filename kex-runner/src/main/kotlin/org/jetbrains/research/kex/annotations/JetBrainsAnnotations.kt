@@ -15,6 +15,9 @@ import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.wrap
+import org.jetbrains.research.kfg.ir.value.StringName
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
+import org.jetbrains.research.kfg.ir.value.instruction.NewInst
 
 @AnnotationFunctionality("org.jetbrains.annotations.Range")
 class Range(val from: Long, val to: Long) : AnnotationInfo() {
@@ -142,8 +145,9 @@ class Contract(val value: String = ""/*, pure: Boolean = false*/) : AnnotationIn
                     }
                     argUnion equality accumulator
                 }
+                val instruction = NewInst(StringName("New statement insertion"), call.method.returnType)
                 result += listOf(
-                        path { argUnion equality true }.wrap() + state { returnTerm.new() },
+                        path { argUnion equality true }.wrap() + state { returnTerm.new(instruction) },
                         path { argUnion equality false }.wrap()
                 )
             }

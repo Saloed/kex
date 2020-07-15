@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.state.transformer
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.ConstBoolTerm
 import org.jetbrains.research.kex.state.term.term
 
@@ -23,7 +24,7 @@ class Optimizer : Transformer<Optimizer> {
     override fun transformBasicState(ps: BasicState): PredicateState = when {
         ps.evaluatesToFalse -> falseState()
         ps.evaluatesToTrue -> trueState()
-        else -> ps.filterNot { it is ConstantPredicate }
+        else -> ps.filterNot { it is ConstantPredicate }.simplify()
     }
 
     override fun transformNegation(ps: NegationState): PredicateState {
@@ -59,13 +60,13 @@ class Optimizer : Transformer<Optimizer> {
     }
 
     private fun mergeChain(first: PredicateState, second: PredicateState): PredicateState = when {
-        first is BasicState && second is BasicState -> BasicState(first.predicates + second.predicates)
+        first is BasicState && second is BasicState -> makeBasic(first.predicates + second.predicates)
         first is ChainState && first.curr is BasicState && second is BasicState -> {
-            val merged = BasicState(first.curr.predicates + second.predicates)
+            val merged = makeBasic(first.curr.predicates + second.predicates)
             ChainState(first.base, merged)
         }
         first is BasicState && second is ChainState && second.base is BasicState -> {
-            val merged = BasicState(first.predicates + second.base.predicates)
+            val merged = makeBasic(first.predicates + second.base.predicates)
             ChainState(merged, second.curr)
         }
         else -> ChainState(first, second)
@@ -80,4 +81,6 @@ class Optimizer : Transformer<Optimizer> {
          }
         else -> choices
     }.let { ChoiceState(it) }
+
+    private fun makeBasic(predicates: List<Predicate>) = BasicState(predicates).simplify()
 }

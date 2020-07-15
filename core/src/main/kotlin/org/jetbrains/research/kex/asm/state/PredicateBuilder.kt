@@ -137,12 +137,12 @@ class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
             val lhv = value(inst)
             val dimensions = inst.dimensions.map { value(it) }
 
-            lhv.new(dimensions)
+            lhv.new(dimensions, inst)
         }
     }
 
     override fun visitNewInst(inst: NewInst) {
-        predicateMap[inst] = state(inst.location) { value(inst).new() }
+        predicateMap[inst] = state(inst.location) { value(inst).new(inst) }
     }
 
     override fun visitPhiInst(inst: PhiInst) {

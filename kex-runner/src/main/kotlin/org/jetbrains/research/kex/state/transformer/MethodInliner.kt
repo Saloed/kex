@@ -10,7 +10,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.Method
 
-class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransformer<MethodInliner> {
+open class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransformer<MethodInliner> {
     private val im = MethodManager.InlineManager
     override val builders = dequeOf(StateBuilder())
     private var inlineIndex = 0
@@ -29,17 +29,20 @@ class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransformer<M
 
         val mappings = im.methodArguments(predicate)
 
-        currentBuilder += prepareInlinedState(calledMethod, mappings) ?: return predicate
+        currentBuilder += prepareInlinedState(predicate, calledMethod, mappings) ?: return predicate
 
         return nothing()
     }
 
-    private fun prepareInlinedState(method: Method, mappings: Map<Term, Term>): PredicateState? {
+    open fun methodState(method: Method): PredicateState? = psa.builder(method).methodState
+
+    open fun prepareInlinedState(call: CallPredicate, method: Method, mappings: Map<Term, Term>): PredicateState? {
         if (method.isEmpty()) return null
+        val endState = methodState(method) ?: return null
+        return renameTermsAfterInlining(call, endState, mappings)
+    }
 
-        val builder = psa.builder(method)
-        val endState = builder.methodState ?: return null
-
-        return TermRenamer("inlined${inlineIndex++}", mappings).apply(endState)
+    open fun renameTermsAfterInlining(call: CallPredicate, state: PredicateState, mappings: Map<Term, Term>): PredicateState {
+        return TermRenamer("inlined${inlineIndex++}", mappings).apply(state)
     }
 }

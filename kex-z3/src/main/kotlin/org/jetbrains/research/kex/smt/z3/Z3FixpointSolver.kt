@@ -178,7 +178,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, nonMemoryArgs: List<Term>): FixpointResult {
+    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>): FixpointResult {
         val callPredicateConverter = CallPredicateConverterWithMemory()
         return CallCtx(tf, callPredicateConverter).use { ctx ->
             ContextMemoryInitializer(negative, positive).apply(ctx.z3Context)
@@ -188,15 +188,15 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
             log.debug("Refine:\nPositive:\n$z3positive\nQuery:\n$z3query")
 
-            val declarationExprs = ctx.knownDeclarations.map { it.expr }
-            val nonMemoryArgsDeclarations = nonMemoryArgs.map { term ->
+            val additionalArgsDeclarations = additionalArgs.map { term ->
                 val expr = ctx.converter.convert(term, ctx.ef, ctx.z3Context).expr
                 val declaration = ctx.knownDeclarations.first { it.expr == expr }
                 term to declaration
             }.toMap()
-            val argumentDeclarations = ctx.knownDeclarations.filter { it.isMemoryOrCall() } + nonMemoryArgsDeclarations.values
+            val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).toSet().toList()
+            val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).toSet().toList()
             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative)
-            nonMemoryArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
+            additionalArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
 
             log.debug("$argumentDeclarations")
 

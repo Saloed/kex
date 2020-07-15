@@ -57,15 +57,20 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
 
 
     fun convert(ps: PredicateState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ = when (ps) {
-#set($states = ["Basic", "Chain", "Choice", "Negation", "Implies"])
+#set($states = ["Basic", "Chain", "Choice", "Negation", "Switch"])
 #foreach($state in $states)
         is ${state}State -> convert(ps, ef, ctx, extractPath)
 #end
         else -> unreachable { log.error("Unknown PS type: ${ ps }") }
     }
 
-    fun convert(impl: ImpliesState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ =
-        convert(impl.base, ef, ctx) implies convert(impl.curr, ef, ctx)
+    fun convert(switch: SwitchState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ {
+        val cases = switch.cases
+                .mapKeys { (key, _) -> convert(key, ef, ctx, extractPath) }
+                .mapValues { (_, value) -> convert(value, ef, ctx, extractPath) }
+        val default = convert(switch.default, ef, ctx, extractPath)
+        return ef.switch(cases, default)
+    }
 
     fun convert(basic: BasicState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ =
         basic.predicates.fold(ef.makeTrue()) { acc, predicate -> acc and convert(predicate, ef, ctx) }
@@ -163,7 +168,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val totalSize = newarray.dimentions.fold(1) { acc: Int, term: Term ->
             acc * ((term as? ConstIntTerm)?.value ?: defaultAllocSize)
         }
-        val ptr = ctx.getLocalArray(memspace, totalSize, elementSize, KexArray(newarray.elementType, memspace))
+        val ptr = ctx.getLocalArray(memspace, totalSize, elementSize, newarray, KexArray(newarray.elementType, memspace))
         return lhv eq ptr
     }
 
@@ -171,7 +176,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val memspace = new.lhv.memspace
         val lhv = convert(new.lhv, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `new`") }
         val elementSize = ${factory}.getTypeSize(new.lhv.type)
-        return lhv eq ctx.getLocalPtr(memspace, elementSize, new.lhv.type)
+        return lhv eq ctx.getLocalPtr(memspace, elementSize, new, new.lhv.type)
     }
 
 #set($terms = ["Argument", "ArrayIndex", "ArrayLength", "ArrayLoad", "Binary", "Call", "Cast", "Cmp",

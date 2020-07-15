@@ -1,5 +1,9 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContext
+
+import org.jetbrains.research.kex.state.predicate.NewArrayPredicate
+import org.jetbrains.research.kex.state.predicate.NewPredicate
+
 import kotlin.math.max
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
@@ -54,14 +58,16 @@ class $self : ${solver}SMTContext {
                 id to VersionedMemory.merge(name, default.get(id), alternatives)
             }.toMap()
 
-            if (choices.any { it.value.localPointer != default.localPointer } || choices.any { it.value.localTypes != default.localTypes }) {
+            if (choices.any { it.value.localPointer != default.localPointer }
+                || choices.any { it.value.localTypes != default.localTypes }
+                || choices.any { it.value.localObjPointers != default.localObjPointers }) {
                 return unreachable("Incosistent local ptr info")
             }
             if (choices.any { it.value.typeIndex != default.typeIndex } || choices.any { it.value.typeMap != default.typeMap }) {
                 return unreachable("Incosistent type info")
             }
 
-            return $self(default.factory, default.localPointer, default.staticPointer, memArrays, default.localTypes, default.typeIndex, default.typeMap)
+            return $self(default.factory, default.localPointer, default.staticPointer, memArrays, default.localObjPointers, default.localTypes, default.typeIndex, default.typeMap)
         }
 
         fun create(factory: $factory) = $self(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
@@ -70,6 +76,7 @@ class $self : ${solver}SMTContext {
 
     val factory: $factory
     private val localPointer: AtomicInteger
+    private val localObjPointers: MutableMap < Any, Int >
     private val staticPointer: AtomicInteger
     private val localTypes: MutableMap < Int, KexType >
     private val typeIndex: AtomicInteger
@@ -79,12 +86,14 @@ class $self : ${solver}SMTContext {
 
     constructor(factory: $factory, localPointer: AtomicInteger, staticPointer: AtomicInteger,
                 memories: Map< String, VersionedMemory >,
+                localObjPointers: MutableMap < Any, Int >,
                 localTypes: MutableMap< Int, KexType >,
                 typeIndex: AtomicInteger, typeMap: MutableMap< KexType, Int >) {
         this.factory = factory
         this.localPointer = localPointer
         this.staticPointer = staticPointer
         this.memories = memories.toMutableMap()
+        this.localObjPointers = localObjPointers
         this.localTypes = localTypes
 
         this.typeIndex = typeIndex
@@ -94,9 +103,9 @@ class $self : ${solver}SMTContext {
     }
 
     constructor(factory: $factory, localPointer: Int, staticPointer: Int)
-                 : this(factory, AtomicInteger(localPointer), AtomicInteger(staticPointer), mapOf(), hashMapOf(), AtomicInteger(BASE_TYPE_IDX), hashMapOf())
+                 : this(factory, AtomicInteger(localPointer), AtomicInteger(staticPointer), mapOf(), hashMapOf(), hashMapOf(), AtomicInteger(BASE_TYPE_IDX), hashMapOf())
 
-    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories, ctx.localTypes, ctx.typeIndex, ctx.typeMap)
+    constructor(ctx: $self) : this(ctx.factory, ctx.localPointer, ctx.staticPointer, ctx.memories, ctx.localObjPointers, ctx.localTypes, ctx.typeIndex, ctx.typeMap)
 
     constructor() : this($factory(), 0, 0)
 
@@ -138,15 +147,15 @@ class $self : ${solver}SMTContext {
         setProperties(memspace, name, mem)
     }
 
-       @Suppress("UNUSED_PARAMETER")
-    fun getLocalPtr(memspace: Int, size: TypeSize, type: KexType): Ptr_ {
-        val ptr = localPointer.getAndAdd(size.int)
+    @Suppress("UNUSED_PARAMETER")
+    fun getLocalPtr(memspace: Int, size: TypeSize, obj: NewPredicate, type: KexType): Ptr_ {
+        val ptr = localObjPointers.getOrPut(obj) { localPointer.getAndAdd(size.int) }
         localTypes[ptr] = type
         return factory.makePtrConst(ptr)
     }
 
-    fun getLocalArray(memspace: Int, length: Int, elementSize: TypeSize, type: KexType): Ptr_ {
-        val ptr = localPointer.getAndAdd(length * elementSize.int)
+    fun getLocalArray(memspace: Int, length: Int, elementSize: TypeSize, obj: NewArrayPredicate, type: KexType): Ptr_ {
+        val ptr = localObjPointers.getOrPut(obj) { localPointer.getAndAdd(length * elementSize.int) }
         localTypes[ptr] = type
         return factory.makePtrConst(ptr).also {
             writeProperty(it, memspace, "length", factory.makeIntConst(length))
