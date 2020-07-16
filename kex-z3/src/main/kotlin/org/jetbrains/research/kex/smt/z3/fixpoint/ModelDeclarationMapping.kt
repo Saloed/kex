@@ -1,12 +1,10 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.memspace
-import org.jetbrains.research.kex.state.wrap
 import org.jetbrains.research.kex.util.join
 
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
@@ -43,12 +41,14 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         terms[declaration] = term
     }
 
-    fun getTerm(idx: Int): TermWithAxiom {
+    fun getTerm(idx: Int, callDependencies: MutableSet<TermDependency>): TermWithAxiom {
         val declaration = declarations[idx]
         if (declaration is DeclarationTracker.Declaration.Call) {
             val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
             if (declaration is DeclarationTracker.Declaration.Call.CallResult) {
-                return TermWithAxiom(callInfo.predicate.lhv, callInfo.predicate.wrap())
+                val term = callInfo.predicate.lhv
+                callDependencies.add(TermDependency(term, callInfo.predicate, DependencyType.RETURN_VALUE))
+                return TermWithAxiom(term)
             }
             TODO("Term for unknown call")
         }

@@ -24,13 +24,6 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     abstract fun analyze(): Refinements
 
-    fun Transformation.applyAdapters() {
-        +Optimizer()
-        +ConstantPropagator
-        +BoolTypeAdapter(cm.type)
-        +Optimizer()
-    }
-
     open fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
 
     open fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
@@ -52,7 +45,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
             else -> ChoiceState(listOf(preparedState) + interestingTopChoices)
         }
         return transform(state) {
-            applyAdapters()
+            applyAdapters(this@MethodAnalyzer)
         }
     }
 
@@ -150,6 +143,16 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         val callMap = callPredicates.zip(callInstructions).toMap()
         return state to callMap
     }
+
     override fun toString() = "Analyzer: $method"
+
+    companion object {
+        fun Transformation.applyAdapters(methodAnalyzer: MethodAnalyzer) {
+            +Optimizer()
+            +ConstantPropagator
+            +BoolTypeAdapter(methodAnalyzer.cm.type)
+            +Optimizer()
+        }
+    }
 
 }

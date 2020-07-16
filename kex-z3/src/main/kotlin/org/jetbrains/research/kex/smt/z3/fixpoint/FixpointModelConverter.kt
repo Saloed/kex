@@ -21,16 +21,42 @@ import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
 
+enum class DependencyType {
+    RETURN_VALUE, MEMORY;
+}
+
+data class TermDependency(val term: Term, val call: CallPredicate, val type: DependencyType)
+
+data class RecoveredModel(val state: PredicateState, val callDependencies: Set<TermDependency>) {
+    val isFinal: Boolean
+        get() = callDependencies.isEmpty()
+
+    fun finalStateOrException(): PredicateState = when {
+        isFinal -> state
+        else -> throw IllegalStateException("State is not final")
+    }
+
+    companion object {
+        fun error() = RecoveredModel(falseState(), emptySet())
+    }
+}
+
 class FixpointModelConverter(
         private val mapping: ModelDeclarationMapping,
         private val tf: TypeFactory,
         private val z3Context: Z3Context
 ) {
 
-    fun apply(expr: Expr): PredicateState = expr.simplify()
-            .let { convert(it) }
-            .let { InstanceOfCorrector(z3Context).apply(it) }
-            .simplify()
+    private var callDependencies = hashSetOf<TermDependency>()
+
+    fun apply(expr: Expr): RecoveredModel {
+        callDependencies = hashSetOf()
+        val state = expr.simplify()
+                .let { convert(it) }
+                .let { InstanceOfCorrector(z3Context).apply(it) }
+                .simplify()
+        return RecoveredModel(state, callDependencies.toSet())
+    }
 
     private object UnknownType : KexType() {
         override val name: String = "Unknown"
@@ -108,7 +134,7 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertVariableTerm(expr: Expr): TermWithAxiom = mapping.getTerm(expr.index)
+    private fun convertVariableTerm(expr: Expr): TermWithAxiom = mapping.getTerm(expr.index, callDependencies)
     private fun convert(expr: BoolExpr): PredicateState = when {
         expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
         expr.isOr -> ChoiceState(expr.args.map { convert(it) }).simplify()
@@ -207,7 +233,8 @@ class FixpointModelConverter(
         }
         val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
         val loadTerm = obj.binaryOperation(fieldLoad) { _, load -> load }
-        return TermWithAxiom(ConstBoolTerm(true), callInfo.predicate.wrap()).binaryOperation(loadTerm) { _, load -> load }
+        callDependencies.add(TermDependency(loadTerm.term, callInfo.predicate, DependencyType.MEMORY))
+        return loadTerm
     }
 
     private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {

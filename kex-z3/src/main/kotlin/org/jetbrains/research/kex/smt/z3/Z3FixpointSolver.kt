@@ -5,7 +5,6 @@ import com.microsoft.z3.*
 import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kex.state.term.Term
@@ -217,7 +216,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>): FixpointResult {
+    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
         val callPredicateConverter = CallPredicateConverterWithMemory()
         return CallCtx(tf, callPredicateConverter).use { ctx ->
             ContextMemoryInitializer(state, query, *positivePaths.toTypedArray()).apply(ctx.z3Context)
@@ -231,11 +230,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
             val calls = callPredicateConverter.getCallsInfo()
-            val ignoredCallIds = calls.filter { it.predicate in ignoredCalls }.map { it.index }.toSet()
             val declarationExprs = ctx.knownDeclarations.map { it.expr }
-            val argumentDeclarations = ctx.knownDeclarations
-                    .filter { it.isValuable() }
-                    .filterNot { it is DeclarationTracker.Declaration.Call && it.index in ignoredCallIds }
+            val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
             declarationMapping.initializeCalls(calls)
 
@@ -326,10 +322,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             model: Model,
             mapping: ModelDeclarationMapping,
             predicates: List<Predicate>
-    ): List<PredicateState> {
+    ): List<RecoveredModel> {
         val modelPredicates = model.funcDecls.map { Predicate.getPredicateIdx("${it.name}") to it }.toMap()
         return predicates.map {
-            val predicate = modelPredicates[it.idx] ?: return@map falseState()
+            val predicate = modelPredicates[it.idx] ?: return@map RecoveredModel.error()
             val predicateInterpretation = model.getFuncInterp(predicate)
             val modelConverter = FixpointModelConverter(mapping, tf, z3Context)
             if (predicateInterpretation.numEntries != 0) TODO("Model with entries")

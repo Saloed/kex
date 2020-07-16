@@ -15,7 +15,7 @@ open class MethodInliner(val psa: PredicateStateAnalysis) : RecollectingTransfor
     override val builders = dequeOf(StateBuilder())
     private var inlineIndex = 0
 
-    protected class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
+    class TermRenamer(val suffix: String, val remapping: Map<Term, Term>) : Transformer<TermRenamer> {
         override fun transformTerm(term: Term): Term = remapping[term] ?: when (term) {
             is ValueTerm, is ArgumentTerm, is ReturnValueTerm -> term { value(term.type, "${term.name}.$suffix") }
             else -> term

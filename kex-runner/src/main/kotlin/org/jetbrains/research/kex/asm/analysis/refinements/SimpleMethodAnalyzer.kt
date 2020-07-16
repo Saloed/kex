@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.RefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
@@ -33,17 +34,12 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
 
         val allSources = refinementSources.merge(nestedRefinementSources).fmap { it.optimize() }
         val allNormal = ChainState(normalPaths, nestedNormal).optimize()
-//        val allNormal = allSources.fmap { it.negateWRTStatePredicates() }.fmap { normalPaths + it }.fmap { it.optimize() }
 
         val (spacedState, spacesSources, spacedNormal) = applyMemspacing(state, allSources, allNormal)
 
         log.info("Analyze: $method")
         log.debug("State:\n$spacedState\nExceptions:\n$spacesSources\nNormal:\n$spacedNormal")
-
-        val (trivialRefinements, sourcesToQuery) = searchForDummySolution(spacedNormal, spacesSources)
-        val otherRefinements = queryRefinementSources(spacedState, spacedNormal, sourcesToQuery)
-
-        return Refinements.create(method, trivialRefinements.value + otherRefinements.value).fmap { transform(it) { applyAdapters() } }
+        return RefinementSourcesAnalyzer(this).analyze(spacedState, spacedNormal, spacesSources)
     }
 
     override fun findRefinement(method: Method): Refinements {
@@ -142,59 +138,4 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
                 .toSet()
     }
 
-    private fun searchForDummySolution(normals: PredicateState, exceptions: RefinementSources): Pair<Refinements, RefinementSources> {
-        val sourcesToQuery = mutableListOf<RefinementSource>()
-        val dummyRefinements = mutableListOf<Refinement>()
-        for (source in exceptions.value) {
-            val dummyResult = analyzeForDummyResult(normals, source.condition)
-            if (dummyResult == null) {
-                sourcesToQuery.add(source)
-                continue
-            }
-            dummyRefinements.add(Refinement.create(source.criteria, dummyResult))
-        }
-        return Refinements.create(method, dummyRefinements) to RefinementSources.create(sourcesToQuery)
-    }
-
-    private fun analyzeForDummyResult(normalPaths: PredicateState, exceptionPaths: PredicateState): PredicateState? = when {
-        normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToFalse -> falseState()
-        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToTrue -> trueState()
-        normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToTrue -> {
-            log.error("Normal and Exception paths are always true")
-            falseState()
-        }
-        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToFalse -> {
-            log.error("Normal and Exception paths are always false")
-            falseState()
-        }
-        else -> null
-    }
-
-    private fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources): Refinements {
-        if (sources.value.isEmpty()) return Refinements.unknown(method)
-        val conditions = sources.value.map { it.condition }
-        val fixpointAnswer = queryFixpointSolver(state, normals, conditions)
-//        val fixpointAnswer = conditions.map { src -> queryFixpointSolver(state, normals, listOf(src)).first() }
-        val refinements = sources.value.zip(fixpointAnswer).map { (src, answer) -> Refinement.create(src.criteria, answer) }
-        return Refinements.create(method, refinements)
-    }
-
-    private fun queryFixpointSolver(state: PredicateState, normal: PredicateState, exceptions: List<PredicateState>): List<PredicateState> =
-            try {
-                val result = Z3FixpointSolver(cm.type).mkFixpointQuery(state, exceptions, normal)
-                when (result) {
-                    is FixpointResult.Sat -> result.result
-                    is FixpointResult.Unknown -> {
-                        log.error("Unknown: ${result.reason}")
-                        exceptions.map { falseState() }
-                    }
-                    is FixpointResult.Unsat -> {
-                        log.error("Unsat: ${result.core.contentToString()}")
-                        exceptions.map { falseState() }
-                    }
-                }
-            } catch (ex: QueryCheckStatus.FixpointQueryException) {
-                log.error("Bad fixpoint query: ${ex.status}")
-                exceptions.map { falseState() }
-            }
 }

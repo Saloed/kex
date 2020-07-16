@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.RecursiveRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
 import org.jetbrains.research.kex.ktype.KexArray
@@ -28,22 +29,6 @@ import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 import org.jetbrains.research.kfg.ir.value.instruction.CallOpcode
 
 class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: MethodRefinements, method: Method) : MethodAnalyzer(cm, psa, mr, method) {
-
-    private fun methodRecursiveCallTraces(): List<List<CallInst>> {
-        fun go(method: Method, methodTrace: List<Method>, trace: List<CallInst>): List<List<CallInst>> =
-                when (method) {
-                    this.method -> listOf(trace)
-                    in methodTrace -> emptyList()
-                    else -> MethodCallCollector.calls(cm, method)
-                            .flatMap { go(it.method, methodTrace + listOf(method), trace + listOf(it)) }
-                            .filter { it.isNotEmpty() }
-                }
-
-        return MethodCallCollector.calls(cm, method)
-                .flatMap { go(it.method, listOf(method), listOf(it)) }
-                .filter { it.isNotEmpty() }
-    }
-
 
     override fun analyze(): Refinements {
         log.info("Analyze recursive method: $method")
@@ -73,11 +58,8 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         }
 
         log.debug("State:\n${afterMemspace.state}\nRecursion:\n${afterMemspace.recursion}\nNormal:\n${afterMemspace.normal}\nSources:\n${afterMemspace.sources}")
-
-        val refinements = afterMemspace.sources.value.map {
-            computeRefinement(afterMemspace.state, rootCall, recursiveCalls, afterMemspace.recursion, afterMemspace.normal, it)
-        }
-        return Refinements.create(method, refinements).fmap { transform(it) { applyAdapters() } }
+        return RecursiveRefinementSourcesAnalyzer(this)
+                .analyze(afterMemspace.state, afterMemspace.normal, afterMemspace.sources, rootCall, recursiveCalls, afterMemspace.recursion)
     }
 
     private data class MemspacingArguments(val state: PredicateState, val recursion: PredicateState, val normal: PredicateState, val sources: RefinementSources)
@@ -85,30 +67,6 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     private fun PredicateState.filterRecursiveCalls(): PredicateState =
             filterNot { it is CallPredicate && (it.callTerm as CallTerm).method == method }
 
-    private fun computeRefinement(
-            state: PredicateState,
-            rootCall: CallPredicate,
-            recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
-            recursionPaths: PredicateState,
-            normalPaths: PredicateState,
-            refinementSource: RefinementSource
-    ): Refinement {
-        val solver = Z3FixpointSolver(cm.type)
-        val refinement: PredicateState = try {
-            val result = solver.analyzeRecursion(state, recursiveCalls, rootCall, recursionPaths, refinementSource.condition, normalPaths)
-            when (result) {
-                is FixpointResult.Sat -> result.result.first()
-                else -> {
-                    if (result is FixpointResult.Unknown) log.error("Unknown: ${result.reason}")
-                    falseState()
-                }
-            }
-        } catch (ex: QueryCheckStatus.FixpointQueryException) {
-            log.error("Bad fixpoint query: ${ex.status}")
-            falseState()
-        }
-        return Refinement.create(refinementSource.criteria, refinement)
-    }
 
     private fun createRootCall(): CallPredicate = state {
         val arguments = method.argTypes.withIndex().map { (index, argType) ->
@@ -206,6 +164,22 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         val state = methodState ?: BasicState()
         return refinement to state
     }
+
+    private fun methodRecursiveCallTraces(): List<List<CallInst>> {
+        fun go(method: Method, methodTrace: List<Method>, trace: List<CallInst>): List<List<CallInst>> =
+                when (method) {
+                    this.method -> listOf(trace)
+                    in methodTrace -> emptyList()
+                    else -> MethodCallCollector.calls(cm, method)
+                            .flatMap { go(it.method, methodTrace + listOf(method), trace + listOf(it)) }
+                            .filter { it.isNotEmpty() }
+                }
+
+        return MethodCallCollector.calls(cm, method)
+                .flatMap { go(it.method, listOf(method), listOf(it)) }
+                .filter { it.isNotEmpty() }
+    }
+
 
     private fun findPathsLeadsToRecursion(calls: List<CallInst>, psb: PredicateStateBuilder) = calls
             .mapNotNull { psb.getInstructionState(it) }
