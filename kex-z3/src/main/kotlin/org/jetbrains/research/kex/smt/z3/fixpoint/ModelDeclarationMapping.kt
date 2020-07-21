@@ -5,7 +5,6 @@ import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.collectArguments
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.memspace
-import org.jetbrains.research.kex.util.join
 
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
     private val terms = hashMapOf<DeclarationTracker.Declaration, Term>()
@@ -27,7 +26,7 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
     fun initializeArrays(vararg ps: PredicateState) {
         val memories = declarations.filterIsInstance<DeclarationTracker.Declaration.Memory>()
         if (memories.isEmpty()) return
-        val pointers = ps.map { collectPointers(it) }.join { acc, curr -> acc + curr }
+        val pointers = ps.map { collectPointers(it) }.reduce { acc: Set<Term>, curr: Set<Term> -> acc + curr }
         val memoryPointers = memories.map { mem -> pointers.filter { it.memspace == mem.memspace } }
         val memoriesUnderArray = memoryPointers.zip(memories).filter { it.first.all { it is ArrayIndexTerm } }.map { it.second }
         arrayMemories.addAll(memoriesUnderArray)
@@ -63,7 +62,7 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
     private fun collectArguments(ps: Array<out PredicateState>): Pair<ValueTerm?, Map<Int, ArgumentTerm>> {
         val collected = ps.map { collectArguments(it) }
         val thisArg = collected.mapNotNull { it.first }.firstOrNull()
-        val args = collected.map { it.second }.join { acc, current -> acc + current }
+        val args = collected.map { it.second }.reduce { acc: Map<Int, ArgumentTerm>, current: Map<Int, ArgumentTerm> -> acc + current }
         return thisArg to args
     }
 

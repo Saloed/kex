@@ -66,7 +66,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
     }
 
     private fun inlineRefinements(state: PredicateState): Pair<PredicateState, RefinementSources> {
-        val calls = PredicateCollector.collectIsInstance<CallPredicate>(state).toSet().toList()
+        val calls = PredicateCollector.collectIsInstance<CallPredicate>(state).distinct()
         val refinements = calls.map { findRefinement(it.calledMethod) }
         val normalPath = buildNormalPath(calls, refinements)
         val exceptionalPaths = buildRefinementSources(calls, refinements)

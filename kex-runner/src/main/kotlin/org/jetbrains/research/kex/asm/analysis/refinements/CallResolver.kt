@@ -1,6 +1,8 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.collection.dequeOf
+import com.abdullin.kthelper.logging.debug
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
@@ -19,7 +21,6 @@ import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ir.Method
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager) {
-
 
     interface Argument<T : Argument<T>> {
         fun transform(transformer: (PredicateState) -> PredicateState): T
@@ -58,6 +59,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val argument = SolverArgument(positiveState, negativeState)
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
+            log.debug(solverArg)
             FixpointSolver(methodAnalyzer.cm).querySingle { refineWithFixpointSolver(solverArg.positive, solverArg.negative, arguments) }
         }
         val finalResult = postprocessState(result, backwardMapping)
@@ -144,6 +146,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     private data class SolverArgument(val positive: PredicateState, val negative: PredicateState) : Argument<SolverArgument> {
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative))
+        override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
     }
 
     private class TermSuffixGenerator {

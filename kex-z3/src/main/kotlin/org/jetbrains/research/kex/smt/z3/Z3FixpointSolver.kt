@@ -185,19 +185,15 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
             val z3query = ctx.convert(negative).asAxiom() as BoolExpr
 
-            log.debug("Refine:\nPositive:\n$z3positive\nQuery:\n$z3query")
-
             val additionalArgsDeclarations = additionalArgs.map { term ->
                 val expr = ctx.converter.convert(term, ctx.ef, ctx.z3Context).expr
                 val declaration = ctx.knownDeclarations.first { it.expr == expr }
                 term to declaration
             }.toMap()
-            val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).toSet().toList()
-            val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).toSet().toList()
+            val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct()
+            val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).distinct()
             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative)
             additionalArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
-
-            log.debug("$argumentDeclarations")
 
             val predicate = Predicate(0)
             val predicateApplication = predicate.call(ctx, argumentDeclarations)
@@ -309,12 +305,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
         val status = check()
         when (status) {
-            Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
-            Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
             Status.SATISFIABLE -> {
                 val result = convertModel(model, mapper, predicates)
                 FixpointResult.Sat(result)
             }
+            Status.UNKNOWN -> FixpointResult.Unknown(reasonUnknown)
+            Status.UNSATISFIABLE -> FixpointResult.Unsat(unsatCore)
         }
     }
 

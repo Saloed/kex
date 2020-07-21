@@ -11,7 +11,6 @@ import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
 import org.jetbrains.research.kex.state.transformer.TermCollector
-import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.ConcreteClass
 import org.jetbrains.research.kfg.ir.Field
@@ -289,7 +288,7 @@ class FixpointModelConverter(
     private fun Term.instanceOf(cls: Class): Term = cls.allInheritors()
             .map { it.kexType }
             .map { term { tf.getInstanceOf(it, this@instanceOf) } }
-            .join { t1, t2 -> term { t1 or t2 } }
+            .reduce { t1: Term, t2: Term -> term { t1 or t2 } }
 
     private fun Class.allInheritors() = cm.concreteClasses.filter { it.isInheritorOf(this) }.toSet()
 

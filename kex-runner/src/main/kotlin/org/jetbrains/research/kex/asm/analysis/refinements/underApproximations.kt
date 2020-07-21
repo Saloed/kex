@@ -5,7 +5,6 @@ import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.util.join
 
 
 class MethodApproximationManager {
@@ -26,11 +25,14 @@ data class MethodUnderApproximations(val approximations: Set<MethodUnderApproxim
 
 class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApproximations>) : RecollectingTransformer<ApproximationInliner> {
     override val builders = dequeOf(StateBuilder())
+
+    @OptIn(ExperimentalStdlibApi::class)
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
         val transformedCall = super.transformCallPredicate(predicate)
         val approximation = approximations[transformedCall] ?: return transformedCall
         val cases = approximation.approximations.map { it.pre to it.post }.toMap()
-        val defaultCase = approximation.approximations.map { it.post.not() }.join(emptyState()) { a, b -> ChainState(a, b) }
+        val defaultCase = approximation.approximations.map { it.post.not() }
+                .reduceOrNull<PredicateState, PredicateState> { a, b -> ChainState(a, b) } ?: emptyState()
         currentBuilder += SwitchState(cases, ChainState(transformedCall.wrap(), defaultCase))
         return nothing()
     }

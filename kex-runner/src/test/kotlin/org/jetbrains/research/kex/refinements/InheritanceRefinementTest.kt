@@ -7,7 +7,6 @@ import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.withMemspace
-import org.jetbrains.research.kex.util.join
 import kotlin.test.Test
 
 class InheritanceRefinementTest : RefinementTest("Inheritance") {
@@ -129,19 +128,19 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
             val argument = arg(myList, 0).withMemspace(1)
             choice({
                 path {
-                    listOf(myList, myListA, myListA1).map { argument `is` it }.join<Term> { a, b -> a and b } equality const(true)
+                    listOf(myList, myListA, myListA1).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListA, myListA2).map { argument `is` it }.join<Term> { a, b -> a and b } equality const(true)
+                    listOf(myList, myListA, myListA2).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListB, myListB1).map { argument `is` it }.join<Term> { a, b -> a and b } equality const(true)
+                    listOf(myList, myListB, myListB1).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListB, myListB2).map { argument `is` it }.join<Term> { a, b -> a and b } equality const(true)
+                    listOf(myList, myListB, myListB2).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
                 }
             }) + choice({
                 path {

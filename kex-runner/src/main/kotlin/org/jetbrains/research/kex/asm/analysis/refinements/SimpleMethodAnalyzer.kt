@@ -7,13 +7,9 @@ import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
-import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.UnknownInstance
 import org.jetbrains.research.kfg.ir.Class
@@ -48,7 +44,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         val implementationsRefinements = implementations.map { super.findRefinement(it) }
         return zip(implementations, implementationsRefinements)
                 .map { (impl, reft) -> transformToMethodImplementation(method.`class`.kexType, impl, reft::fmap) }
-                .join { a, b -> a.merge(b) }
+                .reduce { a, b -> a.merge(b) }
     }
 
 

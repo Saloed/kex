@@ -1,11 +1,9 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
-import com.abdullin.kthelper.assert.asserted
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.transformer.optimize
-import org.jetbrains.research.kex.util.join
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.Type
 
@@ -124,7 +122,7 @@ private data class RefinementDataListImpl(override val value: List<RefinementDat
         val lhs = this.value.groupBy { it.criteria }
         val rhs = other.value.groupBy { it.criteria }
         val merged = (lhs.keys + rhs.keys).map {
-            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).join { a, b -> a.merge(b) }
+            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b) }
         }
         return RefinementDataListImpl(merged)
     }
@@ -166,7 +164,7 @@ private fun negatePsIgnoringStatePredicates(ps: PredicateState): PredicateState 
                 ChoiceState(listOf(notBase, ChainState(ps.base, notCurr)))
             }
         }
-        is ChoiceState -> ps.choices.map { negatePsIgnoringStatePredicates(it) }.join { ps1, ps2 -> ChainState(ps1, ps2) }
+        is ChoiceState -> ps.choices.map { negatePsIgnoringStatePredicates(it) }.reduce { ps1, ps2 -> ChainState(ps1, ps2) }
         else -> throw IllegalStateException("Unknown ps type $ps")
     }
 }
