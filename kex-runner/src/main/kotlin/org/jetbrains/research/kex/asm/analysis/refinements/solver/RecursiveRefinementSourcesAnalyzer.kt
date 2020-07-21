@@ -16,12 +16,13 @@ class RecursiveRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : Refin
             recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
             recursivePaths: PredicateState
     ): Refinements {
-        val refinements = sources.value.map {
-            val refinement = querySolver(
-                    query = { solver.analyzeRecursion(state, recursiveCalls, recursiveRootCall, recursivePaths, it.condition, correctPath) },
-                    onError = { listOf(RecoveredModel.error()) }
-            ).first().finalStateOrException()
-            Refinement.create(it.criteria, refinement)
+        val refinements = sources.value.map { source ->
+            val refinement = FixpointSolver(methodAnalyzer.cm)
+                    .querySingle(
+                            { analyzeRecursion(state, recursiveCalls, recursiveRootCall, recursivePaths, source.condition, correctPath) },
+                            { RecoveredModel.error() }
+                    ).finalStateOrException()
+            Refinement.create(source.criteria, refinement)
         }
         return createRefinements(refinements)
     }

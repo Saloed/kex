@@ -1,19 +1,20 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.collection.dequeOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.DependencyType
-import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.term.*
+import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.FieldTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ir.Method
 
@@ -56,8 +57,8 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val negativeState = preprocessState(negatedState, suffixGen, dependencies, forwardMapping)
         val argument = SolverArgument(positiveState, negativeState)
         val resolver = CallResolver(methodAnalyzer, approximationManager)
-        val result = resolver.callResolutionLoop(argument) {
-            queryFixpointSolver(it.positive, it.negative, arguments)
+        val result = resolver.callResolutionLoop(argument) { solverArg ->
+            FixpointSolver(methodAnalyzer.cm).querySingle { refineWithFixpointSolver(solverArg.positive, solverArg.negative, arguments) }
         }
         val finalResult = postprocessState(result, backwardMapping)
         approximationManager.update(call, MethodUnderApproximation(finalResult, state))
@@ -143,21 +144,6 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     private data class SolverArgument(val positive: PredicateState, val negative: PredicateState) : Argument<SolverArgument> {
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative))
-    }
-
-    private fun queryFixpointSolver(positive: PredicateState, negative: PredicateState, arguments: List<Term>): RecoveredModel {
-        val solverResult = Z3FixpointSolver(methodAnalyzer.cm.type).refineWithFixpointSolver(positive, negative, arguments)
-        return when (solverResult) {
-            is FixpointResult.Sat -> solverResult.result.first()
-            is FixpointResult.Unknown -> {
-                log.error("Unknown: ${solverResult.reason}")
-                RecoveredModel.error()
-            }
-            is FixpointResult.Unsat -> {
-                log.error("Unsat: ${solverResult.core.contentToString()}")
-                RecoveredModel.error()
-            }
-        }
     }
 
     private class TermSuffixGenerator {

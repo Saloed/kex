@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.solver
 
 import org.jetbrains.research.kex.asm.analysis.refinements.*
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
@@ -23,10 +22,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         val argument = SolverQueryArgument(state, normals, conditions)
         val callResolver = CallResolver(methodAnalyzer, methodsUnderApproximations)
         val result = callResolver.callResolutionLoopMany(argument) { arg ->
-            querySolver(
-                    query = { solver.mkFixpointQueryV2(arg.state, arg.sources, arg.normals) },
-                    onError = { arg.sources.map { RecoveredModel.error() } }
-            )
+            FixpointSolver(methodAnalyzer.cm).query { mkFixpointQueryV2(arg.state, arg.sources, arg.normals) }
         }
         val refinements = sources.value.zip(result).map { (src, answer) -> Refinement.create(src.criteria, answer) }
         return Refinements.create(methodAnalyzer.method, refinements)
