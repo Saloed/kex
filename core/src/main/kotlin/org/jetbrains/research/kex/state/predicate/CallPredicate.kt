@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.state.predicate
 
 import com.abdullin.kthelper.assert.asserted
-import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.ContextualSerialization
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
@@ -9,7 +8,6 @@ import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.Location
-import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 
 @InheritorOf("Predicate")
 @Serializable

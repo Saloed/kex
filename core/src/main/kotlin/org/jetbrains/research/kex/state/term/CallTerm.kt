@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.state.term
 
 import kotlinx.serialization.ContextualSerialization
+import kotlinx.serialization.Polymorphic
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
@@ -14,7 +15,7 @@ class CallTerm(
         override val type: KexType,
         val owner: Term,
         @ContextualSerialization val method: Method,
-        @ContextualSerialization val instruction: Instruction,
+        @Polymorphic val instruction: Instruction,
         val arguments: List<Term>) : Term() {
     override val name = "$owner.${method.name}(${arguments.joinToString()})^${instruction.hashCode()}"
     override val subterms by lazy { listOf(owner) + arguments }

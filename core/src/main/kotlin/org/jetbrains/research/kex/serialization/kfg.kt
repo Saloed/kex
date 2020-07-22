@@ -2,22 +2,24 @@ package org.jetbrains.research.kex.serialization
 
 import kotlinx.serialization.*
 import kotlinx.serialization.builtins.list
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.plus
 import kotlinx.serialization.modules.serializersModuleOf
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.*
-import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
-import org.jetbrains.research.kfg.ir.value.instruction.CallOpcode
-import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
+import org.jetbrains.research.kfg.ir.value.Name
+import org.jetbrains.research.kfg.ir.value.Slot
+import org.jetbrains.research.kfg.ir.value.StringName
+import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.parseDesc
 
 @ImplicitReflectionSerializer
 fun getKfgSerialModule(cm: ClassManager): SerialModule {
     ClassSerializer.cm = cm
-    MethodSerializer.cm = cm
+    TypeSerializer.cm = cm
     return serializersModuleOf(mapOf(
             //BinaryOpcodes
             BinaryOpcode::class to BinaryOpcodeSerializer,
@@ -55,8 +57,19 @@ fun getKfgSerialModule(cm: ClassManager): SerialModule {
             OuterClass::class to ClassSerializer,
             // other classes
             Location::class to LocationSerializer,
+            Type::class to TypeSerializer,
             Method::class to MethodSerializer
-    ))
+    )) + SerializersModule {
+        polymorphic(InstructionSerializer) {
+            CallInst::class with CallInstSerializer.apply { reset() }
+            NewInst::class with NewInstSerializer.apply { reset() }
+            NewArrayInst::class with NewArrayInstSerializer.apply { reset() }
+        }
+        polymorphic(NameSerializer) {
+            StringName::class with StringNameSerializer.apply { reset() }
+            Slot::class with SlotSerializer.apply { reset() }
+        }
+    }
 }
 
 @Serializer(forClass = BinaryOpcode::class)
@@ -158,22 +171,20 @@ internal object ClassSerializer : KSerializer<Class> {
 @ImplicitReflectionSerializer
 @Serializer(forClass = Method::class)
 internal object MethodSerializer : KSerializer<Method> {
-    lateinit var cm: ClassManager
-
     override val descriptor: SerialDescriptor
         get() = SerialDescriptor("Method") {
             element("class", ClassSerializer.descriptor)
             element<String>("name")
-            element<String>("retval")
-            element<List<String>>("arguments")
+            element("retval", TypeSerializer.descriptor)
+            element("arguments", TypeSerializer.list.descriptor)
         }
 
     override fun serialize(encoder: Encoder, value: Method) {
         val output = encoder.beginStructure(descriptor)
         output.encodeSerializableElement(descriptor, 0, ClassSerializer, value.`class`)
         output.encodeStringElement(descriptor, 1, value.name)
-        output.encodeStringElement(descriptor, 2, value.returnType.asmDesc)
-        output.encodeSerializableElement(descriptor, 3, String.serializer().list, value.argTypes.map { it.asmDesc }.toList())
+        output.encodeSerializableElement(descriptor, 2, TypeSerializer, value.returnType)
+        output.encodeSerializableElement(descriptor, 3, TypeSerializer.list, value.argTypes.toList())
         output.endStructure(descriptor)
     }
 
@@ -188,10 +199,8 @@ internal object MethodSerializer : KSerializer<Method> {
                 CompositeDecoder.READ_DONE -> break@loop
                 0 -> klass = input.decodeSerializableElement(descriptor, i, ClassSerializer)
                 1 -> name = input.decodeStringElement(descriptor, i)
-                2 -> retval = parseDesc(cm.type, input.decodeStringElement(descriptor, i))
-                3 -> argTypes = input.decodeSerializableElement(descriptor, i, String.serializer().list)
-                        .map { parseDesc(cm.type, it) }
-                        .toTypedArray()
+                2 -> retval = input.decodeSerializableElement(descriptor, i, TypeSerializer)
+                3 -> argTypes = input.decodeSerializableElement(descriptor, i, TypeSerializer.list).toTypedArray()
                 else -> throw SerializationException("Unknown index $i")
             }
         }
@@ -199,3 +208,248 @@ internal object MethodSerializer : KSerializer<Method> {
         return klass.getMethod(name, MethodDesc(argTypes, retval))
     }
 }
+
+@ImplicitReflectionSerializer
+@Serializer(forClass = Type::class)
+private object TypeSerializer : KSerializer<Type> {
+    lateinit var cm: ClassManager
+
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("Type") {
+            element<String>("type")
+        }
+
+    override fun serialize(encoder: Encoder, value: Type) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeStringElement(descriptor, 0, value.asmDesc)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): Type {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var type: Type
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> type = parseDesc(cm.type, input.decodeStringElement(descriptor, i))
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return type
+    }
+}
+
+class ReferenceSerializer<T : Any>(val serializer: KSerializer<T>) : KSerializer<T> {
+    private val deserializationCache = hashMapOf<String, T>()
+
+    @OptIn(ImplicitReflectionSerializer::class)
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("Reference[${serializer.descriptor.serialName}]") {
+            element<String>("ref")
+            element("object", serializer.descriptor)
+        }
+
+    override fun serialize(encoder: Encoder, value: T) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeStringElement(descriptor, 0, objectId(value))
+        output.encodeSerializableElement(descriptor, 1, serializer, value)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): T {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var objId: String
+        lateinit var obj: T
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> objId = input.decodeStringElement(descriptor, i)
+                1 -> obj = input.decodeSerializableElement(descriptor, i, serializer)
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return deserializationCache.getOrPut(objId) { obj }
+    }
+
+    fun reset(): Unit = deserializationCache.clear()
+
+    private fun objectId(obj: Any) = Integer.toHexString(System.identityHashCode(obj))
+}
+
+private inline fun <reified T : Any> KSerializer<T>.withReference() = ReferenceSerializer<T>(this)
+
+private val InstructionSerializer = PolymorphicSerializer(Instruction::class)
+private val CallInstSerializer = CallInstSerializerBase.withReference()
+private val NewInstSerializer = NewInstSerializerBase.withReference()
+private val NewArrayInstSerializer = NewArrayInstSerializerBase.withReference()
+
+@OptIn(ImplicitReflectionSerializer::class)
+@Serializer(forClass = CallInst::class)
+private object CallInstSerializerBase : KSerializer<CallInst> {
+    lateinit var cm: ClassManager
+
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("CallInst") {
+            element("method", MethodSerializer.descriptor)
+            element("opcode", CallOpcodeSerializer.descriptor)
+            element("class", ClassSerializer.descriptor)
+            element("location", LocationSerializer.descriptor)
+        }
+
+    override fun serialize(encoder: Encoder, value: CallInst) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeSerializableElement(descriptor, 0, MethodSerializer, value.method)
+        output.encodeSerializableElement(descriptor, 1, CallOpcodeSerializer, value.opcode)
+        output.encodeSerializableElement(descriptor, 2, ClassSerializer, value.`class`)
+        output.encodeSerializableElement(descriptor, 3, LocationSerializer, value.location)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): CallInst {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var method: Method
+        lateinit var opcode: CallOpcode
+        lateinit var klass: Class
+        lateinit var location: Location
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> method = input.decodeSerializableElement(descriptor, i, MethodSerializer)
+                1 -> opcode = input.decodeSerializableElement(descriptor, i, CallOpcodeSerializer)
+                2 -> klass = input.decodeSerializableElement(descriptor, i, ClassSerializer)
+                3 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return CallInst(opcode, method, klass, emptyArray()).update(loc = location) as CallInst
+    }
+}
+
+@OptIn(ImplicitReflectionSerializer::class)
+@Serializer(forClass = NewInst::class)
+private object NewInstSerializerBase : KSerializer<NewInst> {
+    lateinit var cm: ClassManager
+
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("NewInst") {
+            element("name", NameSerializer.descriptor)
+            element("type", TypeSerializer.descriptor)
+            element("location", LocationSerializer.descriptor)
+        }
+
+    override fun serialize(encoder: Encoder, value: NewInst) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+        output.encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
+        output.encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): NewInst {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var name: Name
+        lateinit var type: Type
+        lateinit var location: Location
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> name = input.decodeSerializableElement(descriptor, i, NameSerializer)
+                1 -> type = input.decodeSerializableElement(descriptor, i, TypeSerializer)
+                2 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return NewInst(name, type).update(loc = location) as NewInst
+    }
+}
+
+@OptIn(ImplicitReflectionSerializer::class)
+@Serializer(forClass = NewArrayInst::class)
+private object NewArrayInstSerializerBase : KSerializer<NewArrayInst> {
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("NewArrayInst") {
+            element("name", NameSerializer.descriptor)
+            element("type", TypeSerializer.descriptor)
+            element("location", LocationSerializer.descriptor)
+        }
+
+    override fun serialize(encoder: Encoder, value: NewArrayInst) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+        output.encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
+        output.encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): NewArrayInst {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var name: Name
+        lateinit var type: Type
+        lateinit var location: Location
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> name = input.decodeSerializableElement(descriptor, i, NameSerializer)
+                1 -> type = input.decodeSerializableElement(descriptor, i, TypeSerializer)
+                2 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return NewArrayInst(name, type, emptyArray()).update(loc = location) as NewArrayInst
+    }
+}
+
+private val NameSerializer = PolymorphicSerializer(Name::class)
+private val StringNameSerializer = StringNameSerializerBase.withReference()
+private val SlotSerializer = SlotSerializerBase.withReference()
+
+@OptIn(ImplicitReflectionSerializer::class)
+@Serializer(forClass = StringName::class)
+private object StringNameSerializerBase : KSerializer<StringName> {
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("StringName") {
+            element<String>("name")
+        }
+
+    override fun serialize(encoder: Encoder, value: StringName) {
+        val output = encoder.beginStructure(descriptor)
+        output.encodeStringElement(descriptor, 0, value.name)
+        output.endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): StringName {
+        val input = decoder.beginStructure(descriptor)
+        lateinit var name: String
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                0 -> name = input.decodeStringElement(descriptor, i)
+                else -> throw SerializationException("Unknown index $i")
+            }
+        }
+        input.endStructure(descriptor)
+        return StringName(name)
+    }
+}
+
+@OptIn(ImplicitReflectionSerializer::class)
+@Serializer(forClass = Slot::class)
+private object SlotSerializerBase : KSerializer<Slot> {
+    override val descriptor: SerialDescriptor
+        get() = SerialDescriptor("Slot") {}
+
+    override fun serialize(encoder: Encoder, value: Slot) {
+        encoder.beginStructure(descriptor).endStructure(descriptor)
+    }
+
+    override fun deserialize(decoder: Decoder): Slot {
+        decoder.beginStructure(descriptor).endStructure(descriptor)
+        return Slot()
+    }
+}
+

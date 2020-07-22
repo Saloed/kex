@@ -65,9 +65,7 @@ class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     }
 
     fun convert(switch: SwitchState, ef: $factory, ctx: ${solver}Context, extractPath: Boolean = false): Bool_ {
-        val cases = switch.cases
-                .mapKeys { (key, _) -> convert(key, ef, ctx, extractPath) }
-                .mapValues { (_, value) -> convert(value, ef, ctx, extractPath) }
+        val cases = switch.transformCases { convert(it, ef, ctx, extractPath) }.toMap()
         val default = convert(switch.default, ef, ctx, extractPath)
         return ef.switch(cases, default)
     }

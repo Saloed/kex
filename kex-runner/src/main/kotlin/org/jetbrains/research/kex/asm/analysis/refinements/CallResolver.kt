@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
+import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
@@ -60,7 +61,13 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
             log.debug(solverArg)
-            FixpointSolver(methodAnalyzer.cm).querySingle { refineWithFixpointSolver(solverArg.positive, solverArg.negative, arguments) }
+            FixpointSolver(methodAnalyzer.cm).querySingle(
+                    { refineWithFixpointSolver(solverArg.positive, solverArg.negative, arguments) },
+                    { ex ->
+                        dumpSolverArguments(solverArg)
+                        throw IllegalStateException("$ex")
+                    }
+            )
         }
         val finalResult = postprocessState(result, backwardMapping)
         approximationManager.update(call, MethodUnderApproximation(finalResult, state))
@@ -143,8 +150,8 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         return Triple(argumentTerms, TermRemapper(argumentsMapping), TermRemapper(backwardMapping))
     }
 
-
-    private data class SolverArgument(val positive: PredicateState, val negative: PredicateState) : Argument<SolverArgument> {
+    @Serializable
+    data class SolverArgument(val positive: PredicateState, val negative: PredicateState) : Argument<SolverArgument> {
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative))
         override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
     }

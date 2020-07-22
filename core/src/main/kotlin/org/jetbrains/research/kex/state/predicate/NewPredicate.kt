@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.state.predicate
 
 import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.ContextualSerialization
+import kotlinx.serialization.Polymorphic
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
@@ -14,7 +15,7 @@ import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 @Serializable
 class NewPredicate(
         val lhv: Term,
-        @Required @ContextualSerialization val instruction: Instruction,
+        @Required @Polymorphic val instruction: Instruction,
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @ContextualSerialization override val location: Location = Location()) : Predicate() {
     override val operands by lazy { listOf(lhv) }
