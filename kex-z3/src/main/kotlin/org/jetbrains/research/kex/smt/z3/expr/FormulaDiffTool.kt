@@ -3,8 +3,9 @@ package org.jetbrains.research.kex.smt.z3.expr
 import com.abdullin.kthelper.collection.dequeOf
 import com.microsoft.z3.Context
 import com.microsoft.z3.Expr
-import kotlin.math.max
+import com.microsoft.z3.Quantifier
 import java.util.*
+import kotlin.math.max
 
 class FormulaDiffTool(val ctx: Context, val first: Expr, val second: Expr) : Z3ExpressionVisitor {
     fun diff(): Expr {
@@ -27,33 +28,48 @@ class FormulaDiffTool(val ctx: Context, val first: Expr, val second: Expr) : Z3E
         !first.isExpr -> DiffNode.Different(parent, selector)
         first.sort != second.sort -> DiffNode.Different(parent, selector)
         first.isApp && first.funcDecl != second.funcDecl -> DiffNode.Different(parent, selector)
-        else -> {
-            val node = DiffNode.Different(parent, selector)
-            val firstNumArgs = max(0, first.numArgs)
-            val secondNumArgs = max(0, first.numArgs)
-            if (firstNumArgs != secondNumArgs) throw IllegalStateException("Same functions with different arguments number")
-            for (argIndex in 0 until firstNumArgs) {
-                val exprSelector = ExprSelector(argIndex)
-                node.children += diff(node, exprSelector, exprSelector.get(first), exprSelector.get(second))
-            }
-            node
+        else -> expressionChildrenDiff(DiffNode.Different(parent, selector), first, second)
+    }
+
+    private fun expressionChildrenDiff(node: DiffNode, first: Expr, second: Expr): DiffNode {
+        if (first.isQuantifier) {
+            val selector = QuantifierBodySelector(ctx)
+            node.children += diff(node, selector, selector.get(first), selector.get(second))
+            return node
         }
+        val firstNumArgs = max(0, first.numArgs)
+        val secondNumArgs = max(0, first.numArgs)
+        if (firstNumArgs != secondNumArgs) throw IllegalStateException("Same functions with different arguments number")
+        for (argIndex in 0 until firstNumArgs) {
+            val selector = ExprSelector(argIndex)
+            node.children += diff(node, selector, selector.get(first), selector.get(second))
+        }
+        return node
     }
 }
 
-private data class ExprSelector(val argIndex: Int) {
-    fun get(expr: Expr): Expr = when {
+private open class ExprSelector(val argIndex: Int) {
+    open fun get(expr: Expr): Expr = when {
         argIndex >= expr.numArgs -> throw IllegalStateException("Unable to apply $this to $expr ")
         else -> expr.args[argIndex]
     }
 
-    fun set(expr: Expr, value: Expr): Expr = when {
+    open fun set(expr: Expr, value: Expr): Expr = when {
         argIndex >= expr.numArgs -> throw IllegalStateException("Unable to apply $this to $expr ")
         else -> {
             val args = expr.args
             args[argIndex] = value
             expr.update(args)
         }
+    }
+}
+
+private class QuantifierBodySelector(val ctx: Context) : ExprSelector(0) {
+    override fun get(expr: Expr): Expr = (expr as Quantifier).body
+    override fun set(expr: Expr, value: Expr): Expr {
+        expr as Quantifier
+        return Quantifier.of(ctx, expr.isUniversal, expr.boundVariableSorts, expr.boundVariableNames,
+                value, expr.numPatterns, expr.patterns, null, null, null)
     }
 }
 
