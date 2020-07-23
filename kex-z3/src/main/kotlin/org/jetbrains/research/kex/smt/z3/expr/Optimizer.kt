@@ -34,25 +34,8 @@ class Optimizer(val ctx: Context) {
             visit(expr)
             val replaceFrom = pendingSubstitutions.map { it.first }.toTypedArray()
             val replaceTo = pendingSubstitutions.map { it.second }.toTypedArray()
-            return when (expr) {
-                is Quantifier -> substituteQuantifier(expr, replaceFrom, replaceTo)
-                else -> expr.substitute(replaceFrom, replaceTo)
-            }
+            return substitute(ctx, expr, replaceFrom, replaceTo)
         }
-
-        private fun substituteQuantifier(expr: Quantifier, from: Array<Expr>, to: Array<Expr>) = ctx.mkQuantifier(
-                expr.isUniversal,
-                expr.boundVariableSorts,
-                expr.boundVariableNames,
-                expr.body.substitute(from, to),
-                expr.numPatterns,
-                expr.patterns,
-                null,
-                null,
-                null
-        )
     }
-
     fun apply(expr: BoolExpr): BoolExpr = TrickyHack1().optimize(expr) as BoolExpr
-
 }

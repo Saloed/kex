@@ -74,4 +74,21 @@ interface Z3ExpressionVisitor {
         expr.numArgs > 0 -> expr.args.forEach { visit(it) }
         else -> Unit
     }
+
+    fun substitute(ctx: Context, expr: Expr, from: Array<Expr>, to: Array<Expr>) = when (expr) {
+        is Quantifier -> substituteQuantifier(ctx, expr, from, to)
+        else -> expr.substitute(from, to)
+    }
+
+    private fun substituteQuantifier(ctx: Context, expr: Quantifier, from: Array<Expr>, to: Array<Expr>) = ctx.mkQuantifier(
+            expr.isUniversal,
+            expr.boundVariableSorts,
+            expr.boundVariableNames,
+            expr.body.substitute(from, to),
+            expr.numPatterns,
+            expr.patterns,
+            null,
+            null,
+            null
+    )
 }
