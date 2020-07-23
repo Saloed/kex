@@ -16,7 +16,11 @@ import kotlin.time.measureTimedValue
 
 class Z3FixpointSolver(val tf: TypeFactory) {
 
-    private class CallCtx(tf: TypeFactory, callConverter: CallPredicateConverter? = null) : AutoCloseable {
+    private class CallCtx(
+            val tf: TypeFactory,
+            val callConverter: CallPredicateConverter? = null,
+            val initializer: ContextMemoryInitializer? = null
+    ) : AutoCloseable {
         val declarationTracker = DeclarationTracker()
         val ef = when {
             callConverter != null -> FixpointExprFactory.withDeclarationsTrackingAndCallConverter(declarationTracker, callConverter)
@@ -65,7 +69,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val knownDeclarations: List<DeclarationTracker.Declaration>
             get() = declarationTracker.declarations.toList()
 
-        fun convert(ps: PredicateState): Bool_ = converter.convert(ps, ef, z3Context)
+        fun convert(ps: PredicateState): Bool_ {
+            initializer?.apply(z3Context)
+            return converter.convert(ps, ef, z3Context)
+        }
 
         fun build(builder: CallCtx.() -> BoolExpr) = builder()
 
@@ -179,12 +186,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>): FixpointResult {
         val callPredicateConverter = CallPredicateConverterWithMemory()
-        return CallCtx(tf, callPredicateConverter).use { ctx ->
-            ContextMemoryInitializer(negative, positive).apply(ctx.z3Context)
-
+        val initializer = ContextMemoryInitializer(negative, positive)
+        return CallCtx(tf, callPredicateConverter, initializer).use { ctx ->
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
             val z3query = ctx.convert(negative).asAxiom() as BoolExpr
-
             val additionalArgsDeclarations = additionalArgs.map { term ->
                 val expr = ctx.converter.convert(term, ctx.ef, ctx.z3Context).expr
                 val declaration = ctx.knownDeclarations.first { it.expr == expr }

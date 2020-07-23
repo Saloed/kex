@@ -113,10 +113,10 @@ class $self : ${solver}SMTContext {
 
     private fun getInitialMemory(id: String) = initialMemories.getOrPut(id) { VersionedMemory(factory.makeEmptyMemory(id)) }
     fun getMemory(memspace: Int) = memories.getOrPut(memoryName(memspace)) { getInitialMemory(memoryName(memspace)) }
-    private fun setMemory(memspace: Int, mem: VersionedMemory) { memories[memoryName(memspace)] = mem }
+    fun setMemory(memspace: Int, mem: VersionedMemory) { memories[memoryName(memspace)] = mem }
 
 
-    private fun setProperties(memspace: Int, name: String, mem: VersionedMemory) {
+    fun setProperties(memspace: Int, name: String, mem: VersionedMemory) {
         memories[propertyName(memspace, name)] = mem
     }
 

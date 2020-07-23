@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.solver
 
+import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.asm.analysis.refinements.*
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -11,6 +12,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         else -> super.createRefinements(refinements)
     }
 
+    @Serializable
     data class SolverQueryArgument(val state: PredicateState, val normals: PredicateState, val sources: List<PredicateState>) : CallResolver.Argument<SolverQueryArgument> {
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverQueryArgument =
                 SolverQueryArgument(transformer(state), transformer(normals), sources.map(transformer))
@@ -22,7 +24,13 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         val argument = SolverQueryArgument(state, normals, conditions)
         val callResolver = CallResolver(methodAnalyzer, methodsUnderApproximations)
         val result = callResolver.callResolutionLoopMany(argument) { arg ->
-            FixpointSolver(methodAnalyzer.cm).query { mkFixpointQueryV2(arg.state, arg.sources, arg.normals) }
+            FixpointSolver(methodAnalyzer.cm).query(
+                    { mkFixpointQueryV2(arg.state, arg.sources, arg.normals) },
+                    { ex ->
+                        dumpSolverArguments(arg)
+                        throw IllegalStateException("$ex")
+                    }
+            )
         }
         val refinements = sources.value.zip(result).map { (src, answer) -> Refinement.create(src.criteria, answer) }
         return Refinements.create(methodAnalyzer.method, refinements)

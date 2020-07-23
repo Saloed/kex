@@ -57,12 +57,12 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         preprocessState(state, suffixGen, dependencies, forwardMapping)
         val positiveState = preprocessState(state, suffixGen, dependencies, forwardMapping)
         val negativeState = preprocessState(negatedState, suffixGen, dependencies, forwardMapping)
-        val argument = SolverArgument(positiveState, negativeState)
+        val argument = SolverArgument(positiveState, negativeState, arguments)
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
             log.debug(solverArg)
             FixpointSolver(methodAnalyzer.cm).querySingle(
-                    { refineWithFixpointSolver(solverArg.positive, solverArg.negative, arguments) },
+                    { refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments) },
                     { ex ->
                         dumpSolverArguments(solverArg)
                         throw IllegalStateException("$ex")
@@ -151,8 +151,8 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     @Serializable
-    data class SolverArgument(val positive: PredicateState, val negative: PredicateState) : Argument<SolverArgument> {
-        override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative))
+    data class SolverArgument(val positive: PredicateState, val negative: PredicateState, val arguments: List<Term>) : Argument<SolverArgument> {
+        override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative), arguments)
         override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
     }
 
