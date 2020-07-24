@@ -15,6 +15,7 @@ import org.jetbrains.research.kfg.ir.value.StringName
 import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.parseDesc
+import kotlin.reflect.KClass
 
 
 fun getKfgSerialModule(cm: ClassManager): SerialModule {
@@ -61,13 +62,13 @@ fun getKfgSerialModule(cm: ClassManager): SerialModule {
             Method::class to MethodSerializer
     )) + SerializersModule {
         polymorphic(InstructionSerializer) {
-            CallInst::class with CallInstSerializer.apply { reset() }
-            NewInst::class with NewInstSerializer.apply { reset() }
-            NewArrayInst::class with NewArrayInstSerializer.apply { reset() }
+            subclass(CallInstSerializer.apply { reset() })
+            subclass(NewInstSerializer.apply { reset() })
+            subclass(NewArrayInstSerializer.apply { reset() })
         }
         polymorphic(NameSerializer) {
-            StringName::class with StringNameSerializer.apply { reset() }
-            Slot::class with SlotSerializer.apply { reset() }
+            subclass(StringNameSerializer.apply { reset() })
+            subclass(SlotSerializer.apply { reset() })
         }
     }
 }
@@ -208,7 +209,7 @@ internal object MethodSerializer : KSerializer<Method> {
 }
 
 @Serializer(forClass = Type::class)
-private object TypeSerializer : KSerializer<Type> {
+internal object TypeSerializer : KSerializer<Type> {
     lateinit var cm: ClassManager
 
     override val descriptor: SerialDescriptor
@@ -237,210 +238,225 @@ private object TypeSerializer : KSerializer<Type> {
     }
 }
 
-class ReferenceSerializer<T : Any>(val serializer: KSerializer<T>) : KSerializer<T> {
-    private val deserializationCache = hashMapOf<String, T>()
-
-    override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Reference[${serializer.descriptor.serialName}]") {
-            element<String>("ref")
-            element("object", serializer.descriptor)
-        }
-
-    override fun serialize(encoder: Encoder, value: T) {
-        val output = encoder.beginStructure(descriptor)
-        output.encodeStringElement(descriptor, 0, objectId(value))
-        output.encodeSerializableElement(descriptor, 1, serializer, value)
-        output.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): T {
-        val input = decoder.beginStructure(descriptor)
-        lateinit var objId: String
-        lateinit var obj: T
-        loop@ while (true) {
-            when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
-                0 -> objId = input.decodeStringElement(descriptor, i)
-                1 -> obj = input.decodeSerializableElement(descriptor, i, serializer)
-                else -> throw SerializationException("Unknown index $i")
-            }
-        }
-        input.endStructure(descriptor)
-        return deserializationCache.getOrPut(objId) { obj }
-    }
-
-    fun reset(): Unit = deserializationCache.clear()
-
-    private fun objectId(obj: Any) = Integer.toHexString(System.identityHashCode(obj))
-}
-
-private inline fun <reified T : Any> KSerializer<T>.withReference() = ReferenceSerializer<T>(this)
-
-private val InstructionSerializer = PolymorphicSerializer(Instruction::class)
-private val CallInstSerializer = CallInstSerializerBase.withReference()
-private val NewInstSerializer = NewInstSerializerBase.withReference()
-private val NewArrayInstSerializer = NewArrayInstSerializerBase.withReference()
+internal val InstructionSerializer = PolymorphicSerializer(Instruction::class)
 
 @Serializer(forClass = CallInst::class)
-private object CallInstSerializerBase : KSerializer<CallInst> {
-    lateinit var cm: ClassManager
-
-    override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("CallInst") {
+internal object CallInstSerializer : KSerializer<CallInst> {
+    private val referenceSerializer = object : ReferenceSerializer<CallInst>(CallInst::class) {
+        override fun SerialDescriptorBuilder.buildDescriptor() {
             element("method", MethodSerializer.descriptor)
             element("opcode", CallOpcodeSerializer.descriptor)
             element("class", ClassSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
         }
 
-    override fun serialize(encoder: Encoder, value: CallInst) {
-        val output = encoder.beginStructure(descriptor)
-        output.encodeSerializableElement(descriptor, 0, MethodSerializer, value.method)
-        output.encodeSerializableElement(descriptor, 1, CallOpcodeSerializer, value.opcode)
-        output.encodeSerializableElement(descriptor, 2, ClassSerializer, value.`class`)
-        output.encodeSerializableElement(descriptor, 3, LocationSerializer, value.location)
-        output.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): CallInst {
-        val input = decoder.beginStructure(descriptor)
-        lateinit var method: Method
-        lateinit var opcode: CallOpcode
-        lateinit var klass: Class
-        lateinit var location: Location
-        loop@ while (true) {
-            when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
-                0 -> method = input.decodeSerializableElement(descriptor, i, MethodSerializer)
-                1 -> opcode = input.decodeSerializableElement(descriptor, i, CallOpcodeSerializer)
-                2 -> klass = input.decodeSerializableElement(descriptor, i, ClassSerializer)
-                3 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
-                else -> throw SerializationException("Unknown index $i")
-            }
+        override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: CallInst) {
+            encodeSerializableElement(descriptor, 0, MethodSerializer, value.method)
+            encodeSerializableElement(descriptor, 1, CallOpcodeSerializer, value.opcode)
+            encodeSerializableElement(descriptor, 2, ClassSerializer, value.`class`)
+            encodeSerializableElement(descriptor, 3, LocationSerializer, value.location)
         }
-        input.endStructure(descriptor)
-        return CallInst(opcode, method, klass, emptyArray()).update(loc = location) as CallInst
+
+        override fun Decoder.deserializeObject(): ReferencedObject<CallInst> {
+            lateinit var method: Method
+            lateinit var opcode: CallOpcode
+            lateinit var klass: Class
+            lateinit var location: Location
+            val ref = deserializeObjectAndReference { descriptor, i ->
+                when (i) {
+                    0 -> method = decodeSerializableElement(descriptor, i, MethodSerializer)
+                    1 -> opcode = decodeSerializableElement(descriptor, i, CallOpcodeSerializer)
+                    2 -> klass = decodeSerializableElement(descriptor, i, ClassSerializer)
+                    3 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    else -> throw SerializationException("Unknown index $i")
+                }
+            }
+            val obj = CallInst(opcode, method, klass, emptyArray()).update(loc = location) as CallInst
+            return ReferencedObject(ref, obj)
+        }
     }
+    override val descriptor: SerialDescriptor
+        get() = referenceSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: CallInst) = referenceSerializer.serialize(encoder, value)
+    override fun deserialize(decoder: Decoder): CallInst = referenceSerializer.deserialize(decoder)
+    fun reset() = referenceSerializer.reset()
 }
 
 @Serializer(forClass = NewInst::class)
-private object NewInstSerializerBase : KSerializer<NewInst> {
-    lateinit var cm: ClassManager
-
-    override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("NewInst") {
+internal object NewInstSerializer : KSerializer<NewInst> {
+    private val referenceSerializer = object : ReferenceSerializer<NewInst>(NewInst::class) {
+        override fun SerialDescriptorBuilder.buildDescriptor() {
             element("name", NameSerializer.descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
         }
 
-    override fun serialize(encoder: Encoder, value: NewInst) {
-        val output = encoder.beginStructure(descriptor)
-        output.encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
-        output.encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
-        output.encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
-        output.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): NewInst {
-        val input = decoder.beginStructure(descriptor)
-        lateinit var name: Name
-        lateinit var type: Type
-        lateinit var location: Location
-        loop@ while (true) {
-            when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
-                0 -> name = input.decodeSerializableElement(descriptor, i, NameSerializer)
-                1 -> type = input.decodeSerializableElement(descriptor, i, TypeSerializer)
-                2 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
-                else -> throw SerializationException("Unknown index $i")
-            }
+        override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewInst) {
+            encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+            encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
+            encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
         }
-        input.endStructure(descriptor)
-        return NewInst(name, type).update(loc = location) as NewInst
+
+        override fun Decoder.deserializeObject(): ReferencedObject<NewInst> {
+            lateinit var name: Name
+            lateinit var type: Type
+            lateinit var location: Location
+            val ref = deserializeObjectAndReference { descriptor, i ->
+                when (i) {
+                    0 -> name = decodeSerializableElement(descriptor, i, NameSerializer)
+                    1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
+                    2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    else -> throw SerializationException("Unknown index $i")
+                }
+            }
+            val obj = NewInst(name, type).update(loc = location) as NewInst
+            return ReferencedObject(ref, obj)
+        }
     }
+    override val descriptor: SerialDescriptor
+        get() = referenceSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: NewInst) = referenceSerializer.serialize(encoder, value)
+    override fun deserialize(decoder: Decoder): NewInst = referenceSerializer.deserialize(decoder)
+    fun reset() = referenceSerializer.reset()
 }
 
 @Serializer(forClass = NewArrayInst::class)
-private object NewArrayInstSerializerBase : KSerializer<NewArrayInst> {
-    override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("NewArrayInst") {
+internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
+    private val referenceSerializer = object : ReferenceSerializer<NewArrayInst>(NewArrayInst::class) {
+        override fun SerialDescriptorBuilder.buildDescriptor() {
             element("name", NameSerializer.descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
         }
 
-    override fun serialize(encoder: Encoder, value: NewArrayInst) {
-        val output = encoder.beginStructure(descriptor)
-        output.encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
-        output.encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
-        output.encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
-        output.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): NewArrayInst {
-        val input = decoder.beginStructure(descriptor)
-        lateinit var name: Name
-        lateinit var type: Type
-        lateinit var location: Location
-        loop@ while (true) {
-            when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
-                0 -> name = input.decodeSerializableElement(descriptor, i, NameSerializer)
-                1 -> type = input.decodeSerializableElement(descriptor, i, TypeSerializer)
-                2 -> location = input.decodeSerializableElement(descriptor, i, LocationSerializer)
-                else -> throw SerializationException("Unknown index $i")
-            }
+        override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewArrayInst) {
+            encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+            encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
+            encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
         }
-        input.endStructure(descriptor)
-        return NewArrayInst(name, type, emptyArray()).update(loc = location) as NewArrayInst
+
+        override fun Decoder.deserializeObject(): ReferencedObject<NewArrayInst> {
+            lateinit var name: Name
+            lateinit var type: Type
+            lateinit var location: Location
+            val ref = deserializeObjectAndReference { descriptor, i ->
+                when (i) {
+                    0 -> name = decodeSerializableElement(descriptor, i, NameSerializer)
+                    1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
+                    2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    else -> throw SerializationException("Unknown index $i")
+                }
+            }
+            val obj = NewArrayInst(name, type, emptyArray()).update(loc = location) as NewArrayInst
+            return ReferencedObject(ref, obj)
+        }
     }
+    override val descriptor: SerialDescriptor
+        get() = referenceSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: NewArrayInst) = referenceSerializer.serialize(encoder, value)
+    override fun deserialize(decoder: Decoder): NewArrayInst = referenceSerializer.deserialize(decoder)
+    fun reset() = referenceSerializer.reset()
 }
 
-private val NameSerializer = PolymorphicSerializer(Name::class)
-private val StringNameSerializer = StringNameSerializerBase.withReference()
-private val SlotSerializer = SlotSerializerBase.withReference()
+internal val NameSerializer = PolymorphicSerializer(Name::class)
 
 @Serializer(forClass = StringName::class)
-private object StringNameSerializerBase : KSerializer<StringName> {
-    override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("StringName") {
+internal object StringNameSerializer : KSerializer<StringName> {
+    private val referenceSerializer = object : ReferenceSerializer<StringName>(StringName::class) {
+        override fun SerialDescriptorBuilder.buildDescriptor() {
             element<String>("name")
         }
 
-    override fun serialize(encoder: Encoder, value: StringName) {
-        val output = encoder.beginStructure(descriptor)
-        output.encodeStringElement(descriptor, 0, value.name)
-        output.endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): StringName {
-        val input = decoder.beginStructure(descriptor)
-        lateinit var name: String
-        loop@ while (true) {
-            when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
-                0 -> name = input.decodeStringElement(descriptor, i)
-                else -> throw SerializationException("Unknown index $i")
-            }
+        override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: StringName) {
+            encodeStringElement(descriptor, 0, value.name)
         }
-        input.endStructure(descriptor)
-        return StringName(name)
+
+        override fun Decoder.deserializeObject(): ReferencedObject<StringName> {
+            lateinit var name: String
+            val ref = deserializeObjectAndReference { descriptor, i ->
+                when (i) {
+                    0 -> name = decodeStringElement(descriptor, i)
+                    else -> throw SerializationException("Unknown index $i")
+                }
+            }
+            return ReferencedObject(ref, StringName(name))
+        }
     }
+    override val descriptor: SerialDescriptor
+        get() = referenceSerializer.descriptor
+
+    override fun serialize(encoder: Encoder, value: StringName) = referenceSerializer.serialize(encoder, value)
+    override fun deserialize(decoder: Decoder): StringName = referenceSerializer.deserialize(decoder)
+    fun reset() = referenceSerializer.reset()
 }
 
 @Serializer(forClass = Slot::class)
-private object SlotSerializerBase : KSerializer<Slot> {
+internal object SlotSerializer : KSerializer<Slot> {
+    private val referenceSerializer = object : ReferenceSerializer<Slot>(Slot::class) {
+        override fun SerialDescriptorBuilder.buildDescriptor() {}
+        override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: Slot) {}
+        override fun Decoder.deserializeObject(): ReferencedObject<Slot> {
+            val ref = deserializeObjectAndReference { _, i -> throw SerializationException("Unknown index $i") }
+            return ReferencedObject(ref, Slot())
+        }
+    }
     override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Slot") {}
+        get() = referenceSerializer.descriptor
 
-    override fun serialize(encoder: Encoder, value: Slot) {
-        encoder.beginStructure(descriptor).endStructure(descriptor)
-    }
-
-    override fun deserialize(decoder: Decoder): Slot {
-        decoder.beginStructure(descriptor).endStructure(descriptor)
-        return Slot()
-    }
+    override fun serialize(encoder: Encoder, value: Slot) = referenceSerializer.serialize(encoder, value)
+    override fun deserialize(decoder: Decoder): Slot = referenceSerializer.deserialize(decoder)
+    fun reset() = referenceSerializer.reset()
 }
 
+internal data class ReferencedObject<T : Any>(val ref: String, val obj: T)
+
+internal abstract class ReferenceSerializer<T : Any>(val type: KClass<T>) {
+    private val referenceCache = hashMapOf<String, T>()
+    abstract fun SerialDescriptorBuilder.buildDescriptor()
+
+    private val refIndex: Int
+        get() = descriptor.elementsCount - 1
+
+    val descriptor: SerialDescriptor
+        get() = SerialDescriptor("Reference[${type.qualifiedName}]") {
+            buildDescriptor()
+            element<String>("ref")
+        }
+
+    abstract fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: T)
+
+    fun serialize(encoder: Encoder, value: T) {
+        val output = encoder.beginStructure(descriptor)
+        output.serializeElements(descriptor, value)
+        output.encodeStringElement(descriptor, refIndex, objectId(value))
+        output.endStructure(descriptor)
+    }
+
+    fun deserialize(decoder: Decoder): T {
+        val refObj = decoder.deserializeObject()
+        return referenceCache.getOrPut(refObj.ref) { refObj.obj }
+    }
+
+    abstract fun Decoder.deserializeObject(): ReferencedObject<T>
+
+    fun Decoder.deserializeObjectAndReference(builder: CompositeDecoder.(SerialDescriptor, Int) -> Unit): String {
+        val input = beginStructure(descriptor)
+        lateinit var objId: String
+        loop@ while (true) {
+            when (val i = input.decodeElementIndex(descriptor)) {
+                CompositeDecoder.READ_DONE -> break@loop
+                refIndex -> objId = input.decodeStringElement(descriptor, i)
+                else -> input.builder(descriptor, i)
+            }
+        }
+//        input.endStructure(descriptor) // fixme: polymorphic field key missed
+        return objId
+    }
+
+    fun reset(): Unit = referenceCache.clear()
+
+    private fun objectId(obj: Any) = Integer.toHexString(System.identityHashCode(obj))
+}

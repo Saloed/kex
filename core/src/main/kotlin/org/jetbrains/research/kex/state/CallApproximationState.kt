@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.state
 
 import com.abdullin.kthelper.defaultHashCode
+import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -8,12 +9,12 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 
 @InheritorOf("State")
 @Serializable
-class CallApproximationState private constructor(
-        val preconditions: List<PredicateState>,
-        val postconditions: List<PredicateState>,
-        val defaultPrecondition: PredicateState,
-        val defaultPostcondition: PredicateState,
-        val call: CallPredicate
+class CallApproximationState(
+        @Required val preconditions: List<PredicateState>,
+        @Required val postconditions: List<PredicateState>,
+        @Required val defaultPrecondition: PredicateState,
+        @Required val defaultPostcondition: PredicateState,
+        @Required val call: CallPredicate
 ) : PredicateState() {
     constructor(preconditions: List<PredicateState>, postconditions: List<PredicateState>, call: CallPredicate, defaultPostcondition: PredicateState)
             : this(preconditions, postconditions, call.wrap(), defaultPostcondition, call)

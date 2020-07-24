@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex
 
-import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.asm.analysis.refinements.CallResolver
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.serialization.KexSerializer
@@ -10,7 +9,6 @@ import java.nio.file.Paths
 import kotlin.test.Test
 
 class FixpointSolverDebug : KexTest() {
-    @OptIn(ImplicitReflectionSerializer::class)
     inline fun <reified T : Any> run(name: String, execute: (T) -> Unit) {
         val file = Paths.get("fails", name).toFile()
         val data = KexSerializer(cm).fromJson<T>(file.readText())
