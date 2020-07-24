@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.serialization
 
-import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.UnsafeSerializationApi
 import kotlinx.serialization.modules.SerialModule
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.serializer
@@ -12,7 +12,7 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.ClassManager
 import kotlin.reflect.KClass
 
-@ImplicitReflectionSerializer
+@OptIn(UnsafeSerializationApi::class)
 val kexTypeSerialModule: SerialModule
     get() = SerializersModule {
         polymorphic(KexType::class) {
@@ -23,7 +23,7 @@ val kexTypeSerialModule: SerialModule
         }
     }
 
-@ImplicitReflectionSerializer
+@OptIn(UnsafeSerializationApi::class)
 fun getTermSerialModule(cm: ClassManager): SerialModule = SerializersModule {
     include(getKfgSerialModule(cm))
     include(kexTypeSerialModule)
@@ -36,7 +36,6 @@ fun getTermSerialModule(cm: ClassManager): SerialModule = SerializersModule {
 
 }
 
-@ImplicitReflectionSerializer
 val predicateTypeSerialModule: SerialModule
     get() = SerializersModule {
         polymorphic(PredicateType::class) {
@@ -47,7 +46,7 @@ val predicateTypeSerialModule: SerialModule
         }
     }
 
-@ImplicitReflectionSerializer
+@OptIn(UnsafeSerializationApi::class)
 fun getPredicateSerialModule(cm: ClassManager): SerialModule = SerializersModule {
     include(getTermSerialModule(cm))
     include(predicateTypeSerialModule)
@@ -59,7 +58,7 @@ fun getPredicateSerialModule(cm: ClassManager): SerialModule = SerializersModule
     }
 }
 
-@ImplicitReflectionSerializer
+@OptIn(UnsafeSerializationApi::class)
 fun getPredicateStateSerialModule(cm: ClassManager): SerialModule = SerializersModule {
     include(getPredicateSerialModule(cm))
     polymorphic(PredicateState::class) {

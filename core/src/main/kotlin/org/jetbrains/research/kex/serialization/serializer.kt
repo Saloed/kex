@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.serialization
 
-import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.UnsafeSerializationApi
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonConfiguration
@@ -20,12 +20,10 @@ abstract class AbstractSerializer(val context: SerialModule) {
     )
     val json = Json(configuration, context)
 
-    @ImplicitReflectionSerializer
+    @OptIn(UnsafeSerializationApi::class)
     inline fun <reified T: Any> toJson(t: T) = json.stringify(T::class.serializer(), t)
-    @ImplicitReflectionSerializer
+    @OptIn(UnsafeSerializationApi::class)
     inline fun <reified T: Any> fromJson(str: String) = json.parse(T::class.serializer(), str)
 }
 
-@ImplicitReflectionSerializer
 class KexSerializer(val cm: ClassManager) : AbstractSerializer(getPredicateStateSerialModule(cm))
-

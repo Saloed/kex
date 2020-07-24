@@ -16,7 +16,7 @@ import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.parseDesc
 
-@ImplicitReflectionSerializer
+
 fun getKfgSerialModule(cm: ClassManager): SerialModule {
     ClassSerializer.cm = cm
     TypeSerializer.cm = cm
@@ -118,7 +118,6 @@ object CallOpcodeSerializer : KSerializer<CallOpcode> {
 }
 
 @Serializer(forClass = Location::class)
-@ImplicitReflectionSerializer
 object LocationSerializer : KSerializer<Location> {
     override val descriptor: SerialDescriptor
         get() = SerialDescriptor("Location") {
@@ -168,7 +167,6 @@ internal object ClassSerializer : KSerializer<Class> {
     override fun deserialize(decoder: Decoder) = cm[decoder.decodeString()]
 }
 
-@ImplicitReflectionSerializer
 @Serializer(forClass = Method::class)
 internal object MethodSerializer : KSerializer<Method> {
     override val descriptor: SerialDescriptor
@@ -209,7 +207,6 @@ internal object MethodSerializer : KSerializer<Method> {
     }
 }
 
-@ImplicitReflectionSerializer
 @Serializer(forClass = Type::class)
 private object TypeSerializer : KSerializer<Type> {
     lateinit var cm: ClassManager
@@ -243,7 +240,6 @@ private object TypeSerializer : KSerializer<Type> {
 class ReferenceSerializer<T : Any>(val serializer: KSerializer<T>) : KSerializer<T> {
     private val deserializationCache = hashMapOf<String, T>()
 
-    @OptIn(ImplicitReflectionSerializer::class)
     override val descriptor: SerialDescriptor
         get() = SerialDescriptor("Reference[${serializer.descriptor.serialName}]") {
             element<String>("ref")
@@ -285,7 +281,6 @@ private val CallInstSerializer = CallInstSerializerBase.withReference()
 private val NewInstSerializer = NewInstSerializerBase.withReference()
 private val NewArrayInstSerializer = NewArrayInstSerializerBase.withReference()
 
-@OptIn(ImplicitReflectionSerializer::class)
 @Serializer(forClass = CallInst::class)
 private object CallInstSerializerBase : KSerializer<CallInst> {
     lateinit var cm: ClassManager
@@ -328,7 +323,6 @@ private object CallInstSerializerBase : KSerializer<CallInst> {
     }
 }
 
-@OptIn(ImplicitReflectionSerializer::class)
 @Serializer(forClass = NewInst::class)
 private object NewInstSerializerBase : KSerializer<NewInst> {
     lateinit var cm: ClassManager
@@ -367,7 +361,6 @@ private object NewInstSerializerBase : KSerializer<NewInst> {
     }
 }
 
-@OptIn(ImplicitReflectionSerializer::class)
 @Serializer(forClass = NewArrayInst::class)
 private object NewArrayInstSerializerBase : KSerializer<NewArrayInst> {
     override val descriptor: SerialDescriptor
@@ -408,7 +401,6 @@ private val NameSerializer = PolymorphicSerializer(Name::class)
 private val StringNameSerializer = StringNameSerializerBase.withReference()
 private val SlotSerializer = SlotSerializerBase.withReference()
 
-@OptIn(ImplicitReflectionSerializer::class)
 @Serializer(forClass = StringName::class)
 private object StringNameSerializerBase : KSerializer<StringName> {
     override val descriptor: SerialDescriptor
@@ -437,7 +429,6 @@ private object StringNameSerializerBase : KSerializer<StringName> {
     }
 }
 
-@OptIn(ImplicitReflectionSerializer::class)
 @Serializer(forClass = Slot::class)
 private object SlotSerializerBase : KSerializer<Slot> {
     override val descriptor: SerialDescriptor
