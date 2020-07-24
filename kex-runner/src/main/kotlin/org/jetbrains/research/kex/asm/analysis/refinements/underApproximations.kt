@@ -28,12 +28,14 @@ class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApp
 
     @OptIn(ExperimentalStdlibApi::class)
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
-        val transformedCall = super.transformCallPredicate(predicate)
-        val approximation = approximations[transformedCall] ?: return transformedCall
-        val cases = approximation.approximations.map { it.pre to it.post }.toMap()
-        val defaultCase = approximation.approximations.map { it.post.not() }
-                .reduceOrNull<PredicateState, PredicateState> { a, b -> ChainState(a, b) } ?: emptyState()
-        currentBuilder += SwitchState(cases, ChainState(transformedCall.wrap(), defaultCase))
+        val transformedCall = super.transformCallPredicate(predicate) as CallPredicate
+        val approximation = approximations[transformedCall]?.approximations
+        val preconditions = approximation?.map { it.pre } ?: emptyList()
+        val postconditions = approximation?.map { it.post } ?: emptyList()
+        val defaultPostcondition = postconditions.map { it.not() }
+                .reduceOrNull<PredicateState, PredicateState> { a, b -> ChainState(a, b) }
+                ?: emptyState()
+        currentBuilder += CallApproximationState(preconditions, postconditions, transformedCall, defaultPostcondition)
         return nothing()
     }
 }

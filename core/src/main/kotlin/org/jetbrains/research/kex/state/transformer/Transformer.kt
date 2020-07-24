@@ -38,7 +38,7 @@ interface Transformer<T : Transformer<T>> {
             is ChoiceState -> transformChoice(argument) as T
             is ChainState -> transformChain(argument) as T
             is BasicState -> transformBasic(argument) as T
-            is SwitchState -> transformSwitch(argument) as T
+            is CallApproximationState -> transformCallApproximation(argument) as T
             else -> unreachable { log.error("No PredicateState transformer for $argument") }
         }
 
@@ -102,7 +102,7 @@ interface Transformer<T : Transformer<T>> {
             is ChoiceState -> transformChoiceState(argument) as T
             is ChainState -> transformChainState(argument) as T
             is BasicState -> transformBasicState(argument) as T
-            is SwitchState -> transformSwitchState(argument) as T
+            is CallApproximationState -> transformCallApproximationState(argument) as T
             else -> unreachable { log.error("No PredicateState transformer for $argument") }
         }
 
@@ -176,13 +176,13 @@ interface Transformer<T : Transformer<T>> {
     fun transformChain(ps: ChainState): PredicateState = ps.fmap { e -> transformBase(e) }
     fun transformChoice(ps: ChoiceState): PredicateState = ps.fmap { e -> transformBase(e) }
     fun transformNegation(ps: NegationState): PredicateState = ps.fmap { e -> transformBase(e) }
-    fun transformSwitch(ps: SwitchState): PredicateState = ps.fmap { e -> transformBase(e) }
+    fun transformCallApproximation(ps: CallApproximationState): PredicateState = ps.fmap { e -> transformBase(e) }
 
     fun transformBasicState(ps: BasicState): PredicateState = ps
     fun transformChainState(ps: ChainState): PredicateState = ps
     fun transformChoiceState(ps: ChoiceState): PredicateState = ps
     fun transformNegationState(ps: NegationState): PredicateState = ps
-    fun transformSwitchState(ps: SwitchState): PredicateState = ps
+    fun transformCallApproximationState(ps: CallApproximationState): PredicateState = ps
 
     fun transform(predicate: Predicate) = transformBase(predicate)
     fun transformBase(predicate: Predicate): Predicate {

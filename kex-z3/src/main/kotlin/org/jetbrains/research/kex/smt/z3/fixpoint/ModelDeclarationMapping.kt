@@ -9,7 +9,7 @@ import org.jetbrains.research.kex.state.transformer.memspace
 class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declaration>) {
     private val terms = hashMapOf<DeclarationTracker.Declaration, Term>()
     private val arrayMemories = mutableSetOf<DeclarationTracker.Declaration>()
-    val calls = hashMapOf<Int, CallPredicateConverterWithMemory.CallInfo>()
+    val calls = hashMapOf<Int, Z3ContextWithCallMemory.CallInfo>()
 
     fun initializeTerms(vararg ps: PredicateState) {
         val (thisArg, otherArgs) = collectArguments(ps)
@@ -32,7 +32,7 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
         arrayMemories.addAll(memoriesUnderArray)
     }
 
-    fun initializeCalls(calls: List<CallPredicateConverterWithMemory.CallInfo>) {
+    fun initializeCalls(calls: List<Z3ContextWithCallMemory.CallInfo>) {
         calls.map { it.index to it }.toMap(this.calls)
     }
 

@@ -1,21 +1,24 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import com.abdullin.kthelper.collection.dequeOf
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
+import org.jetbrains.research.kex.state.CallApproximationState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kfg.type.TypeFactory
 
-class CallPredicateConverterWithMemory : CallPredicateConverter {
+class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
     private var callCounter = 0
 
     data class CallInfo(
             val index: Int,
             val predicate: CallPredicate,
-            val subterms: List<Z3ValueExpr>,
             val result: Z3Bool,
             val resultTerm: Term,
             val memoryBefore: Map<String, VersionedMemory>,
@@ -24,14 +27,33 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
 
     val callInfo = hashMapOf<CallPredicate, CallInfo>()
     fun getCallsInfo(): List<CallInfo> = callInfo.values.toList()
+    private val callStack = dequeOf<CallPredicate>()
 
-    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool {
+    override fun convert(callApproximation: CallApproximationState, ef: Z3ExprFactory, ctx: Z3Context, extractPath: Boolean): Bool_ {
+        val call = callApproximation.call
+        callStack.addLast(call)
         if (call !in callInfo) {
-            callInfo[call] = processCall(call, ef, ctx, converter)
+            callInfo[call] = processCall(call, ef, ctx)
         }
-        val info = callInfo[call] ?: throw IllegalStateException("Impossible")
-        ctx.setMemory(info.memoryAfter)
-        return info.result
+        val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
+        val preconditions = callApproximation.preconditions.map { convert(it, ef, ctx, extractPath) }
+        val defaultPre = convert(callApproximation.defaultPrecondition, ef, ctx, extractPath)
+        ctx.setMemory(callInfo.memoryAfter)
+        val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
+        val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
+        val cases = preconditions.zip(postconditions).toMap()
+        val defaultCase = defaultPre and defaultPost
+        callStack.removeLast()
+        return ef.switch(cases, defaultCase)
+    }
+
+    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Bool_ {
+        if (callStack.isEmpty()) throw IllegalStateException("No calls in stack")
+        if (call !in callStack) throw IllegalStateException("Call not in stack")
+        if (callStack.size > 1) log.warn("Call approximation stack size ${callStack.size}")
+        val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
+        val callArguments = call.call.subterms.map { convert(it, ef, ctx) }
+        return callInfo.result
     }
 
     private fun Z3Context.currentMemory() = accessRawMemories().toMap()
@@ -49,9 +71,8 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
         }
     }
 
-    private fun processCall(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): CallInfo {
+    private fun processCall(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): CallInfo {
         val callIdx = callCounter++
-        val subterms = call.call.subterms.map { converter.convert(it, ef, ctx) }
         val memoriesBefore = ctx.currentMemory()
         ctx.cleanupMemory(callIdx)
         val callType = when {
@@ -63,9 +84,9 @@ class CallPredicateConverterWithMemory : CallPredicateConverter {
             call.hasLhv -> EqualityPredicate(call.lhv, callVariable, call.type, call.location)
             else -> ConstantPredicate(true, call.type, call.location)
         }
-        val result = converter.convert(callReplacement, ef, ctx)
+        val result = convert(callReplacement, ef, ctx)
         val afterMemory = ctx.currentMemory()
-        return CallInfo(callIdx, call, subterms, result, callVariable, memoriesBefore, afterMemory)
+        return CallInfo(callIdx, call, result, callVariable, memoriesBefore, afterMemory)
     }
 
 }

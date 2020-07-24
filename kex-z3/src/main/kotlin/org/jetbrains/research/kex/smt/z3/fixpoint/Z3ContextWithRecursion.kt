@@ -9,11 +9,12 @@ import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kex.state.transformer.memspace
 import org.jetbrains.research.kfg.ir.Field
+import org.jetbrains.research.kfg.type.TypeFactory
 
-class CallPredicateConverterWithRecursion(
+class Z3ContextWithRecursion(
         private val recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
         callPrototype: CallPredicate,
-        private val predicateName: String) : CallPredicateConverter {
+        private val predicateName: String, tf: TypeFactory) : Z3Converter(tf) {
 
     private val orderedDeclarations: MutableList<DeclarationTracker.Declaration>
     private val orderedProperties: List<DeclarationTracker.Declaration.Property>
@@ -35,14 +36,13 @@ class CallPredicateConverterWithRecursion(
         mapper.setTerm(receiverDecl, receiver)
     }
 
-    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool =
-            when {
-                call in recursiveCalls -> buildPredicate(call, ef, ctx, converter)
-                else -> ef.makeTrue()
-            }
+    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Bool_ = when {
+        call in recursiveCalls -> buildPredicate(call, ef, ctx)
+        else -> ef.makeTrue()
+    }
 
-    fun buildPredicate(callPredicate: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context, converter: Z3Converter): Z3Bool {
-        val predicateArguments = predicateArguments(callPredicate, converter, ef, ctx)
+    fun buildPredicate(callPredicate: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Z3Bool {
+        val predicateArguments = predicateArguments(callPredicate, ef, ctx)
         val predicateSorts = predicateArguments.map { it.getSort() }
         val predicateAxioms = predicateArguments.map { it.axiom }
         val predicateExprs = predicateArguments.map { it.expr }
@@ -64,18 +64,18 @@ class CallPredicateConverterWithRecursion(
         }
     }
 
-    private fun predicateArguments(callPredicate: CallPredicate, converter: Z3Converter, ef: Z3ExprFactory, ctx: Z3Context): List<Z3ValueExpr> {
+    private fun predicateArguments(callPredicate: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): List<Z3ValueExpr> {
         val call = callPredicate.call as CallTerm
-        val arguments = (listOf(call.owner) + call.arguments).map { converter.convert(it, ef, ctx) }
-        val receiver = callPredicate.lhvUnsafe?.let { converter.convert(it, ef, ctx) } ?: ef.dummyReceiver(call)
+        val arguments = (listOf(call.owner) + call.arguments).map { convert(it, ef, ctx) }
+        val receiver = callPredicate.lhvUnsafe?.let { convert(it, ef, ctx) } ?: ef.dummyReceiver(call)
         return (arguments
                 + listOf(receiver)
-                + orderedProperties.map { readProperty(it, converter, ef, ctx) }
+                + orderedProperties.map { readProperty(it, ef, ctx) }
                 )
     }
 
-    private fun readProperty(property: DeclarationTracker.Declaration.Property, converter: Z3Converter, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
-        val type = converter.Z3Type(propertyTypes[property]!!)
+    private fun readProperty(property: DeclarationTracker.Declaration.Property, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
+        val type = Z3Type(propertyTypes[property]!!)
         val memory = ctx.getProperties(property.memspace, property.fullName).memory
         memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory
         return memory.inner

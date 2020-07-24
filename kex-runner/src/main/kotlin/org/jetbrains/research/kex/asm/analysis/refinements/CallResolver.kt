@@ -29,6 +29,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     inline fun <reified T : Argument<T>> callResolutionLoopMany(argument: T, crossinline processor: (T) -> List<RecoveredModel>): List<PredicateState> {
         while (true) {
+            log.debug("Enter call resolution loop for ${methodAnalyzer.method}")
             val callArgument = argument.transform { approximationManager.extendWithUnderApproximations(it) }
             val processed = processor(callArgument)
             if (processed.all { it.isFinal }) return processed.map { it.finalStateOrException() }
