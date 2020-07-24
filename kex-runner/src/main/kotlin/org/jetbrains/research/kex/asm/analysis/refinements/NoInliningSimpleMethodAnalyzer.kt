@@ -52,7 +52,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
     }
 
     private fun extendWithRefinements(builder: MethodRefinementSourceAnalyzer): PredicateState {
-        val originalState = builder.methodRawFullState()
+        val originalState = builder.methodRawFullState().let { ConstructorDeepInliner(psa).apply(it) }
         val calls = PredicateCollector.collectIsInstance<CallPredicate>(originalState)
         val exceptionalPaths = calls.map { predicate ->
             val instructionState = psa.builder(method).getInstructionState(predicate.instruction)

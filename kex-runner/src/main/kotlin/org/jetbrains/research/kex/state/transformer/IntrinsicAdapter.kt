@@ -14,6 +14,7 @@ object IntrinsicAdapter : Transformer<IntrinsicAdapter> {
         val call = predicate.call as CallTerm
         return when (val method = call.method) {
             im.checkNotNull(method.cm) -> assume { call.arguments[0] inequality null }
+            im.checkNotNullNew(method.cm) -> assume { call.arguments[0] inequality null }
             im.areEqual(method.cm) -> state { predicate.lhv equality (call.arguments[0] eq call.arguments[1]) }
             else -> predicate
         }

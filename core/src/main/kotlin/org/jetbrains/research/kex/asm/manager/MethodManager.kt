@@ -86,6 +86,14 @@ object MethodManager {
                 )
         )
 
+        fun checkNotNullNew(cm: ClassManager) = cm[intrinsicsClass].getMethod(
+                "checkNotNullParameter",
+                MethodDesc(
+                        arrayOf(cm.type.objectType, cm.type.stringType),
+                        cm.type.voidType
+                )
+        )
+
         fun areEqual(cm: ClassManager) = cm[intrinsicsClass].getMethod(
                 "areEqual",
                 MethodDesc(
