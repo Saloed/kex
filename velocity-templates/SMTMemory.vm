@@ -6,77 +6,30 @@ import kotlin.reflect.KClass
 private val engine = ${solver}Engine
 
 #set($self = "${Memory}")
-abstract class ${self}<  in Index : ${Bitvector}, Element : ${valexpr} >(val ctx: ${context}) : Z3SMTMemory() {
-
-    class EmptyMemory <  in Index : ${Bitvector}, Element : ${valexpr} >(val name: String, ctx: ${context}) : ${self}<  Index, Element>(ctx) {
-        private var array: ${Array} <  Element, Index> ? = null
-        override val inner: ${Array}<  Element, Index>
-            get() = array ?: throw IllegalStateException("Inner array of empty memory is not initialized")
-
-        override fun loadRaw(index: Index, kClass: KClass< out ${valexpr}>): ${valexpr} {
-            val elSort = ${valexpr}.getStaticSort(ctx, kClass)
-            val idxSort = ${valexpr}.getDynamicSort(ctx, index)
-            val array = ensureArray(elSort, idxSort)
-            return array.load(index)
-        }
-
-        override fun get(index: Index): Element = inner.load(index) as Element
-
-        override fun store(index: Index, element: Element): ${self}<  Index, Element > {
-            val elSort = ${valexpr}.getDynamicSort(ctx, element)
-            val idxSort = ${valexpr}.getDynamicSort(ctx, index)
-            val array = ensureArray(elSort, idxSort)
-            return FullMemory(array.store(index, element))
-        }
-
-        fun ensureArray(element: $sort, index: $sort): ${Array}<  Element, Index > {
-            val myArray = array ?: ${Array}.makeFree<  Element, Index>(ctx, name, element, index)
-            array = myArray
-            return myArray
-        }
-    }
-
-    class FullMemory<  in Index : ${Bitvector}, Element : ${valexpr} >(val array: ${Array}<  Element, Index>) : ${self}<  Index, Element>(array.ctx) {
-        override val inner: ${Array}<  Element, Index>
-            get() = array
-
-        override fun loadRaw(index: Index, kClass: KClass<  out ${valexpr}>): ${valexpr} = array.load(index)
-        override operator fun get(index: Index) = array[index] as Element
-        override fun store(index: Index, element: Element) = FullMemory(array.store(index, element))
-    }
+class $self< in Index : $Bitvector, Element : ${valexpr} >(val ctx: ContextWithIntSortSizeInfo, val type: KClass< out Element >, val inner: ${Array}< Element, Index >) : Z3SMTMemory() {
+    fun < T : ${valexpr}> load(index: Index, type: KClass< out Element >) = ${valexpr}.forceCast(inner.load(index), type) as T
+    fun store(index: Index, element: Element): $self< Index, Element> = $self(ctx, type, inner.store(index, element))
+    operator fun set(index: Index, value: Element) = store(index, value)
+    operator fun get(index: Index): Element = ${valexpr}.forceCast(inner[index], type) as Element
 
     companion object {
-
-        fun < Index : ${Bitvector}, Element : ${valexpr}> merge(default: ${self}< Index, Element>, cases: List< Pair< ${Bool}, ${self}< Index, Element>>>): ${self}< Index, Element> {
-            val fullCases = cases.filter { it.second !is EmptyMemory }
-            return when {
-                fullCases.isEmpty() -> default
-                default is EmptyMemory -> {
-                    val inners = fullCases.map { it.first to it.second.inner }
-                    val arrayPrototype = inners.first().second
-                    val defaultArray = default.ensureArray(arrayPrototype.elementSort, arrayPrototype.indexSort)
-                    FullMemory< Index, Element>(${Array}.merge(defaultArray, inners))
-                }
-                else -> {
-                    val inners = fullCases.map { it.first to it.second.inner }
-                    FullMemory< Index, Element>(${Array}.merge(default.inner, inners))
-                }
-            }
+        inline fun < reified Index : $Bitvector, Element : ${valexpr}> makeDefault(ctx: ContextWithIntSortSizeInfo, name: String, default: Element, type: KClass< out Element >): $self< Index, Element > {
+            val array = ${Array}.makeDefault< Element, Index>(ctx, name, default)
+            return $self(ctx, type, array)
         }
 
-        inline fun < reified Index : ${Bitvector}, Element : ${valexpr}> makeDefault(ctx: ${context}, name: String, default: Element) =
-                FullMemory< Index, Element>(${Array}.makeDefault< Element, Index>(ctx, name, default))
+        inline fun < reified Index : $Bitvector, Element : ${valexpr}> makeFree(ctx: ContextWithIntSortSizeInfo, name: String, type: KClass< out Element >): $self< Index, Element> {
+            val elSort = ${valexpr}.getStaticSort(ctx, type)
+            val idxSort = ${valexpr}.getStaticSort< Index>(ctx)
+            val array = ${Array}.makeFree< Element, Index>(ctx, name, elSort, idxSort)
+            return $self(ctx, type, array)
+        }
 
-        inline fun < reified Index : ${Bitvector}, Element : ${valexpr}> makeFree(ctx: ${context}, name: String) =
-                EmptyMemory< Index, Element>(name, ctx)
+        fun < Index : $Bitvector, Element : ${valexpr}> merge(default: $self< Index, Element>, cases: List< Pair< $Bool, $self< Index, Element>>>): $self< Index, Element> {
+            check(cases.all { it.second.type == default.type }) { "Try to merge memories with different element types" }
+            val inners = cases.map { it.first to it.second.inner }
+            val newArray = ${Array}.merge(default.inner, inners)
+            return $self(default.ctx, default.type, newArray)
+        }
     }
-
-    abstract val inner: ${Array}< Element, Index>
-
-    fun < T : ${valexpr}> load(index: Index, type: KClass< out ${valexpr}>) = ${valexpr}.forceCast(loadRaw(index, type), type) as T
-
-    abstract fun loadRaw(index: Index, kClass: KClass< out ${valexpr}>): ${valexpr}
-    abstract fun store(index: Index, element: Element): ${self}< Index, Element>
-    operator fun set(index: Index, value: Element) = store(index, value)
-    abstract operator fun get(index: Index): Element
 }

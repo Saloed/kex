@@ -2,7 +2,6 @@ package org.jetbrains.research.kex
 
 import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
-import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.asm.analysis.Failure
 import org.jetbrains.research.kex.asm.analysis.MethodChecker
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
@@ -147,7 +146,6 @@ class Kex(args: Array<String>) {
         System.setProperty("java.class.path", classPath)
     }
 
-    @ImplicitReflectionSerializer
     fun main() {
         val mode = cmd.getEnumValue<Mode>("mode") ?: this.mode
         if (mode == Mode.refinements) {
@@ -175,7 +173,6 @@ class Kex(args: Array<String>) {
         }
     }
 
-    @ImplicitReflectionSerializer
     fun debug(analysisContext: ExecutionContext) {
         val psa = PredicateStateAnalysis(analysisContext.cm)
 

@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.solver
 
 import com.abdullin.kthelper.logging.log
-import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.serialization.KexSerializer
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
@@ -16,24 +15,24 @@ val failDir: String
     get() = kexConfig.getStringValue("debug", "dump-directory", "fail")
 
 class FixpointSolver(val cm: ClassManager) {
-    inline fun query(crossinline query: Z3FixpointSolver.() -> FixpointResult): List<RecoveredModel> =
+    inline fun query(crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult): List<RecoveredModel> =
             query(query, { result -> result }, { ex -> throw IllegalStateException("Solver error: $ex") })
 
-    inline fun query(crossinline query: Z3FixpointSolver.() -> FixpointResult, crossinline onError: FixpointSolver.(FixpointResult?) -> List<RecoveredModel>): List<RecoveredModel> =
+    inline fun query(crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult, crossinline onError: FixpointSolver.(FixpointResult?) -> List<RecoveredModel>): List<RecoveredModel> =
             query(query, { result -> result }, onError)
 
-    inline fun querySingle(crossinline query: Z3FixpointSolver.() -> FixpointResult): RecoveredModel =
+    inline fun querySingle(crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult): RecoveredModel =
             query(query, { result -> result.first() }, { ex -> throw IllegalStateException("Solver error: $ex") })
 
-    inline fun querySingle(crossinline query: Z3FixpointSolver.() -> FixpointResult, crossinline onError: FixpointSolver.(FixpointResult?) -> RecoveredModel): RecoveredModel =
+    inline fun querySingle(crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult, crossinline onError: FixpointSolver.(FixpointResult?) -> RecoveredModel): RecoveredModel =
             query(query, { result -> result.first() }, onError)
 
     inline fun <reified T> query(
-            crossinline query: Z3FixpointSolver.() -> FixpointResult,
+            crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult,
             crossinline onResult: FixpointSolver.(List<RecoveredModel>) -> T,
             crossinline onError: FixpointSolver.(FixpointResult?) -> T
     ): T = try {
-        when (val result = Z3FixpointSolver(cm.type).query()) {
+        when (val result = Z3FixpointSolver(cm.type).query(this)) {
             is FixpointResult.Sat -> onResult(result.result)
             is FixpointResult.Unknown -> {
                 log.error("Unknown: ${result.reason}")
@@ -49,7 +48,6 @@ class FixpointSolver(val cm: ClassManager) {
         onError(null)
     }
 
-    @OptIn(ImplicitReflectionSerializer::class)
     inline fun <reified T : Any> dumpSolverArguments(args: T) {
         val failDirPath = Paths.get(failDir)
         if (!Files.exists(failDirPath)) {

@@ -68,7 +68,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             get() = declarationTracker.declarations.toList()
 
         fun convert(ps: PredicateState): Bool_ {
-            initializer?.apply(z3Context)
+            initializer?.apply(z3Context, converter)
             return converter.convert(ps, ef, z3Context)
         }
 
@@ -226,8 +226,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
             val z3query = ctx.convert(query).asAxiom() as BoolExpr
 
-            log.debug("State:\n$state\nPositive:\n$positivePaths\nQuery:\n$query")
-            log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
+//            log.debug("State:\n$state\nPositive:\n$positivePaths\nQuery:\n$query")
+//            log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
             val calls = callPredicateConverter.getCallsInfo()
             val declarationExprs = ctx.knownDeclarations.map { it.expr }
@@ -304,7 +304,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
         add(query)
 
-        log.debug(debugFixpointSmtLib(this))
+//        log.debug(debugFixpointSmtLib(this))
         File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(this))
 
         val status = check()

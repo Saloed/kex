@@ -64,17 +64,17 @@ class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
         }
     }
 
-    private fun Z3Context.cleanupMemory(idx: Int) {
+    private fun Z3Context.generateEmptyMemory(idx: Int) {
         val memories = accessRawMemories()
-        for ((name, _) in memories) {
-            memories[name] = VersionedMemory(factory.makeEmptyMemory("call__${idx}__${name}"))
+        for ((name, current) in memories) {
+            memories[name] = VersionedMemory(factory.makeEmptyMemory("call__${idx}__${name}", current.type), current.version + 1, current.type)
         }
     }
 
     private fun processCall(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): CallInfo {
         val callIdx = callCounter++
         val memoriesBefore = ctx.currentMemory()
-        ctx.cleanupMemory(callIdx)
+        ctx.generateEmptyMemory(callIdx)
         val callType = when {
             call.hasLhv -> call.lhv.type
             else -> (call.call as CallTerm).method.returnType.kexType

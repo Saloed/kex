@@ -3,6 +3,7 @@ import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTExprFa
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
+import kotlin.reflect.KClass
 
 typealias Bool_ = $Bool
 typealias Ptr_ = $Bitvector32
@@ -60,10 +61,10 @@ open class $factory : ${solver}SMTExprFactory() {
 
 #generateMakes("Double", "Double")
 
-    inline fun < reified  Element: $valexpr > makeEmptyMemory(id: String) = Memory_.makeFree< Ptr_, Element >(ctx, id)
+    inline fun < reified  Element: $valexpr > makeEmptyMemory(id: String, type: KClass< out Element >) = Memory_.makeFree< Ptr_, Element >(ctx, id, type)
     //            makeDefaultMemory(id, 0xFF)
-    inline fun < reified  Element: $valexpr > makeDefaultMemory(id: String, default: Int) =
-        Memory_.makeDefault< Ptr_, Element >(ctx, id, makeIntConst(default) as Element)
+    inline fun < reified  Element: $valexpr > makeDefaultMemory(id: String, default: Int, type: KClass< out Element >) =
+        Memory_.makeDefault< Ptr_, Element >(ctx, id, makeIntConst(default) as Element, type)
 
 #set($types = ["Bool", "Short", "Char", "Int", "Long", "Float", "Double"])
     fun getVarByTypeAndName(type: KexType, name: String, fresh: Boolean = false) = when(type) {

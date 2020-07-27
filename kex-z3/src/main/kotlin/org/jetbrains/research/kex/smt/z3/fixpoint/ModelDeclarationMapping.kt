@@ -46,7 +46,7 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
             val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
             if (declaration is DeclarationTracker.Declaration.Call.CallResult) {
                 val term = callInfo.predicate.lhv
-                callDependencies.add(TermDependency(term, callInfo.predicate, DependencyType.RETURN_VALUE))
+                callDependencies.add(TermDependency(term, callInfo.index, callInfo.predicate, DependencyType.RETURN_VALUE))
                 return TermWithAxiom(term)
             }
             TODO("Term for unknown call")

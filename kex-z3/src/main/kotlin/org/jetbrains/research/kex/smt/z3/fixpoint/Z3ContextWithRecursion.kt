@@ -76,7 +76,7 @@ class Z3ContextWithRecursion(
 
     private fun readProperty(property: DeclarationTracker.Declaration.Property, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
         val type = Z3Type(propertyTypes[property]!!)
-        val memory = ctx.getProperties(property.memspace, property.fullName).memory
+        val memory = ctx.getProperties(property.memspace, property.fullName, type).memory
         memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory
         return memory.inner
     }

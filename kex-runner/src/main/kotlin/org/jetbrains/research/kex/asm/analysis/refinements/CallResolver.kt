@@ -44,11 +44,31 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         if (model.isFinal) return
         val calls = model.callDependencies.groupBy { it.call }
         if (calls.isEmpty()) return
-        if (calls.size > 1) {
-            TODO("Too many calls to resolve")
-        }
+        if (calls.size > 1) return tryResolveMultipleCalls(model, calls)
         val (call, dependencies) = calls.entries.last()
         resolveCall(model.state, call, dependencies)
+    }
+
+    private fun tryResolveMultipleCalls(model: RecoveredModel, calls: Map<CallPredicate, List<TermDependency>>) {
+        val groupedByIdx = model.callDependencies.groupBy { it.callIdx }
+        val maxIdx = model.callDependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
+        val lastCallDependencies = groupedByIdx[maxIdx] ?: error("impossible")
+        val call = lastCallDependencies.first().call
+        val otherDependencies = model.callDependencies - lastCallDependencies
+        val allPredicates = PredicateCollector { true }.apply { apply(model.state) }.predicates
+        val lastCallTerms = lastCallDependencies.map { it.term }.toSet()
+        val otherTerms = otherDependencies.map { it.term }.toSet()
+        val predicateTerms = allPredicates.map { it to TermCollector.getFullTermSet(it) }.toMap()
+        val dependentPredicates = allPredicates.filter {
+            ((predicateTerms[it] ?: error("impossible")) intersect lastCallTerms).isNotEmpty()
+        }
+        val dependsOnOther = dependentPredicates.filter {
+            ((predicateTerms[it] ?: error("impossible")) intersect otherTerms).isNotEmpty()
+        }
+        if (dependsOnOther.isNotEmpty()) {
+            error("Predicates with multiple dependencies: $dependsOnOther")
+        }
+        TODO("Multi resolve")
     }
 
     private fun resolveCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
@@ -62,13 +82,15 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
             log.debug(solverArg)
-            FixpointSolver(methodAnalyzer.cm).querySingle(
+            val result = FixpointSolver(methodAnalyzer.cm).querySingle(
                     { refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments) },
                     { ex ->
                         dumpSolverArguments(solverArg)
                         throw IllegalStateException("$ex")
                     }
             )
+            log.debug(result)
+            result
         }
         val finalResult = postprocessState(result, backwardMapping)
         approximationManager.update(call, MethodUnderApproximation(finalResult, state))

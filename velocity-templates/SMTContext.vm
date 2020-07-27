@@ -4,31 +4,31 @@ import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContex
 import org.jetbrains.research.kex.state.predicate.NewArrayPredicate
 import org.jetbrains.research.kex.state.predicate.NewPredicate
 
-import kotlin.math.max
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
-class VersionedMemory(val memory: Memory_, val version: Long = 0) {
+class VersionedMemory(val memory: Memory_, val version: Long = 0, val type: KClass< out $valexpr >) {
     companion object {
         @Suppress("UNUSED_PARAMETER")
         fun merge(name: String, default: VersionedMemory, cases: List< Pair< Bool_, VersionedMemory >>): VersionedMemory {
-            val maxVersion = cases.maxBy { it.second.version }?.second?.version ?: default.version
+            val maxVersion = cases.maxByOrNull { it.second.version }?.second?.version ?: default.version
             return if (maxVersion == default.version) default else {
+                check(cases.all { it.second.type == default.type })
                 val memories = cases.map { it.first to it.second.memory }
-                VersionedMemory(Memory_.merge(default.memory, memories), maxVersion + 1)
+                VersionedMemory(Memory_.merge(default.memory, memories), maxVersion + 1, default.type)
             }
         }
     }
 
     fun < T : $valexpr > load(ptr: Ptr_, type: KClass< out $valexpr >) = memory.load< T >(ptr, type)
 
-    fun < T : Dynamic_ > store(index: Ptr_, element: T): VersionedMemory {
+    fun < T : Dynamic_ > store(index: Ptr_, element: T, type: KClass< out $valexpr >): VersionedMemory {
         val newMemory = memory.store(index, element)
-        return VersionedMemory(newMemory, version + 1)
+        return VersionedMemory(newMemory, version + 1, type)
     }
 
     operator fun get(index: Ptr_) = memory[index]
-    operator fun < T : Dynamic_ > set(index: Ptr_, element: T) = store(index, element)
+    operator fun < T : Dynamic_ > set(index: Ptr_, element: T, type: KClass< out $valexpr >) = store(index, element, type)
 }
 
 #set($self = "${solver}Context")
@@ -48,14 +48,16 @@ class $self : ${solver}SMTContext {
 
         fun mergeContexts(name: String, default: $self, choices: Map< Bool_, $self >): $self {
             val ids = hashSetOf< String >()
-            ids.addAll(default.memories.keys)
-            choices.values.forEach { ctx ->
+            val elementTypes = hashMapOf< String, KClass< out $valexpr >>()
+            (choices.values + default).forEach { ctx ->
                 ids.addAll(ctx.memories.keys)
+                ctx.memories.forEach { (id, mem) -> elementTypes[id] = mem.type }
             }
 
             val memArrays = ids.map { id ->
-                val alternatives = choices.map { it.key to it.value.get(id) }
-                id to VersionedMemory.merge(name, default.get(id), alternatives)
+                val elementType = elementTypes[id] ?: error("Type must be present")
+                val alternatives = choices.map { it.key to it.value.get(id, elementType) }
+                id to VersionedMemory.merge(name, default.get(id, elementType), alternatives)
             }.toMap()
 
             if (choices.any { it.value.localPointer != default.localPointer }
@@ -98,8 +100,6 @@ class $self : ${solver}SMTContext {
 
         this.typeIndex = typeIndex
         this.typeMap = typeMap
-
-        initialMemories[MEMORY_NAME] = VersionedMemory(factory.makeEmptyMemory(MEMORY_NAME))
     }
 
     constructor(factory: $factory, localPointer: Int, staticPointer: Int)
@@ -111,8 +111,8 @@ class $self : ${solver}SMTContext {
 
     fun accessRawMemories() = this.memories
 
-    private fun getInitialMemory(id: String) = initialMemories.getOrPut(id) { VersionedMemory(factory.makeEmptyMemory(id)) }
-    fun getMemory(memspace: Int) = memories.getOrPut(memoryName(memspace)) { getInitialMemory(memoryName(memspace)) }
+    private fun getInitialMemory(id: String, type: KClass< out $valexpr >) = initialMemories.getOrPut(id) { VersionedMemory(factory.makeEmptyMemory(id, type), type=type) }
+    fun getMemory(memspace: Int, type: KClass< out $valexpr >) = memories.getOrPut(memoryName(memspace)) { getInitialMemory(memoryName(memspace), type) }
     fun setMemory(memspace: Int, mem: VersionedMemory) { memories[memoryName(memspace)] = mem }
 
 
@@ -120,30 +120,30 @@ class $self : ${solver}SMTContext {
         memories[propertyName(memspace, name)] = mem
     }
 
-    fun getProperties(memspace: Int, name: String) = memories.getOrPut(propertyName(memspace, name)) {
-        VersionedMemory(factory.makeEmptyMemory(propertyName(memspace, name)))
+    fun getProperties(memspace: Int, name: String, type: KClass< out $valexpr >) = memories.getOrPut(propertyName(memspace, name)) {
+        VersionedMemory(factory.makeEmptyMemory(propertyName(memspace, name), type), type=type)
     }
 
-    private fun get(id: String) = memories.getOrPut(id) { getInitialMemory(id) }
+    private fun get(id: String, type: KClass< out $valexpr >) = memories.getOrPut(id) { getInitialMemory(id, type) }
 
 
-    fun getInitialMemory(memspace: Int) = initialMemories.getOrElse(memoryName(memspace)) { getMemory(memspace) }
+    fun getInitialMemory(memspace: Int, type: KClass< out $valexpr >) = initialMemories.getOrElse(memoryName(memspace)) { getMemory(memspace, type) }
 
-    fun getInitialProperties(memspace: Int, name: String) =
-        initialMemories.getOrElse(propertyName(memspace, name)) { getProperties(memspace, name) }
+    fun getInitialProperties(memspace: Int, name: String, type: KClass< out $valexpr >) =
+        initialMemories.getOrElse(propertyName(memspace, name)) { getProperties(memspace, name, type) }
 
-    fun < T : $valexpr > readMemory(ptr: Ptr_, memspace: Int, type: KClass< out $valexpr >) = getMemory(memspace).load< T >(ptr, type)
+    fun < T : $valexpr > readMemory(ptr: Ptr_, memspace: Int, type: KClass< out $valexpr >) = getMemory(memspace, type).load< T >(ptr, type)
 
-    fun < T : $valexpr > writeMemory(ptr: Ptr_, value: T, memspace: Int) {
-        val mem = getMemory(memspace).store(ptr, value)
+    fun < T : $valexpr > writeMemory(ptr: Ptr_, value: T, memspace: Int, type: KClass< out $valexpr >) {
+        val mem = getMemory(memspace, type).store(ptr, value, type)
         setMemory(memspace, mem)
     }
 
     fun < T : $valexpr > readProperty(ptr: Ptr_, memspace: Int, name: String, type: KClass< out $valexpr >) =
-            getProperties(memspace, name).load< T >(ptr, type)
+            getProperties(memspace, name, type).load< T >(ptr, type)
 
-    fun < T : $valexpr > writeProperty(ptr: Ptr_, memspace: Int, name: String, prop: T) {
-        val mem = getProperties(memspace, name).store(ptr, prop)
+    fun < T : $valexpr > writeProperty(ptr: Ptr_, memspace: Int, name: String, prop: T, type: KClass< out $valexpr >) {
+        val mem = getProperties(memspace, name, type).store(ptr, prop, type)
         setProperties(memspace, name, mem)
     }
 
@@ -158,7 +158,7 @@ class $self : ${solver}SMTContext {
         val ptr = localObjPointers.getOrPut(obj) { localPointer.getAndAdd(length * elementSize.int) }
         localTypes[ptr] = type
         return factory.makePtrConst(ptr).also {
-            writeProperty(it, memspace, "length", factory.makeIntConst(length))
+            writeProperty(it, memspace, "length", factory.makeIntConst(length), Int_::class)
         }
     }
 
@@ -171,7 +171,7 @@ class $self : ${solver}SMTContext {
     fun getStaticArray(memspace: Int, length: Int, elementSize: TypeSize): Ptr_ {
         val ptr = staticPointer.getAndAdd(length * elementSize.int)
         return factory.makePtrConst(ptr).also {
-            writeProperty(it, memspace, "length", factory.makeIntConst(length))
+            writeProperty(it, memspace, "length", factory.makeIntConst(length), Int_::class)
         }
     }
 
@@ -186,7 +186,7 @@ class $self : ${solver}SMTContext {
     fun getTypeMapping(): Map< KexType, Int > = typeMap.toMap()
 
     fun readType(ptr: Ptr_, memspace: Int): Int_ = readProperty(ptr, memspace, TYPE_PROPERTY, Int_::class)
-    fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type))
+    fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type), Int_::class)
 
     fun getLocalsTypeMapping() = localTypes.toMap()
 }

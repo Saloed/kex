@@ -24,7 +24,7 @@ enum class DependencyType {
     RETURN_VALUE, MEMORY;
 }
 
-data class TermDependency(val term: Term, val call: CallPredicate, val type: DependencyType)
+data class TermDependency(val term: Term, val callIdx: Int, val call: CallPredicate, val type: DependencyType)
 
 data class RecoveredModel(val state: PredicateState, val callDependencies: Set<TermDependency>) {
     val isFinal: Boolean
@@ -232,7 +232,7 @@ class FixpointModelConverter(
         }
         val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
         val loadTerm = obj.binaryOperation(fieldLoad) { _, load -> load }
-        callDependencies.add(TermDependency(loadTerm.term, callInfo.predicate, DependencyType.MEMORY))
+        callDependencies.add(TermDependency(loadTerm.term, callInfo.index, callInfo.predicate, DependencyType.MEMORY))
         return loadTerm
     }
 
@@ -269,7 +269,7 @@ class FixpointModelConverter(
                 .mapNotNull { it.findField(fieldName) }
                 .toSet()
         if (fields.isEmpty()) throw IllegalArgumentException("Class $cls and it inheritors has no field $fieldName")
-        val fieldType = fields.map { it.type.kexType }.groupBy({ it }, { 1 }).maxBy { (_, cnt) -> cnt.sum() }?.key
+        val fieldType = fields.map { it.type.kexType }.groupBy({ it }, { 1 }).maxByOrNull { (_, cnt) -> cnt.sum() }?.key
                 ?: throw IllegalStateException("No types")
         val resultFiledLoad = term { value(fieldType, "load_${cls.name}.$fieldName") }
         val axioms = fields.map {

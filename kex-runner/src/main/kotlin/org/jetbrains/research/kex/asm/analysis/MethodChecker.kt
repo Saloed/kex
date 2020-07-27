@@ -4,7 +4,6 @@ import com.abdullin.kthelper.algorithm.DominatorTreeBuilder
 import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.ContextualSerialization
-import kotlinx.serialization.ImplicitReflectionSerializer
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.asm.manager.isImpactable
@@ -54,7 +53,6 @@ class MethodChecker(
     val loader: ClassLoader get() = ctx.loader
     val generator = Generator(ctx, psa)
 
-    @ImplicitReflectionSerializer
     private fun dumpPS(method: Method, message: String, state: PredicateState) {
         val failDirPath = Paths.get(failDir)
         if (!Files.exists(failDirPath)) {
@@ -67,7 +65,6 @@ class MethodChecker(
 
     override fun cleanup() {}
 
-    @ImplicitReflectionSerializer
     override fun visit(method: Method) {
         super.visit(method)
 
@@ -123,7 +120,6 @@ class MethodChecker(
         cleanup()
     }
 
-    @ImplicitReflectionSerializer
     private fun coverBlock(method: Method, block: BasicBlock): Result {
         val checker = Checker(method, loader, psa)
         val ps = checker.createState(block.terminator)

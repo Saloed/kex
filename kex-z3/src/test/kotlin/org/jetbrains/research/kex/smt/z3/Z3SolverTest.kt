@@ -40,7 +40,7 @@ class Z3SolverTest : KexTest() {
             solver.check() == Status.UNSATISFIABLE
         }
 
-        val memory = ef.makeDefaultMemory<Word_>("mem", 0xFF)
+        val memory = ef.makeDefaultMemory<Word_>("mem", 0xFF, Word_::class)
         for (i in 0..128) {
             assertTrue(checkExpr(memory[ef.makePtrConst(i)] eq Word_.makeConst(ef.ctx, 0xFF)))
         }
@@ -63,8 +63,8 @@ class Z3SolverTest : KexTest() {
         val condA = cond eq a
         val condB = cond eq b
 
-        memA.writeMemory(ptr, a, 0)
-        memB.writeMemory(ptr, b, 0)
+        memA.writeMemory(ptr, a, 0, Int_::class)
+        memB.writeMemory(ptr, b, 0, Int_::class)
 
         val merged = Z3Context.mergeContexts("merged", default, mapOf(
                 condA to memA,
