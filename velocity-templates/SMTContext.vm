@@ -13,7 +13,7 @@ class VersionedMemory(val memory: Memory_, val version: Long = 0, val type: KCla
         fun merge(name: String, default: VersionedMemory, cases: List< Pair< Bool_, VersionedMemory >>): VersionedMemory {
             val maxVersion = cases.maxByOrNull { it.second.version }?.second?.version ?: default.version
             return if (maxVersion == default.version) default else {
-                check(cases.all { it.second.type == default.type })
+                check(cases.all { it.second.type == default.type }) { "Try to merge memories with different element types" }
                 val memories = cases.map { it.first to it.second.memory }
                 VersionedMemory(Memory_.merge(default.memory, memories), maxVersion + 1, default.type)
             }
