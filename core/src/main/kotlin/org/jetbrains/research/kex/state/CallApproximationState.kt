@@ -28,7 +28,7 @@ class CallApproximationState(
     }
 
     override fun print() = buildString {
-        appendln("(CALL")
+        appendLine("(CALL")
         append(preconditions.zip(postconditions).joinToString { (cond, ps) -> " <CASE> $cond <THEN> $ps" })
         append(" <DEFAULT> $defaultPrecondition <THEN> $defaultPostcondition")
         append(" END)")

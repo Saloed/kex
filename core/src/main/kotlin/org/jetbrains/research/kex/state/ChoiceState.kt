@@ -11,7 +11,7 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
     override val size: Int by lazy(LazyThreadSafetyMode.NONE) { choices.fold(0) { acc, it -> acc + it.size } }
 
     override fun print() = buildString {
-        appendln("(BEGIN")
+        appendLine("(BEGIN")
         append(choices.joinToString { " <OR> $it" })
         append(" END)")
     }

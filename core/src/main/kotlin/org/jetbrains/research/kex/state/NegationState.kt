@@ -14,9 +14,9 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
         get() = predicateState.size
 
     override fun print() = buildString {
-        appendln("(")
-        appendln("NOT")
-        appendln(predicateState.print())
+        appendLine("(")
+        appendLine("NOT")
+        appendLine(predicateState.print())
         append(")")
     }
 

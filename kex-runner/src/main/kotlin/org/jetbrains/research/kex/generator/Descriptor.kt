@@ -138,9 +138,9 @@ data class ObjectDescriptor(
         append("$klass {")
         if (fieldsInner.isNotEmpty()) {
             append("\n  ")
-            appendln(fieldsInner.values.joinToString("\n").replace("\n", "\n  "))
+            appendLine(fieldsInner.values.joinToString("\n").replace("\n", "\n  "))
         }
-        appendln("}")
+        appendLine("}")
     }
 
     fun merge(other: ObjectDescriptor): ObjectDescriptor {
@@ -188,9 +188,9 @@ data class ArrayDescriptor(
         append("$type {")
         if (elementsInner.isNotEmpty()) {
             append("\n  ")
-            appendln(elementsInner.toList().joinToString("\n") { "[${it.first}] = ${it.second}" }.replace("\n", "\n  "))
+            appendLine(elementsInner.toList().joinToString("\n") { "[${it.first}] = ${it.second}" }.replace("\n", "\n  "))
         }
-        appendln("}")
+        appendLine("}")
     }
 }
 

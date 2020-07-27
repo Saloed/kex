@@ -86,6 +86,7 @@ class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
         }
         val result = convert(callReplacement, ef, ctx)
         val afterMemory = ctx.currentMemory()
+        ctx.setMemory(memoriesBefore)
         return CallInfo(callIdx, call, result, callVariable, memoriesBefore, afterMemory)
     }
 
