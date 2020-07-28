@@ -5,10 +5,6 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
-import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -26,7 +22,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         val normalPaths = methodPaths.normalExecutionPaths
 
         val state = extendWithRefinements(methodPaths)
-        val (nestedNormal, nestedRefinementSources) = inlineRefinements(state)
+        val (nestedNormal, nestedRefinementSources) = nestedExecutionPaths(state)
 
         val allSources = refinementSources.merge(nestedRefinementSources).fmap { it.optimize() }
         val allNormal = ChainState(normalPaths, nestedNormal).optimize()
@@ -44,12 +40,17 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
     inner class CallRefinementsInliner : RecollectingTransformer<CallRefinementsInliner> {
         override val builders = dequeOf(StateBuilder())
         override fun transformCallPredicate(predicate: CallPredicate): Predicate {
-            val refinement = findRefinement(predicate.calledMethod).expanded()
+            val refinement = callRefinement(predicate)
             currentBuilder += refinement.allStates().negateWRTStatePredicates().simplify()
             currentBuilder += BasicState() // fixme: tricky hack to avoid state collapsing
             return predicate
         }
     }
+
+    private fun callRefinement(predicate: CallPredicate): Refinements =
+            findRefinement(predicate.calledMethod)
+                    .expanded()
+                    .fmap { inlineRefinementIntoState(predicate.wrap(), mapOf(predicate to it)) }
 
     private fun extendWithRefinements(builder: MethodRefinementSourceAnalyzer): PredicateState {
         val originalState = builder.methodRawFullState().let { ConstructorDeepInliner(psa).apply(it) }
@@ -57,7 +58,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         val exceptionalPaths = calls.map { predicate ->
             val instructionState = psa.builder(method).getInstructionState(predicate.instruction)
                     ?: throw IllegalStateException("No state for call")
-            val refinement = findRefinement(predicate.calledMethod).expanded()
+            val refinement = callRefinement(predicate)
             val withoutCurrentCall = instructionState.filterNot { it == predicate }
             ChainState(withoutCurrentCall, refinement.allStates())
         }
@@ -65,7 +66,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         return CallRefinementsInliner().apply(expandedState).optimize()
     }
 
-    private fun inlineRefinements(state: PredicateState): Pair<PredicateState, RefinementSources> {
+    private fun nestedExecutionPaths(state: PredicateState): Pair<PredicateState, RefinementSources> {
         val calls = PredicateCollector.collectIsInstance<CallPredicate>(state).distinct()
         val refinements = calls.map { findRefinement(it.calledMethod) }
         val normalPath = buildNormalPath(calls, refinements)
