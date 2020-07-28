@@ -42,6 +42,8 @@ class CallApproximationState(
             call
     )
 
+    override fun filter(predicate: (Predicate) -> Boolean): PredicateState = emptyState()
+
     override fun reverse() = TODO()
     override fun hashCode() = defaultHashCode(preconditions, postconditions, call, defaultPostcondition)
     override fun equals(other: Any?): Boolean {

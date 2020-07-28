@@ -1,5 +1,7 @@
 package org.jetbrains.research.kex
 
+import com.abdullin.kthelper.logging.debug
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.refinements.CallResolver
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.serialization.KexSerializer
@@ -17,6 +19,7 @@ class FixpointSolverDebug : KexTest() {
 
     @Test
     fun debugCallResolver() = run("last-fail.json") { args: CallResolver.SolverArgument ->
+        log.debug(args)
         val res = Z3FixpointSolver(cm.type).refineWithFixpointSolver(args.positive, args.negative, args.arguments)
         assert(res is FixpointResult.Sat) { res }
         println((res as FixpointResult.Sat).result)
@@ -24,6 +27,7 @@ class FixpointSolverDebug : KexTest() {
 
     @Test
     fun debugAnalyzer() = run("last-fail.json") { args: CallResolvingRefinementSourcesAnalyzer.SolverQueryArgument ->
+        log.debug(args)
         val res = Z3FixpointSolver(cm.type).mkFixpointQueryV2(args.state, args.sources, args.normals)
         assert(res is FixpointResult.Sat) { res }
         println((res as FixpointResult.Sat).result)

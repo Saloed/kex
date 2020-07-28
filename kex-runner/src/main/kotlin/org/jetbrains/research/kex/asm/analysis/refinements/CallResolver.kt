@@ -19,6 +19,7 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.wrap
 import org.jetbrains.research.kfg.ir.Method
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager) {
@@ -68,16 +69,16 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         if (dependsOnOther.isNotEmpty()) {
             error("Predicates with multiple dependencies: $dependsOnOther")
         }
-        TODO("Multi resolve")
+        for (predicate in dependentPredicates) {
+            resolveCall(predicate.wrap(), call, lastCallDependencies)
+        }
     }
 
     private fun resolveCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val negatedState = state.negateWRTStatePredicates().optimize()
         val suffixGen = TermSuffixGenerator()
-        preprocessState(state, suffixGen, dependencies, forwardMapping)
         val positiveState = preprocessState(state, suffixGen, dependencies, forwardMapping)
-        val negativeState = preprocessState(negatedState, suffixGen, dependencies, forwardMapping)
+        val negativeState = positiveState.negateWRTStatePredicates().optimize()
         val argument = SolverArgument(positiveState, negativeState, arguments)
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
