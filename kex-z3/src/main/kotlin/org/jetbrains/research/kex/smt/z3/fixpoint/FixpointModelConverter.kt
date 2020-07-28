@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import com.abdullin.kthelper.collection.dequeOf
 import com.microsoft.z3.*
+import com.microsoft.z3.enumerations.Z3_decl_kind
 import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
@@ -183,6 +184,9 @@ class FixpointModelConverter(
 
     private fun convertFPTerm(expr: FPExpr): TermWithAxiom = when {
         expr is FPNum -> TermWithAxiom.wrap { Z3Unlogic.undo(expr) }
+        expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_ADD -> listOf(expr.args[1], expr.args[2]).map { convertTerm(it) }.combine { a, b -> a add b }
+        expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_TO_FP -> convertTerm(expr.args[1])
+        expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_NEG -> convertTerm(expr.args[0]).transformTerm { it.not() }
         else -> TODO()
     }
 
