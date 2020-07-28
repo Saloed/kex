@@ -31,6 +31,7 @@ interface Transformer<T : Transformer<T>> {
         if (res is Stub) return res
         return delegate1(res)
     }
+
     private inline fun <reified T : TypeInfo> delegate0(argument: T): T = when (argument) {
 
         is PredicateState -> when (argument) {
@@ -321,5 +322,26 @@ interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {
         val result = super.transformPredicate(predicate)
         if (result != nothing()) currentBuilder += result
         return result
+    }
+
+    override fun transformNegation(ps: NegationState): PredicateState {
+        val nestedState = transformPs(ps.predicateState)
+        currentBuilder += NegationState(nestedState)
+        return ps
+    }
+
+    override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
+        val newPre = ps.preconditions.map { transformPs(it) }
+        val newPost = ps.postconditions.map { transformPs(it) }
+        val newDefaultPre = transformPs(ps.defaultPrecondition)
+        val newDefaultPost = transformPs(ps.defaultPostcondition)
+        currentBuilder += CallApproximationState(newPre, newPost, newDefaultPre, newDefaultPost, ps.call)
+        return ps
+    }
+
+    fun transformPs(ps: PredicateState): PredicateState {
+        builders.addLast(StateBuilder())
+        super.transformBase(ps)
+        return builders.removeLast().apply()
     }
 }
