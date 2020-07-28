@@ -128,19 +128,19 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
             val argument = arg(myList, 0).withMemspace(1)
             choice({
                 path {
-                    listOf(myList, myListA, myListA1).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
+                    listOf(myList, myListA, myListA1).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListA, myListA2).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
+                    listOf(myList, myListA, myListA2).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListB, myListB1).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
+                    listOf(myList, myListB, myListB1).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
             }, {
                 path {
-                    listOf(myList, myListB, myListB2).map { argument `is` it }.reduce<Term, Term> { a: Term, b: Term -> a and b } equality const(true)
+                    listOf(myList, myListB, myListB2).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
             }) + choice({
                 path {

@@ -1,7 +1,11 @@
 package org.jetbrains.research.kex.refinements
 
+import org.jetbrains.research.kex.ktype.KexClass
+import org.jetbrains.research.kex.ktype.KexInt
+import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.falseState
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
 
@@ -15,8 +19,22 @@ class InliningRefinementTest : RefinementTest("Inlining") {
 
     @Test
     fun testSample() = run("sample") {
+        val firstArg = term { arg(KexInt(), 0) }
+        val sampleCls = KexClass(nestedClass("SampleCls"))
+        val secondArg = term { arg(sampleCls, 1) }
         refinement(IllegalStateException()) {
-            emptyState()
+            choice({
+                path {
+                    firstArg - secondArg.field(KexInt(), "x").load() gt const(1) equality true
+                }
+            }, {
+                path {
+                    firstArg - secondArg.field(KexInt(), "x").load() lt const(1) equality true
+                }
+                path {
+                    firstArg gt const(6) equality true
+                }
+            })
         }
     }
 
