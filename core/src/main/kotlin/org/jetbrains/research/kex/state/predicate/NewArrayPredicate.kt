@@ -1,10 +1,7 @@
 package org.jetbrains.research.kex.state.predicate
 
 import com.abdullin.kthelper.defaultHashCode
-import kotlinx.serialization.ContextualSerialization
-import kotlinx.serialization.Polymorphic
-import kotlinx.serialization.Required
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.*
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.term.Term
@@ -20,7 +17,7 @@ class NewArrayPredicate(
         val elementType: KexType,
         @Required @Polymorphic val instruction: Instruction,
         @Required override val type: PredicateType = PredicateType.State(),
-        @Required @ContextualSerialization override val location: Location = Location()) : Predicate() {
+        @Required @Contextual override val location: Location = Location()) : Predicate() {
     override val operands by lazy { listOf(lhv) + dimentions }
 
     val numDimentions: Int

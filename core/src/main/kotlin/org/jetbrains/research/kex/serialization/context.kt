@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.serialization
 
 import kotlinx.serialization.UnsafeSerializationApi
-import kotlinx.serialization.modules.SerialModule
 import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.serializer
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.PredicateState
@@ -13,58 +13,57 @@ import org.jetbrains.research.kfg.ClassManager
 import kotlin.reflect.KClass
 
 @OptIn(UnsafeSerializationApi::class)
-val kexTypeSerialModule: SerialModule
+val kexTypeSerialModule: SerializersModule
     get() = SerializersModule {
         polymorphic(KexType::class) {
             KexType.types.forEach { (_, klass) ->
-                @Suppress("UNCHECKED_CAST") val any = klass as KClass<Any>
-                addSubclass(any, any.serializer())
+                subclass(klass, klass.serializer())
             }
         }
     }
 
 @OptIn(UnsafeSerializationApi::class)
-fun getTermSerialModule(cm: ClassManager): SerialModule = SerializersModule {
+fun getTermSerialModule(cm: ClassManager): SerializersModule = SerializersModule {
     include(getKfgSerialModule(cm))
     include(kexTypeSerialModule)
     polymorphic(Term::class) {
         Term.terms.forEach { (_, klass) ->
-            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Any>
-            addSubclass(any, any.serializer())
+            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Term>
+            subclass(any, any.serializer())
         }
     }
 
 }
 
-val predicateTypeSerialModule: SerialModule
+val predicateTypeSerialModule: SerializersModule
     get() = SerializersModule {
         polymorphic(PredicateType::class) {
-            addSubclass(PredicateType.Path::class, PredicateType.Path.serializer())
-            addSubclass(PredicateType.State::class, PredicateType.State.serializer())
-            addSubclass(PredicateType.Assume::class, PredicateType.Assume.serializer())
-            addSubclass(PredicateType.Require::class, PredicateType.Require.serializer())
+            subclass(PredicateType.Path::class, PredicateType.Path.serializer())
+            subclass(PredicateType.State::class, PredicateType.State.serializer())
+            subclass(PredicateType.Assume::class, PredicateType.Assume.serializer())
+            subclass(PredicateType.Require::class, PredicateType.Require.serializer())
         }
     }
 
 @OptIn(UnsafeSerializationApi::class)
-fun getPredicateSerialModule(cm: ClassManager): SerialModule = SerializersModule {
+fun getPredicateSerialModule(cm: ClassManager): SerializersModule = SerializersModule {
     include(getTermSerialModule(cm))
     include(predicateTypeSerialModule)
     polymorphic(Predicate::class) {
         Predicate.predicates.forEach { (_, klass) ->
-            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Any>
-            addSubclass(any, any.serializer())
+            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Predicate>
+            subclass(any, any.serializer())
         }
     }
 }
 
 @OptIn(UnsafeSerializationApi::class)
-fun getPredicateStateSerialModule(cm: ClassManager): SerialModule = SerializersModule {
+fun getPredicateStateSerialModule(cm: ClassManager): SerializersModule = SerializersModule {
     include(getPredicateSerialModule(cm))
     polymorphic(PredicateState::class) {
         PredicateState.states.forEach { (_, klass) ->
-            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Any>
-            addSubclass(any, any.serializer())
+            @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<PredicateState>
+            subclass(any, any.serializer())
         }
     }
 }

@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex.refinements
 
-import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.ChainState
@@ -47,7 +46,6 @@ class ClassesRefinementTest : RefinementTest("Classes") {
     }
 
     @Test
-    @ImplicitReflectionSerializer
     fun testManyClassArgs() = run("manyClassArgs") {
         refinementFromResource(IllegalArgumentException())
     }

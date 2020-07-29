@@ -3,7 +3,7 @@ package org.jetbrains.research.kex.asm.analysis
 import com.abdullin.kthelper.algorithm.DominatorTreeBuilder
 import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
-import kotlinx.serialization.ContextualSerialization
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.asm.manager.isImpactable
@@ -38,8 +38,8 @@ class KexRunnerException(val inner: Exception, val model: ReanimatedModel) : Exc
 
 @Serializable
 data class Failure(
-        @ContextualSerialization val `class`: Class,
-        @ContextualSerialization val method: Method,
+        @Contextual val `class`: Class,
+        @Contextual val method: Method,
         val message: String,
         val state: PredicateState
 )

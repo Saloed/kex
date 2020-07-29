@@ -51,26 +51,17 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     private fun tryResolveMultipleCalls(model: RecoveredModel, calls: Map<CallPredicate, List<TermDependency>>) {
-        val groupedByIdx = model.callDependencies.groupBy { it.callIdx }
-        val maxIdx = model.callDependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
-        val lastCallDependencies = groupedByIdx[maxIdx] ?: error("impossible")
-        val call = lastCallDependencies.first().call
-        val otherDependencies = model.callDependencies - lastCallDependencies
         val allPredicates = PredicateCollector { true }.apply { apply(model.state) }.predicates
-        val lastCallTerms = lastCallDependencies.map { it.term }.toSet()
-        val otherTerms = otherDependencies.map { it.term }.toSet()
-        val predicateTerms = allPredicates.map { it to TermCollector.getFullTermSet(it) }.toMap()
-        val dependentPredicates = allPredicates.filter {
-            ((predicateTerms[it] ?: error("impossible")) intersect lastCallTerms).isNotEmpty()
-        }
-        val dependsOnOther = dependentPredicates.filter {
-            ((predicateTerms[it] ?: error("impossible")) intersect otherTerms).isNotEmpty()
-        }
-        if (dependsOnOther.isNotEmpty()) {
-            error("Predicates with multiple dependencies: $dependsOnOther")
-        }
-        for (predicate in dependentPredicates) {
-            resolveCall(predicate.wrap(), call, lastCallDependencies)
+        val dependentTerms = calls.map { (_, value) -> value.map { it.term }.toSet() to value.first() }
+        for (predicate in allPredicates) {
+            val terms = TermCollector.getFullTermSet(predicate)
+            val dependsOnCalls = dependentTerms.filter { (it.first intersect terms).isNotEmpty() }
+                    .map { it.second }
+                    .sortedByDescending { it.callIdx }
+                    .map { calls[it.call] ?: error("impossible") }
+            for (dependency in dependsOnCalls) {
+                resolveCall(predicate.wrap(), dependency.first().call, dependency)
+            }
         }
     }
 

@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
 import com.abdullin.kthelper.logging.log
-import kotlinx.serialization.ImplicitReflectionSerializer
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
@@ -13,9 +12,9 @@ import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.random.easyrandom.EasyRandomDriver
 import org.jetbrains.research.kex.serialization.KexSerializer
 import org.jetbrains.research.kex.smt.Result
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.Z3Solver
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
@@ -110,7 +109,6 @@ abstract class RefinementTest(
             values.add(Refinement.create(criteria, ps))
         }
 
-        @ImplicitReflectionSerializer
         fun refinementFromResource(exception: Exception) {
             val criteria = criteriaForException(exception)
             val resourceName = "${suiteName}__${method.name}.json"

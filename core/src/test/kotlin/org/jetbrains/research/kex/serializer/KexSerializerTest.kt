@@ -1,7 +1,5 @@
 package org.jetbrains.research.kex.serializer
 
-import kotlinx.serialization.ImplicitReflectionSerializer
-import kotlinx.serialization.UnstableDefault
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.serialization.KexSerializer
@@ -12,8 +10,6 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import kotlin.test.*
 
-@UnstableDefault
-@ImplicitReflectionSerializer
 class KexSerializerTest : KexTest() {
     val serializer = KexSerializer(cm)
 

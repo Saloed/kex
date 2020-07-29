@@ -1,11 +1,18 @@
 package org.jetbrains.research.kex.serialization
 
-import kotlinx.serialization.*
-import kotlinx.serialization.builtins.list
-import kotlinx.serialization.modules.SerialModule
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Serializer
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.encoding.CompositeEncoder
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.plus
-import kotlinx.serialization.modules.serializersModuleOf
+import kotlinx.serialization.modules.SerializersModuleBuilder
+import kotlinx.serialization.modules.polymorphic
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.*
@@ -18,65 +25,88 @@ import org.jetbrains.research.kfg.type.parseDesc
 import kotlin.reflect.KClass
 
 
-fun getKfgSerialModule(cm: ClassManager): SerialModule {
+fun getKfgSerialModule(cm: ClassManager): SerializersModule {
     ClassSerializer.cm = cm
     TypeSerializer.cm = cm
-    return serializersModuleOf(mapOf(
-            //BinaryOpcodes
-            BinaryOpcode::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Add::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Sub::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Mul::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Div::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Rem::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Shl::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Shr::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Ushr::class to BinaryOpcodeSerializer,
-            BinaryOpcode.And::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Or::class to BinaryOpcodeSerializer,
-            BinaryOpcode.Xor::class to BinaryOpcodeSerializer,
-            //CmpOpcodes
-            CmpOpcode::class to CmpOpcodeSerializer,
-            CmpOpcode.Eq::class to CmpOpcodeSerializer,
-            CmpOpcode.Neq::class to CmpOpcodeSerializer,
-            CmpOpcode.Lt::class to CmpOpcodeSerializer,
-            CmpOpcode.Gt::class to CmpOpcodeSerializer,
-            CmpOpcode.Le::class to CmpOpcodeSerializer,
-            CmpOpcode.Ge::class to CmpOpcodeSerializer,
-            CmpOpcode.Cmp::class to CmpOpcodeSerializer,
-            CmpOpcode.Cmpg::class to CmpOpcodeSerializer,
-            CmpOpcode.Cmpl::class to CmpOpcodeSerializer,
-            //CallOpcodes
-            CallOpcode::class to CallOpcodeSerializer,
-            CallOpcode.Interface::class to CallOpcodeSerializer,
-            CallOpcode.Virtual::class to CallOpcodeSerializer,
-            CallOpcode.Static::class to CallOpcodeSerializer,
-            CallOpcode.Special::class to CallOpcodeSerializer,
-            //Classes
-            Class::class to ClassSerializer,
-            ConcreteClass::class to ClassSerializer,
-            OuterClass::class to ClassSerializer,
-            // other classes
-            Location::class to LocationSerializer,
-            Type::class to TypeSerializer,
-            Method::class to MethodSerializer
-    )) + SerializersModule {
-        polymorphic(InstructionSerializer) {
-            subclass(CallInstSerializer.apply { reset() })
-            subclass(NewInstSerializer.apply { reset() })
-            subclass(NewArrayInstSerializer.apply { reset() })
-        }
-        polymorphic(NameSerializer) {
-            subclass(StringNameSerializer.apply { reset() })
-            subclass(SlotSerializer.apply { reset() })
-        }
+    return SerializersModule {
+        include(binaryOpCodeSerializers())
+        include(cmpOpcodeSerializers())
+        include(callOpcodeSerializers())
+        include(classSerializers())
+        include(instructionSerializers())
+        include(nameSerializers())
+
+        contextual(Location::class, LocationSerializer)
+        contextual(Type::class, TypeSerializer)
+        contextual(Method::class, MethodSerializer)
     }
 }
+
+private fun binaryOpCodeSerializers() = SerializersModule {
+    contextual(BinaryOpcode::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Add::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Sub::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Mul::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Div::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Rem::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Shl::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Shr::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Ushr::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.And::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Or::class, BinaryOpcodeSerializer)
+    unsafeContextual(BinaryOpcode.Xor::class, BinaryOpcodeSerializer)
+}
+
+private fun cmpOpcodeSerializers() = SerializersModule {
+    contextual(CmpOpcode::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Eq::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Neq::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Lt::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Gt::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Le::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Ge::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Cmp::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Cmpg::class, CmpOpcodeSerializer)
+    unsafeContextual(CmpOpcode.Cmpl::class, CmpOpcodeSerializer)
+}
+
+private fun callOpcodeSerializers() = SerializersModule {
+    contextual(CallOpcode::class, CallOpcodeSerializer)
+    unsafeContextual(CallOpcode.Interface::class, CallOpcodeSerializer)
+    unsafeContextual(CallOpcode.Virtual::class, CallOpcodeSerializer)
+    unsafeContextual(CallOpcode.Static::class, CallOpcodeSerializer)
+    unsafeContextual(CallOpcode.Special::class, CallOpcodeSerializer)
+}
+
+private fun classSerializers() = SerializersModule {
+    contextual(Class::class, ClassSerializer)
+    unsafeContextual(ConcreteClass::class, ClassSerializer)
+    unsafeContextual(OuterClass::class, ClassSerializer)
+}
+
+private fun instructionSerializers() = SerializersModule {
+    polymorphic(Instruction::class, InstructionSerializer) {
+        subclass(CallInst::class, CallInstSerializer.apply { reset() })
+        subclass(NewInst::class, NewInstSerializer.apply { reset() })
+        subclass(NewArrayInst::class, NewArrayInstSerializer.apply { reset() })
+    }
+}
+
+private fun nameSerializers() = SerializersModule {
+    polymorphic(Name::class, NameSerializer) {
+        subclass(StringName::class, StringNameSerializer.apply { reset() })
+        subclass(Slot::class, SlotSerializer.apply { reset() })
+    }
+}
+
+@Suppress("UNCHECKED_CAST")
+private inline fun <reified Base : Any, reified T : Base> SerializersModuleBuilder.unsafeContextual(kClass: KClass<T>, serializer: KSerializer<Base>) =
+        contextual(kClass, serializer as KSerializer<T>)
 
 @Serializer(forClass = BinaryOpcode::class)
 object BinaryOpcodeSerializer : KSerializer<BinaryOpcode> {
     override val descriptor: SerialDescriptor
-        get() = PrimitiveDescriptor("opcode", PrimitiveKind.STRING)
+        get() = PrimitiveSerialDescriptor("opcode", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: BinaryOpcode) {
         encoder.encodeString(value.name)
@@ -91,7 +121,7 @@ object BinaryOpcodeSerializer : KSerializer<BinaryOpcode> {
 @Serializer(forClass = CmpOpcode::class)
 object CmpOpcodeSerializer : KSerializer<CmpOpcode> {
     override val descriptor: SerialDescriptor
-        get() = PrimitiveDescriptor("opcode", PrimitiveKind.STRING)
+        get() = PrimitiveSerialDescriptor("opcode", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: CmpOpcode) {
         encoder.encodeString(value.name)
@@ -106,7 +136,7 @@ object CmpOpcodeSerializer : KSerializer<CmpOpcode> {
 @Serializer(forClass = CallOpcode::class)
 object CallOpcodeSerializer : KSerializer<CallOpcode> {
     override val descriptor: SerialDescriptor
-        get() = PrimitiveDescriptor("opcode", PrimitiveKind.STRING)
+        get() = PrimitiveSerialDescriptor("opcode", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: CallOpcode) {
         encoder.encodeString(value.name)
@@ -121,7 +151,7 @@ object CallOpcodeSerializer : KSerializer<CallOpcode> {
 @Serializer(forClass = Location::class)
 object LocationSerializer : KSerializer<Location> {
     override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Location") {
+        get() = buildClassSerialDescriptor("Location") {
             element<String>("package")
             element<String>("file")
             element<Int>("line")
@@ -142,7 +172,7 @@ object LocationSerializer : KSerializer<Location> {
         var line = 0
         loop@ while (true) {
             when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 0 -> `package` = Package(input.decodeStringElement(descriptor, i))
                 1 -> file = input.decodeStringElement(descriptor, i)
                 2 -> line = input.decodeIntElement(descriptor, i)
@@ -159,7 +189,7 @@ internal object ClassSerializer : KSerializer<Class> {
     lateinit var cm: ClassManager
 
     override val descriptor: SerialDescriptor
-        get() = PrimitiveDescriptor("fullname", PrimitiveKind.STRING)
+        get() = PrimitiveSerialDescriptor("fullname", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: Class) {
         encoder.encodeString(value.fullname)
@@ -171,11 +201,11 @@ internal object ClassSerializer : KSerializer<Class> {
 @Serializer(forClass = Method::class)
 internal object MethodSerializer : KSerializer<Method> {
     override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Method") {
+        get() = buildClassSerialDescriptor("Method") {
             element("class", ClassSerializer.descriptor)
             element<String>("name")
             element("retval", TypeSerializer.descriptor)
-            element("arguments", TypeSerializer.list.descriptor)
+            element("arguments", ListSerializer(TypeSerializer).descriptor)
         }
 
     override fun serialize(encoder: Encoder, value: Method) {
@@ -183,7 +213,7 @@ internal object MethodSerializer : KSerializer<Method> {
         output.encodeSerializableElement(descriptor, 0, ClassSerializer, value.`class`)
         output.encodeStringElement(descriptor, 1, value.name)
         output.encodeSerializableElement(descriptor, 2, TypeSerializer, value.returnType)
-        output.encodeSerializableElement(descriptor, 3, TypeSerializer.list, value.argTypes.toList())
+        output.encodeSerializableElement(descriptor, 3, ListSerializer(TypeSerializer), value.argTypes.toList())
         output.endStructure(descriptor)
     }
 
@@ -195,11 +225,11 @@ internal object MethodSerializer : KSerializer<Method> {
         lateinit var argTypes: Array<Type>
         loop@ while (true) {
             when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 0 -> klass = input.decodeSerializableElement(descriptor, i, ClassSerializer)
                 1 -> name = input.decodeStringElement(descriptor, i)
                 2 -> retval = input.decodeSerializableElement(descriptor, i, TypeSerializer)
-                3 -> argTypes = input.decodeSerializableElement(descriptor, i, TypeSerializer.list).toTypedArray()
+                3 -> argTypes = input.decodeSerializableElement(descriptor, i, ListSerializer(TypeSerializer)).toTypedArray()
                 else -> throw SerializationException("Unknown index $i")
             }
         }
@@ -213,7 +243,7 @@ internal object TypeSerializer : KSerializer<Type> {
     lateinit var cm: ClassManager
 
     override val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Type") {
+        get() = buildClassSerialDescriptor("Type") {
             element<String>("type")
         }
 
@@ -228,7 +258,7 @@ internal object TypeSerializer : KSerializer<Type> {
         lateinit var type: Type
         loop@ while (true) {
             when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 0 -> type = parseDesc(cm.type, input.decodeStringElement(descriptor, i))
                 else -> throw SerializationException("Unknown index $i")
             }
@@ -243,7 +273,7 @@ internal val InstructionSerializer = PolymorphicSerializer(Instruction::class)
 @Serializer(forClass = CallInst::class)
 internal object CallInstSerializer : KSerializer<CallInst> {
     private val referenceSerializer = object : ReferenceSerializer<CallInst>(CallInst::class) {
-        override fun SerialDescriptorBuilder.buildDescriptor() {
+        override fun ClassSerialDescriptorBuilder.buildDescriptor() {
             element("method", MethodSerializer.descriptor)
             element("opcode", CallOpcodeSerializer.descriptor)
             element("class", ClassSerializer.descriptor)
@@ -286,7 +316,7 @@ internal object CallInstSerializer : KSerializer<CallInst> {
 @Serializer(forClass = NewInst::class)
 internal object NewInstSerializer : KSerializer<NewInst> {
     private val referenceSerializer = object : ReferenceSerializer<NewInst>(NewInst::class) {
-        override fun SerialDescriptorBuilder.buildDescriptor() {
+        override fun ClassSerialDescriptorBuilder.buildDescriptor() {
             element("name", NameSerializer.descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
@@ -325,7 +355,7 @@ internal object NewInstSerializer : KSerializer<NewInst> {
 @Serializer(forClass = NewArrayInst::class)
 internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
     private val referenceSerializer = object : ReferenceSerializer<NewArrayInst>(NewArrayInst::class) {
-        override fun SerialDescriptorBuilder.buildDescriptor() {
+        override fun ClassSerialDescriptorBuilder.buildDescriptor() {
             element("name", NameSerializer.descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
@@ -366,7 +396,7 @@ internal val NameSerializer = PolymorphicSerializer(Name::class)
 @Serializer(forClass = StringName::class)
 internal object StringNameSerializer : KSerializer<StringName> {
     private val referenceSerializer = object : ReferenceSerializer<StringName>(StringName::class) {
-        override fun SerialDescriptorBuilder.buildDescriptor() {
+        override fun ClassSerialDescriptorBuilder.buildDescriptor() {
             element<String>("name")
         }
 
@@ -396,7 +426,7 @@ internal object StringNameSerializer : KSerializer<StringName> {
 @Serializer(forClass = Slot::class)
 internal object SlotSerializer : KSerializer<Slot> {
     private val referenceSerializer = object : ReferenceSerializer<Slot>(Slot::class) {
-        override fun SerialDescriptorBuilder.buildDescriptor() {}
+        override fun ClassSerialDescriptorBuilder.buildDescriptor() {}
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: Slot) {}
         override fun Decoder.deserializeObject(): ReferencedObject<Slot> {
             val ref = deserializeObjectAndReference { _, i -> throw SerializationException("Unknown index $i") }
@@ -415,13 +445,13 @@ internal data class ReferencedObject<T : Any>(val ref: String, val obj: T)
 
 internal abstract class ReferenceSerializer<T : Any>(val type: KClass<T>) {
     private val referenceCache = hashMapOf<String, T>()
-    abstract fun SerialDescriptorBuilder.buildDescriptor()
+    abstract fun ClassSerialDescriptorBuilder.buildDescriptor()
 
     private val refIndex: Int
         get() = descriptor.elementsCount - 1
 
     val descriptor: SerialDescriptor
-        get() = SerialDescriptor("Reference[${type.qualifiedName}]") {
+        get() = buildClassSerialDescriptor("Reference[${type.qualifiedName}]") {
             buildDescriptor()
             element<String>("ref")
         }
@@ -447,7 +477,7 @@ internal abstract class ReferenceSerializer<T : Any>(val type: KClass<T>) {
         lateinit var objId: String
         loop@ while (true) {
             when (val i = input.decodeElementIndex(descriptor)) {
-                CompositeDecoder.READ_DONE -> break@loop
+                CompositeDecoder.DECODE_DONE -> break@loop
                 refIndex -> objId = input.decodeStringElement(descriptor, i)
                 else -> input.builder(descriptor, i)
             }
