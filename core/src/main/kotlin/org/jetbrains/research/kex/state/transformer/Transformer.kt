@@ -89,6 +89,8 @@ interface Transformer<T : Transformer<T>> {
             is BinaryTerm -> transformBinary(argument) as T
             is ConstLongTerm -> transformConstLong(argument) as T
             is InstanceOfTerm -> transformInstanceOf(argument) as T
+            is LocalObjectTerm -> transformLocalObject(argument) as T
+            is IfTerm -> transformIf(argument) as T
             else -> unreachable { log.error("No Term transformer for $argument") }
         }
 
@@ -153,6 +155,8 @@ interface Transformer<T : Transformer<T>> {
             is BinaryTerm -> transformBinaryTerm(argument) as T
             is ConstLongTerm -> transformConstLongTerm(argument) as T
             is InstanceOfTerm -> transformInstanceOfTerm(argument) as T
+            is LocalObjectTerm -> transformLocalObjectTerm(argument) as T
+            is IfTerm -> transformIfTerm(argument) as T
             else -> unreachable { log.error("No Term transformer for $argument") }
         }
 
@@ -261,6 +265,8 @@ interface Transformer<T : Transformer<T>> {
     fun transformReturnValue(term: ReturnValueTerm): Term = term.accept(this)
     fun transformValue(term: ValueTerm): Term = term.accept(this)
     fun transformUndef(term: UndefTerm): Term = term.accept(this)
+    fun transformLocalObject(term: LocalObjectTerm): Term = term.accept(this)
+    fun transformIf(term: IfTerm): Term = term.accept(this)
 
     fun transformArgumentTerm(term: ArgumentTerm): Term = term
     fun transformArrayIndexTerm(term: ArrayIndexTerm): Term = term
@@ -289,6 +295,8 @@ interface Transformer<T : Transformer<T>> {
     fun transformReturnValueTerm(term: ReturnValueTerm): Term = term
     fun transformValueTerm(term: ValueTerm): Term = term
     fun transformUndefTerm(term: UndefTerm): Term = term
+    fun transformLocalObjectTerm(term: LocalObjectTerm): Term = term
+    fun transformIfTerm(term: IfTerm): Term = term
 }
 
 interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {
@@ -333,9 +341,9 @@ interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {
     override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
         val newPre = ps.preconditions.map { transformPs(it) }
         val newPost = ps.postconditions.map { transformPs(it) }
-        val newDefaultPre = transformPs(ps.defaultPrecondition)
+        val newCallState = transformPs(ps.callState)
         val newDefaultPost = transformPs(ps.defaultPostcondition)
-        currentBuilder += CallApproximationState(newPre, newPost, newDefaultPre, newDefaultPost, ps.call)
+        currentBuilder += CallApproximationState(ps.eliminateCall, newPre, newPost, newCallState, newDefaultPost, ps.call)
         return ps
     }
 

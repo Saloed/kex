@@ -10,16 +10,17 @@ import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.state.transformer.TermCollector
+import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.ConcreteClass
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.OuterClass
+import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
+import java.util.*
 
 enum class DependencyType {
     RETURN_VALUE, MEMORY;
@@ -53,6 +54,8 @@ class FixpointModelConverter(
         callDependencies = hashSetOf()
         val state = expr.simplify()
                 .let { convert(it) }
+                .let { ComparisonNormalizer().apply(it) }
+                .let { Optimizer().apply(it) }
                 .let { InstanceOfCorrector(z3Context).apply(it) }
                 .simplify()
         return RecoveredModel(state, callDependencies.toSet())
@@ -62,6 +65,60 @@ class FixpointModelConverter(
         override val name: String = "Unknown"
         override val bitsize: Int = 0
         override fun getKfgType(types: TypeFactory): Type = throw IllegalStateException("type is unknown")
+    }
+
+    private class ComparisonNormalizer : Transformer<ComparisonNormalizer> {
+        override fun transformCmpTerm(term: CmpTerm): Term = normalize(term) ?: term
+        private fun normalize(term: CmpTerm): Term? {
+            val rhv = term.rhv as? ConstIntTerm ?: return null
+            val lhv = term.lhv as? BinaryTerm ?: return null
+            val lhvRhv = lhv.rhv as? BinaryTerm ?: return null
+            val lhvRhvLhv = lhvRhv.lhv as? ConstIntTerm ?: return null
+            if (rhv.value != 0) return null
+            if (lhv.opcode !is BinaryOpcode.Add) return null
+            if (lhvRhv.opcode !is BinaryOpcode.Mul) return null
+            if (lhvRhvLhv.value != -1) return null
+            return CmpTerm(term.type, term.opcode, lhv.lhv, lhvRhv.rhv)
+        }
+    }
+
+    private class NumeralEqualityChecksNormalizer : RecollectingTransformer<NumeralEqualityChecksNormalizer> {
+        override val builders: Deque<StateBuilder> = dequeOf(StateBuilder())
+        override fun transformBasic(ps: BasicState): PredicateState {
+            for (predicate in ps.predicates) {
+                val equalityPredicate = predicate as? EqualityPredicate
+                val pair = equalityPredicate?.let { findPair(it, ps.predicates) }
+                if (pair == null) {
+                    currentBuilder += predicate
+                    continue
+                }
+                val (current, paired, equalityRhv) = pair
+                val cmpTerm = CmpTerm(current.type, CmpOpcode.Eq(), current.lhv, current.rhv)
+                currentBuilder += EqualityPredicate(cmpTerm, equalityRhv, predicate.type, predicate.location)
+            }
+            return emptyState()
+        }
+
+        private fun findPair(predicate: EqualityPredicate, searchSpace: List<Predicate>): Triple<CmpTerm, CmpTerm, ConstBoolTerm>? =
+                searchSpace.filterIsInstance<EqualityPredicate>()
+                        .mapNotNull { checkCandidate(predicate, it) }
+                        .firstOrNull()
+
+        private fun checkCandidate(predicate: EqualityPredicate, candidate: EqualityPredicate): Triple<CmpTerm, CmpTerm, ConstBoolTerm>? {
+            val rhv = predicate.rhv as? ConstBoolTerm ?: return null
+            if (rhv != candidate.rhv) return null
+            val target = predicate.lhv as? CmpTerm ?: return null
+            val candidateTerm = candidate.lhv as? CmpTerm ?: return null
+            if (candidateTerm.lhv == target.lhv && candidateTerm.rhv == target.rhv) {
+                if (target.opcode is CmpOpcode.Le && candidateTerm.opcode is CmpOpcode.Ge) return Triple(target, candidateTerm, rhv)
+                if (target.opcode is CmpOpcode.Ge && candidateTerm.opcode is CmpOpcode.Le) return Triple(target, candidateTerm, rhv)
+            }
+            if (candidateTerm.lhv == target.rhv && candidateTerm.rhv == target.lhv) {
+                if (target.opcode is CmpOpcode.Le && candidateTerm.opcode is CmpOpcode.Le) return Triple(target, candidateTerm, rhv)
+                if (target.opcode is CmpOpcode.Ge && candidateTerm.opcode is CmpOpcode.Ge) return Triple(target, candidateTerm, rhv)
+            }
+            return null
+        }
     }
 
     private class InstanceOfCorrector(private val z3Context: Z3Context) : RecollectingTransformer<InstanceOfCorrector> {
@@ -126,6 +183,7 @@ class FixpointModelConverter(
     private fun convertTerm(expr: Expr): TermWithAxiom = when {
         expr.isVar -> convertVariableTerm(expr)
         expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
+        expr.isITE -> convertITETerm(expr)
         expr is BoolExpr -> convertBoolTerm(expr)
         expr is IntExpr -> convertIntTerm(expr)
         expr is BitVecExpr -> convertBVTerm(expr)
@@ -199,12 +257,21 @@ class FixpointModelConverter(
         else -> TODO("Real: $expr")
     }
 
+    private fun convertITETerm(expr: Expr): TermWithAxiom {
+        val (condition, trueBranch, falseBranch) = expr.convertArgs()
+        check(trueBranch.term.type == falseBranch.term.type) { "Types of expression branches must be equal" }
+        return TermWithAxiom.wrap { IfTerm(trueBranch.term.type, condition.term, trueBranch.term, falseBranch.term) }
+                .binaryOperation(condition) { res, _ -> res }
+                .binaryOperation(trueBranch) { res, _ -> res }
+                .binaryOperation(falseBranch) { res, _ -> res }
+    }
+
     private fun convertMemoryLoad(memory: Expr, location: Expr): TermWithAxiom {
         if (!memory.isVar) throw IllegalStateException("Memory is not var $memory")
         val decl = mapping.declarations[memory.index]
         return when {
-            decl is DeclarationTracker.Declaration.Property -> readProperty(convertTerm(location), decl)
-            decl is DeclarationTracker.Declaration.Memory && mapping.isArrayMemory(decl) -> {
+            decl is DeclarationTracker.Declaration.NormalProperty -> readProperty(convertTerm(location), decl)
+            decl is DeclarationTracker.Declaration.NormalMemory && mapping.isArrayMemory(decl) -> {
                 if (!(location.isAdd && location.args.size == 2)) {
                     throw IllegalStateException("Unexpected array memory location $location")
                 }
@@ -224,18 +291,7 @@ class FixpointModelConverter(
 
     private fun readCallProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Call.CallProperty): TermWithAxiom {
         val callInfo = mapping.calls[property.index]!!
-        if (property !is DeclarationTracker.Declaration.Call.CallClassProperty) TODO("Not yet implemented")
-        val owner = when {
-            obj.term.type.getKfgType(tf) is ClassType -> obj.term
-            obj.term is ConstIntTerm -> {
-                val locals = z3Context.getLocalsTypeMapping()
-                val type = locals[obj.term.value] ?: throw IllegalStateException("No type info about local variable")
-                term { value(type, "local__${obj.term.value}") }
-            }
-            else -> throw IllegalArgumentException("Only class types supported")
-        }
-        val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
-        val loadTerm = obj.binaryOperation(fieldLoad) { _, load -> load }
+        val loadTerm = readProperty(obj, property)
         callDependencies.add(TermDependency(loadTerm.term, callInfo.index, callInfo.predicate, DependencyType.MEMORY))
         return loadTerm
     }
@@ -243,17 +299,17 @@ class FixpointModelConverter(
     private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {
         is DeclarationTracker.Declaration.ClassProperty -> {
             val owner = when {
-                obj.term.type.getKfgType(tf) is ClassType -> obj.term
+                obj.term.type.getKfgType(tf) is ClassType -> obj
                 obj.term is ConstIntTerm -> {
-                    val locals = z3Context.getLocalsTypeMapping()
-                    val type = locals[obj.term.value]
-                            ?: throw IllegalStateException("No type info about local variable")
-                    term { value(type, "local__${obj.term.value}") }
+                    val objId = obj.term.value
+                    val identifier = z3Context.getLocals().entries
+                            .firstOrNull { (_, id) -> id == objId }?.key
+                            ?: error("No info about object $objId")
+                    TermWithAxiom.wrap { LocalObjectTerm("local__$objId", identifier) }
                 }
                 else -> throw IllegalArgumentException("Only class types supported")
             }
-            val fieldLoad = getFieldLoad(owner, tf.cm[property.className], property.propertyName)
-            obj.binaryOperation(fieldLoad) { _, load -> load }
+            getFieldLoad(owner, tf.cm[property.className], property.propertyName)
         }
         else -> when {
             property.fullName == Z3Context.TYPE_PROPERTY -> obj.transformTerm { InstanceOfTerm(UnknownType, it) }
@@ -263,10 +319,10 @@ class FixpointModelConverter(
 
     }
 
-    private fun getFieldLoad(owner: Term, cls: Class, fieldName: String): TermWithAxiom {
+    private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String): TermWithAxiom {
         val field = cls.findField(fieldName)
         if (field != null) {
-            return TermWithAxiom.wrap { owner.field(field.type.kexType, field.name).load() }
+            return owner.transformTerm { it.field(field.type.kexType, field.name).load() }
         }
         val fields = tf.cm.concreteClasses
                 .filter { it.isInheritorOf(cls) }
@@ -279,14 +335,15 @@ class FixpointModelConverter(
         val axioms = fields.map {
             basic {
                 path {
-                    owner.instanceOf(it.`class`) equality const(true)
+                    owner.term.instanceOf(it.`class`) equality const(true)
                 }
                 state {
-                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner).field(it.type.kexType, it.name).load()
+                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load()
                 }
             }
         }
-        return TermWithAxiom(resultFiledLoad, ChoiceState(axioms))
+        val result = TermWithAxiom(resultFiledLoad, ChoiceState(axioms))
+        return owner.binaryOperation(result) { _, fieldLoad -> fieldLoad }
     }
 
     private fun Term.instanceOf(cls: Class): Term = cls.allInheritors()

@@ -17,8 +17,8 @@ class Z3ContextWithRecursion(
         private val predicateName: String, tf: TypeFactory) : Z3Converter(tf) {
 
     private val orderedDeclarations: MutableList<DeclarationTracker.Declaration>
-    private val orderedProperties: List<DeclarationTracker.Declaration.Property>
-    private val propertyTypes = hashMapOf<DeclarationTracker.Declaration.Property, KexType>()
+    private val orderedProperties: List<DeclarationTracker.Declaration.NormalProperty>
+    private val propertyTypes = hashMapOf<DeclarationTracker.Declaration.NormalProperty, KexType>()
     val mapper: ModelDeclarationMapping
 
     init {
@@ -51,14 +51,14 @@ class Z3ContextWithRecursion(
         return Z3Bool(ef.ctx, predicateApplication, spliceAxioms(ef.ctx, predicateAxioms))
     }
 
-    private fun prepareMemoryProperties(): List<DeclarationTracker.Declaration.Property> {
+    private fun prepareMemoryProperties(): List<DeclarationTracker.Declaration.NormalProperty> {
         val allCallProperties = recursiveCalls.values
         val propertyPrototype = allCallProperties.first()
         if (allCallProperties.any { it != propertyPrototype }) {
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            val property = DeclarationTracker.Declaration.ClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
+            val property = DeclarationTracker.Declaration.NormalClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
             propertyTypes[property] = loadTerm.type
             property
         }
@@ -74,7 +74,7 @@ class Z3ContextWithRecursion(
                 )
     }
 
-    private fun readProperty(property: DeclarationTracker.Declaration.Property, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
+    private fun readProperty(property: DeclarationTracker.Declaration.NormalProperty, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
         val type = Z3Type(propertyTypes[property]!!)
         val memory = ctx.getProperties(property.memspace, property.fullName, type).memory
         memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory

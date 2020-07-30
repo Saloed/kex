@@ -153,26 +153,24 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     }
 
     fun convert(newarray: NewArrayPredicate, ef: $factory, ctx: ${solver}Context): Bool_ {
-        val memspace = newarray.lhv.memspace
         val lhv = convert(newarray.lhv, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `new`") }
-        val elementSize = ${factory}.getTypeSize(newarray.elementType)
-        val totalSize = newarray.dimentions.fold(1) { acc: Int, term: Term ->
+        val ptr = ctx.getLocalPtr(newarray.identifier, newarray.identifier.size({ ${factory}.getTypeSize(it).int }, defaultAllocSize))
+        val length = newarray.dimentions.fold(1) { acc: Int, term: Term ->
             acc * ((term as? ConstIntTerm)?.value ?: defaultAllocSize)
         }
-        val ptr = ctx.getLocalArray(memspace, totalSize, elementSize, newarray, KexArray(newarray.elementType, memspace))
+        ctx.writeProperty(ptr, newarray.identifier.memspace, "length", ef.makeIntConst(length), Int_::class)
         return lhv eq ptr
     }
 
     fun convert(new: NewPredicate, ef: $factory, ctx: ${solver}Context): Bool_ {
-        val memspace = new.lhv.memspace
         val lhv = convert(new.lhv, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `new`") }
-        val elementSize = ${factory}.getTypeSize(new.lhv.type)
-        return lhv eq ctx.getLocalPtr(memspace, elementSize, new, new.lhv.type)
+        val size = new.identifier.size({ ${factory}.getTypeSize(it).int }, defaultAllocSize)
+        return lhv eq ctx.getLocalPtr(new.identifier, size)
     }
 
 #set($terms = ["Argument", "ArrayIndex", "ArrayLength", "ArrayLoad", "Binary", "Call", "Cast", "Cmp",
     "ConstBool", "ConstByte", "ConstChar", "ConstClass", "ConstDouble", "ConstFloat", "ConstInt", "ConstLong",
-    "ConstShort", "ConstString", "FieldLoad", "Field", "InstanceOf", "Neg", "Null", "ReturnValue", "Value", "Undef"])
+    "ConstShort", "ConstString", "FieldLoad", "Field", "InstanceOf", "Neg", "Null", "ReturnValue", "Value", "Undef", "LocalObject", "If"])
     fun convert(term: Term, ef: $factory, ctx: ${solver}Context): Dynamic_ = when (term) {
 #foreach($term in $terms)
         is ${term}Term -> convert(term, ef, ctx)
@@ -340,5 +338,21 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     fun convert(undef: UndefTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
         val expr = ef.getVarByTypeAndName(undef.type, undef.name, true)
         return addTypeAxioms(undef, expr, ef, ctx)
+    }
+
+    fun convert(localObjectTerm: LocalObjectTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
+        val size = localObjectTerm.identifier.size({ ${factory}.getTypeSize(it).int }, defaultAllocSize)
+        return ctx.getLocalPtr(localObjectTerm.identifier, size)
+    }
+
+    fun convert(ifTerm: IfTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
+        val cond = ${valexpr}.forceCast< $Bool >(convert(ifTerm.condition, ef, ctx))
+        val trueBranch = convert(ifTerm.trueBranch, ef, ctx)
+        val falseBranch = convert(ifTerm.falseBranch, ef, ctx)
+        val expr = ${solver}Engine.ite(ef.ctx, cond.expr, trueBranch.expr, falseBranch.expr)
+        val axiom = spliceAxioms(ef.ctx, cond.axiom, trueBranch.axiom, falseBranch.axiom)
+        return ${valexpr}(ef.ctx, expr, axiom)
+        val result =  ${valexpr}(ef.ctx, expr, axiom)
+        return ${valexpr}.forceCast(result, ${solver}Type(ifTerm.type))
     }
 }

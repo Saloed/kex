@@ -19,7 +19,6 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kex.state.wrap
 import org.jetbrains.research.kfg.ir.Method
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager) {
@@ -31,7 +30,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     inline fun <reified T : Argument<T>> callResolutionLoopMany(argument: T, crossinline processor: (T) -> List<RecoveredModel>): List<PredicateState> {
         while (true) {
             log.debug("Enter call resolution loop for ${methodAnalyzer.method}")
-            val callArgument = argument.transform { approximationManager.extendWithUnderApproximations(it) }
+            val callArgument = argument.transform { approximationManager.extendWithUnderApproximations(it, eliminateCalls = true) }
             val processed = processor(callArgument)
             if (processed.all { it.isFinal }) return processed.map { it.finalStateOrException() }
             processed.forEach { resolveCalls(it) }
@@ -45,28 +44,25 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         if (model.isFinal) return
         val calls = model.callDependencies.groupBy { it.call }
         if (calls.isEmpty()) return
-        if (calls.size > 1) return tryResolveMultipleCalls(model, calls)
+        if (calls.size > 1) return tryResolveMultipleCalls(model)
         val (call, dependencies) = calls.entries.last()
-        resolveCall(model.state, call, dependencies)
+        resolveSingleCall(model.state, call, dependencies)
     }
 
-    private fun tryResolveMultipleCalls(model: RecoveredModel, calls: Map<CallPredicate, List<TermDependency>>) {
-        val allPredicates = PredicateCollector { true }.apply { apply(model.state) }.predicates
-        val dependentTerms = calls.map { (_, value) -> value.map { it.term }.toSet() to value.first() }
-        for (predicate in allPredicates) {
-            val terms = TermCollector.getFullTermSet(predicate)
-            val dependsOnCalls = dependentTerms.filter { (it.first intersect terms).isNotEmpty() }
-                    .map { it.second }
-                    .sortedByDescending { it.callIdx }
-                    .map { calls[it.call] ?: error("impossible") }
-            for (dependency in dependsOnCalls) {
-                resolveCall(predicate.wrap(), dependency.first().call, dependency)
-            }
-        }
+    private fun tryResolveMultipleCalls(model: RecoveredModel) {
+        val maxId = model.callDependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
+        val depsToResolve = model.callDependencies.filter { it.callIdx == maxId }
+        val callToResolve = depsToResolve.first().call
+        resolveSingleCall(model.state, callToResolve, depsToResolve)
     }
 
-    private fun resolveCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
-        val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
+    private fun resolveSingleCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
+        val callPreconditions = resolveCalls(state, listOf(call), dependencies)
+        approximationManager.update(call, MethodUnderApproximation(callPreconditions, state))
+    }
+
+    private fun resolveCalls(state: PredicateState, calls: List<CallPredicate>, dependencies: List<TermDependency>): PredicateState {
+        val (arguments, forwardMapping, backwardMapping) = collectArguments(state, calls, dependencies)
         val suffixGen = TermSuffixGenerator()
         val positiveState = preprocessState(state, suffixGen, dependencies, forwardMapping)
         val negativeState = positiveState.negateWRTStatePredicates().optimize()
@@ -84,8 +80,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
             log.debug(result)
             result
         }
-        val finalResult = postprocessState(result, backwardMapping)
-        approximationManager.update(call, MethodUnderApproximation(finalResult, state))
+        return postprocessState(result, backwardMapping)
     }
 
     private fun preprocessState(state: PredicateState, suffixGen: TermSuffixGenerator, dependencies: List<TermDependency>, forwardMapping: TermRemapper): PredicateState =
@@ -155,9 +150,9 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     }
 
-    private fun collectArguments(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
+    private fun collectArguments(state: PredicateState, calls: List<CallPredicate>, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
         val dependentTerms = dependencies.map { it.term }.toSet()
-        val callArguments = VariableCollector().apply { transform(call.call) }.variables.toList()
+        val callArguments = calls.flatMap { call -> VariableCollector().apply { transform(call.call) }.variables }
         val stateArguments = collectVariables(state).filter { it !is FieldTerm }.filter { it !in dependentTerms }
         val argumentsMapping = (callArguments + stateArguments).map { arg -> arg to term { value(arg.type, "refine_arg_${arg.name}") } }.toMap()
         val backwardMapping = argumentsMapping.map { it.value to it.key }.toMap()

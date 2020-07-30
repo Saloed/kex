@@ -28,7 +28,10 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         val result = callResolver.callResolutionLoopMany(argument) { arg ->
             log.debug(arg)
             val result = FixpointSolver(methodAnalyzer.cm).query(
-                    { mkFixpointQueryV2(arg.state, arg.sources, arg.normals) },
+                    {
+                        it.dumpSolverArguments(arg, debug = true)
+                        mkFixpointQueryV2(arg.state, arg.sources, arg.normals)
+                    },
                     { ex ->
                         dumpSolverArguments(arg)
                         throw IllegalStateException("$ex")

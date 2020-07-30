@@ -6,8 +6,7 @@ import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.serializer
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.ClassManager
 import kotlin.reflect.KClass
@@ -49,6 +48,7 @@ val predicateTypeSerialModule: SerializersModule
 fun getPredicateSerialModule(cm: ClassManager): SerializersModule = SerializersModule {
     include(getTermSerialModule(cm))
     include(predicateTypeSerialModule)
+    include(getNewObjectIdentifierSerialModule())
     polymorphic(Predicate::class) {
         Predicate.predicates.forEach { (_, klass) ->
             @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<Predicate>
@@ -65,5 +65,12 @@ fun getPredicateStateSerialModule(cm: ClassManager): SerializersModule = Seriali
             @Suppress("UNCHECKED_CAST") val any = klass.kotlin as KClass<PredicateState>
             subclass(any, any.serializer())
         }
+    }
+}
+
+fun getNewObjectIdentifierSerialModule() = SerializersModule {
+    polymorphic(NewObjectIdentifier::class) {
+        subclass(NewPredicateIdentifier::class, NewPredicateIdentifier.serializer())
+        subclass(NewArrayPredicateIdentifier::class, NewArrayPredicateIdentifier.serializer())
     }
 }

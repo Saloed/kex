@@ -10,34 +10,36 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 @InheritorOf("State")
 @Serializable
 class CallApproximationState(
+        val eliminateCall: Boolean,
         @Required val preconditions: List<PredicateState>,
         @Required val postconditions: List<PredicateState>,
-        @Required val defaultPrecondition: PredicateState,
+        @Required val callState: PredicateState,
         @Required val defaultPostcondition: PredicateState,
         @Required val call: CallPredicate
 ) : PredicateState() {
-    constructor(preconditions: List<PredicateState>, postconditions: List<PredicateState>, call: CallPredicate, defaultPostcondition: PredicateState)
-            : this(preconditions, postconditions, call.wrap(), defaultPostcondition, call)
+    constructor(eliminateCall: Boolean, preconditions: List<PredicateState>, postconditions: List<PredicateState>, call: CallPredicate, defaultPostcondition: PredicateState)
+            : this(eliminateCall, preconditions, postconditions, call.wrap(), defaultPostcondition, call)
 
     init {
         require(preconditions.size == postconditions.size) { "invalid number of pre and post conditions" }
     }
 
     override val size: Int by lazy(LazyThreadSafetyMode.NONE) {
-        preconditions.sumBy { it.size } + postconditions.sumBy { it.size } + defaultPostcondition.size + defaultPrecondition.size
+        preconditions.sumBy { it.size } + postconditions.sumBy { it.size } + defaultPostcondition.size + callState.size
     }
 
     override fun print() = buildString {
-        appendLine("(CALL")
+        appendLine("(CALL (eliminate=$eliminateCall)")
         append(preconditions.zip(postconditions).joinToString { (cond, ps) -> " <CASE> $cond <THEN> $ps" })
-        append(" <DEFAULT> $defaultPrecondition <THEN> $defaultPostcondition")
+        append(" <DEFAULT> $callState <THEN> $defaultPostcondition")
         append(" END)")
     }
 
     override fun fmap(transform: (PredicateState) -> PredicateState): PredicateState = CallApproximationState(
+            eliminateCall,
             preconditions.map(transform),
             postconditions.map(transform),
-            transform(defaultPrecondition),
+            transform(callState),
             transform(defaultPostcondition),
             call
     )
@@ -54,7 +56,7 @@ class CallApproximationState(
                 && this.postconditions == other.postconditions
                 && this.call == other.call
                 && this.defaultPostcondition == other.defaultPostcondition
-                && this.defaultPrecondition == other.defaultPrecondition
+                && this.callState == other.callState
     }
 
     override fun addPredicate(predicate: Predicate) = ChainState(this, predicate.wrap())

@@ -38,12 +38,12 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 .fp.xform.inlineLinear(false)
                 .fp.xform.compressUnbound(false)
 
-                .fp.datalog.generateExplanations(true)
+                .fp.datalog.generateExplanations(false)
                 .fp.datalog.similarityCompressor(false)
                 .fp.datalog.unboundCompressor(false)
                 .fp.datalog.subsumption(false)
 
-                .fp.spacer.iuc.debugProof(true)
+                .fp.spacer.iuc.debugProof(false)
                 .fp.spacer.q3(false)
                 .fp.spacer.simplifyPob(true)
 

@@ -1,8 +1,7 @@
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContext
 
-import org.jetbrains.research.kex.state.predicate.NewArrayPredicate
-import org.jetbrains.research.kex.state.predicate.NewPredicate
+import org.jetbrains.research.kex.state.predicate.NewObjectIdentifier
 
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
@@ -78,7 +77,7 @@ class $self : ${solver}SMTContext {
 
     val factory: $factory
     private val localPointer: AtomicInteger
-    private val localObjPointers: MutableMap < Any, Int >
+    private val localObjPointers: MutableMap < NewObjectIdentifier, Int >
     private val staticPointer: AtomicInteger
     private val localTypes: MutableMap < Int, KexType >
     private val typeIndex: AtomicInteger
@@ -88,7 +87,7 @@ class $self : ${solver}SMTContext {
 
     constructor(factory: $factory, localPointer: AtomicInteger, staticPointer: AtomicInteger,
                 memories: Map< String, VersionedMemory >,
-                localObjPointers: MutableMap < Any, Int >,
+                localObjPointers: MutableMap < NewObjectIdentifier, Int >,
                 localTypes: MutableMap< Int, KexType >,
                 typeIndex: AtomicInteger, typeMap: MutableMap< KexType, Int >) {
         this.factory = factory
@@ -148,18 +147,10 @@ class $self : ${solver}SMTContext {
     }
 
     @Suppress("UNUSED_PARAMETER")
-    fun getLocalPtr(memspace: Int, size: TypeSize, obj: NewPredicate, type: KexType): Ptr_ {
-        val ptr = localObjPointers.getOrPut(obj) { localPointer.getAndAdd(size.int) }
-        localTypes[ptr] = type
+    fun getLocalPtr(identifier: NewObjectIdentifier, size: Int): Ptr_ {
+        val ptr = localObjPointers.getOrPut(identifier) { localPointer.getAndAdd(size) }
+        localTypes[ptr] = identifier.type
         return factory.makePtrConst(ptr)
-    }
-
-    fun getLocalArray(memspace: Int, length: Int, elementSize: TypeSize, obj: NewArrayPredicate, type: KexType): Ptr_ {
-        val ptr = localObjPointers.getOrPut(obj) { localPointer.getAndAdd(length * elementSize.int) }
-        localTypes[ptr] = type
-        return factory.makePtrConst(ptr).also {
-            writeProperty(it, memspace, "length", factory.makeIntConst(length), Int_::class)
-        }
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -189,4 +180,5 @@ class $self : ${solver}SMTContext {
     fun writeType(ptr: Ptr_, memspace: Int, type: Int) = writeProperty(ptr, memspace, TYPE_PROPERTY, factory.makeIntConst(type), Int_::class)
 
     fun getLocalsTypeMapping() = localTypes.toMap()
+    fun getLocals() = localObjPointers.toMap()
 }

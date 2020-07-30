@@ -7,6 +7,7 @@ import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.BaseType
 import org.jetbrains.research.kex.InheritanceInfo
+import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.TypeInfo
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
@@ -110,4 +111,14 @@ fun Predicate.inverse(): Predicate = when (this) {
         else -> this
     }
     else -> this
+}
+
+interface NewObjectIdentifier {
+    val memspace: Int
+    val type: KexType
+    fun size(sizeFactory: (KexType) -> Int, defaultSize: Int): Int
+}
+
+interface NewObjectPredicate {
+    val identifier: NewObjectIdentifier
 }

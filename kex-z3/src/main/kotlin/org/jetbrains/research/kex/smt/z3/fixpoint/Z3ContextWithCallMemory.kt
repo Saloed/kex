@@ -37,12 +37,21 @@ class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
         }
         val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
         val preconditions = callApproximation.preconditions.map { convert(it, ef, ctx, extractPath) }
-        val defaultPre = convert(callApproximation.defaultPrecondition, ef, ctx, extractPath)
-        ctx.setMemory(callInfo.memoryAfter)
-        val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
-        val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
-        val cases = preconditions.zip(postconditions).toMap()
-        val defaultCase = defaultPre and defaultPost
+        val callState = convert(callApproximation.callState, ef, ctx, extractPath)
+        val cases: Map<Z3Bool, Z3Bool>
+        val defaultCase: Z3Bool
+        if (!callApproximation.eliminateCall) {
+            ctx.setMemory(callInfo.memoryAfter)
+            val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
+            val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
+            cases = preconditions.zip(postconditions).toMap()
+            defaultCase = callState and defaultPost
+        } else {
+            val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
+            val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
+            cases = preconditions.zip(postconditions).toMap()
+            defaultCase = defaultPost
+        }
         callStack.removeLast()
         return ef.switch(cases, defaultCase)
     }

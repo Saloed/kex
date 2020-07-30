@@ -14,7 +14,7 @@ class MethodApproximationManager {
         underApproximations[call] = currentApproximations.add(approximation)
     }
 
-    fun extendWithUnderApproximations(state: PredicateState): PredicateState = ApproximationInliner(underApproximations).apply(state)
+    fun extendWithUnderApproximations(state: PredicateState, eliminateCalls: Boolean): PredicateState = ApproximationInliner(underApproximations, eliminateCalls).apply(state)
 }
 
 data class MethodUnderApproximation(val pre: PredicateState, val post: PredicateState)
@@ -23,7 +23,7 @@ data class MethodUnderApproximations(val approximations: Set<MethodUnderApproxim
 }
 
 
-class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApproximations>) : RecollectingTransformer<ApproximationInliner> {
+class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApproximations>, val eliminateCalls: Boolean) : RecollectingTransformer<ApproximationInliner> {
     override val builders = dequeOf(StateBuilder())
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -35,7 +35,8 @@ class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApp
         val defaultPostcondition = postconditions.map { it.not() }
                 .reduceOrNull<PredicateState, PredicateState> { a, b -> ChainState(a, b) }
                 ?: emptyState()
-        currentBuilder += CallApproximationState(preconditions, postconditions, transformedCall, defaultPostcondition)
+        val eliminate = eliminateCalls && preconditions.isNotEmpty()
+        currentBuilder += CallApproximationState(eliminate, preconditions, postconditions, transformedCall, defaultPostcondition)
         return nothing()
     }
 }

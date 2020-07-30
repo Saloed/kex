@@ -48,15 +48,20 @@ class FixpointSolver(val cm: ClassManager) {
         onError(null)
     }
 
-    inline fun <reified T : Any> dumpSolverArguments(args: T) {
+    inline fun <reified T : Any> dumpSolverArguments(args: T, debug: Boolean = false) {
         val failDirPath = Paths.get(failDir)
         if (!Files.exists(failDirPath)) {
             Files.createDirectory(failDirPath)
         }
         val serialized = KexSerializer(cm).toJson(args)
         val errorDump = Files.createTempFile(failDirPath, "ps-", ".json").toFile()
-        log.error("Arguments saved to file ${errorDump.path}")
         errorDump.writeText(serialized)
-        Paths.get(failDir, "last-fail.json").toFile().writeText(serialized)
+        val message = "Arguments saved to file ${errorDump.path}"
+        if (!debug) {
+            log.error(message)
+            Paths.get(failDir, "last-fail.json").toFile().writeText(serialized)
+        } else {
+            log.debug(message)
+        }
     }
 }

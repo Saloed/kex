@@ -5,6 +5,7 @@ import com.microsoft.z3.Expr
 import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.smt.z3.Z3Context
 
+
 class DeclarationTracker {
     val declarations = hashSetOf<Declaration>()
 
@@ -30,25 +31,42 @@ class DeclarationTracker {
             }
         }
 
-        data class Memory(val memspace: Int, override val info: DeclarationInfo? = null) : Declaration(info)
+        interface Memory {
+            val memspace: Int
+        }
 
-        open class Property(val fullName: String, open val memspace: Int, info: DeclarationInfo? = null) : Declaration(info) {
+        interface Property {
+            val memspace: Int
+            val fullName: String
+        }
+
+        interface ClassProperty : Property {
+            val className: String
+            val propertyName: String
+        }
+
+        data class NormalMemory(override val memspace: Int, override val info: DeclarationInfo? = null) : Declaration(info), Memory
+        open class NormalProperty(override val fullName: String, override val memspace: Int, info: DeclarationInfo? = null) : Declaration(info), Property {
             override fun toString(): String = "Property(fullName='$fullName', memspace=$memspace info=$info)"
             override fun hashCode() = defaultHashCode(fullName, memspace)
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true
-                if (other !is Property) return false
+                if (other !is NormalProperty) return false
                 return memspace == other.memspace && fullName == other.fullName
             }
         }
 
-        data class ClassProperty(val className: String, val propertyName: String, override val memspace: Int, override val info: DeclarationInfo? = null) : Property("$className.$propertyName", memspace, info)
+        data class NormalClassProperty(
+                override val className: String,
+                override val propertyName: String,
+                override val memspace: Int,
+                override val info: DeclarationInfo? = null
+        ) : NormalProperty("$className.$propertyName", memspace, info), ClassProperty
 
         sealed class Call(open val index: Int, override val info: DeclarationInfo) : Declaration(info) {
-
             data class CallResult(override val index: Int, override val info: DeclarationInfo) : Call(index, info)
-            data class CallMemory(val memspace: Int, override val index: Int, override val info: DeclarationInfo) : Call(index, info)
-            open class CallProperty(val fullName: String, open val memspace: Int, index: Int, info: DeclarationInfo) : Call(index, info) {
+            data class CallMemory(override val memspace: Int, override val index: Int, override val info: DeclarationInfo) : Call(index, info), Memory
+            open class CallProperty(override val fullName: String, override val memspace: Int, index: Int, info: DeclarationInfo) : Call(index, info), Property {
                 override fun toString(): String = "CallProperty(index = $index fullName='$fullName', memspace=$memspace info=$info)"
                 override fun hashCode() = defaultHashCode(fullName, memspace)
                 override fun equals(other: Any?): Boolean {
@@ -58,16 +76,22 @@ class DeclarationTracker {
                 }
             }
 
-            data class CallClassProperty(val className: String, val propertyName: String, override val memspace: Int, override val index: Int, override val info: DeclarationInfo) : CallProperty("$className.$propertyName", memspace, index, info)
+            data class CallClassProperty(
+                    override val className: String,
+                    override val propertyName: String,
+                    override val memspace: Int,
+                    override val index: Int,
+                    override val info: DeclarationInfo
+            ) : CallProperty("$className.$propertyName", memspace, index, info), ClassProperty
         }
 
         fun isValuable() = when (this) {
-            is This, is Argument, is Memory, is Property, is Call -> true
+            is This, is Argument, is NormalMemory, is NormalProperty, is Call -> true
             else -> false
         }
 
         fun isMemoryOrCall() = when (this) {
-            is Memory, is Property, is Call -> true
+            is NormalMemory, is NormalProperty, is Call -> true
             else -> false
         }
 
@@ -87,9 +111,9 @@ class DeclarationTracker {
                 return regexWhen(name) {
                     like(thisRegex) { This(declarationInfo) }
                             ?: like(argRegexp) { (idx) -> Argument(idx.toInt(), declarationInfo) }
-                            ?: like(memoryRegexp) { (memspace) -> Memory(memspace.toInt(), declarationInfo) }
-                            ?: like(classPropertyRegexp) { (className, propertyName, memspace) -> ClassProperty(className, propertyName, memspace.toInt(), declarationInfo) }
-                            ?: like(otherPropertyRegexp) { (propertyName, memspace) -> Property(propertyName, memspace.toInt(), declarationInfo) }
+                            ?: like(memoryRegexp) { (memspace) -> NormalMemory(memspace.toInt(), declarationInfo) }
+                            ?: like(classPropertyRegexp) { (className, propertyName, memspace) -> NormalClassProperty(className, propertyName, memspace.toInt(), declarationInfo) }
+                            ?: like(otherPropertyRegexp) { (propertyName, memspace) -> NormalProperty(propertyName, memspace.toInt(), declarationInfo) }
                             ?: like(callResultRegexp) { (idx) -> Call.CallResult(idx.toInt(), declarationInfo) }
                             ?: like(callMemoryRegexp) { (idx, memspace) -> Call.CallMemory(memspace.toInt(), idx.toInt(), declarationInfo) }
                             ?: like(callClassProperty) { (idx, className, propertyName, memspace) -> Call.CallClassProperty(className, propertyName, memspace.toInt(), idx.toInt(), declarationInfo) }
@@ -110,3 +134,5 @@ private inline class RegexWhen(val regexWhenArg: String) {
     inline fun <R : Any> like(expr: Regex, block: (MatchResult.Destructured) -> R): R? = expr.matchEntire(regexWhenArg)?.destructured?.let(block)
     inline fun <R : Any> `else`(block: () -> R): R = block()
 }
+
+

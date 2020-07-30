@@ -24,7 +24,7 @@ class ModelDeclarationMapping(val declarations: List<DeclarationTracker.Declarat
     }
 
     fun initializeArrays(vararg ps: PredicateState) {
-        val memories = declarations.filterIsInstance<DeclarationTracker.Declaration.Memory>()
+        val memories = declarations.filterIsInstance<DeclarationTracker.Declaration.NormalMemory>()
         if (memories.isEmpty()) return
         val pointers = ps.map { collectPointers(it) }.reduce { acc: Set<Term>, curr: Set<Term> -> acc + curr }
         val memoryPointers = memories.map { mem -> pointers.filter { it.memspace == mem.memspace } }
