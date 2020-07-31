@@ -343,7 +343,7 @@ interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {
         val newPost = ps.postconditions.map { transformPs(it) }
         val newCallState = transformPs(ps.callState)
         val newDefaultPost = transformPs(ps.defaultPostcondition)
-        currentBuilder += CallApproximationState(ps.eliminateCall, newPre, newPost, newCallState, newDefaultPost, ps.call)
+        currentBuilder += CallApproximationState(newPre, newPost, newCallState, newDefaultPost, ps.call)
         return ps
     }
 

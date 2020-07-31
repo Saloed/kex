@@ -10,15 +10,14 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 @InheritorOf("State")
 @Serializable
 class CallApproximationState(
-        val eliminateCall: Boolean,
         @Required val preconditions: List<PredicateState>,
         @Required val postconditions: List<PredicateState>,
         @Required val callState: PredicateState,
         @Required val defaultPostcondition: PredicateState,
         @Required val call: CallPredicate
 ) : PredicateState() {
-    constructor(eliminateCall: Boolean, preconditions: List<PredicateState>, postconditions: List<PredicateState>, call: CallPredicate, defaultPostcondition: PredicateState)
-            : this(eliminateCall, preconditions, postconditions, call.wrap(), defaultPostcondition, call)
+    constructor(preconditions: List<PredicateState>, postconditions: List<PredicateState>, call: CallPredicate, defaultPostcondition: PredicateState)
+            : this(preconditions, postconditions, call.wrap(), defaultPostcondition, call)
 
     init {
         require(preconditions.size == postconditions.size) { "invalid number of pre and post conditions" }
@@ -29,14 +28,13 @@ class CallApproximationState(
     }
 
     override fun print() = buildString {
-        appendLine("(CALL (eliminate=$eliminateCall)")
+        appendLine("(CALL")
         append(preconditions.zip(postconditions).joinToString { (cond, ps) -> " <CASE> $cond <THEN> $ps" })
         append(" <DEFAULT> $callState <THEN> $defaultPostcondition")
         append(" END)")
     }
 
     override fun fmap(transform: (PredicateState) -> PredicateState): PredicateState = CallApproximationState(
-            eliminateCall,
             preconditions.map(transform),
             postconditions.map(transform),
             transform(callState),

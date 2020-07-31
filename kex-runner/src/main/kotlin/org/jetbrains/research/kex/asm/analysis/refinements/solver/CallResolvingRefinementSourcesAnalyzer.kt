@@ -15,22 +15,30 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
     }
 
     @Serializable
-    data class SolverQueryArgument(val state: PredicateState, val normals: PredicateState, val sources: List<PredicateState>) : CallResolver.Argument<SolverQueryArgument> {
+    data class SolverQueryArgument(
+            val state: PredicateState,
+            val normals: PredicateState,
+            val sources: List<PredicateState>,
+            val ignoredCalls: Set<CallPredicate>
+    ) : CallResolver.Argument<SolverQueryArgument> {
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverQueryArgument =
-                SolverQueryArgument(transformer(state), transformer(normals), sources.map(transformer))
+                SolverQueryArgument(transformer(state), transformer(normals), sources.map(transformer), ignoredCalls)
+
+        override fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): SolverQueryArgument =
+                SolverQueryArgument(state, normals, sources, transformer(ignoredCalls))
     }
 
     override fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources): Refinements {
         if (sources.value.isEmpty()) return Refinements.unknown(methodAnalyzer.method)
         val conditions = sources.value.map { it.condition }
-        val argument = SolverQueryArgument(state, normals, conditions)
+        val argument = SolverQueryArgument(state, normals, conditions, emptySet())
         val callResolver = CallResolver(methodAnalyzer, methodsUnderApproximations)
         val result = callResolver.callResolutionLoopMany(argument) { arg ->
             log.debug(arg)
             val result = FixpointSolver(methodAnalyzer.cm).query(
                     {
                         it.dumpSolverArguments(arg, debug = true)
-                        mkFixpointQueryV2(arg.state, arg.sources, arg.normals)
+                        mkFixpointQueryV2(arg.state, arg.sources, arg.normals, arg.ignoredCalls)
                     },
                     { ex ->
                         dumpSolverArguments(arg)

@@ -142,11 +142,11 @@ private class CallApproximationSelector(val idx: Int?, val type: CallApproximati
     override fun set(expr: PredicateState, value: PredicateState): PredicateState {
         expr as CallApproximationState
         return if (idx == null) when (type) {
-            CallApproximationType.PRE -> CallApproximationState(expr.eliminateCall, expr.preconditions, expr.postconditions, value, expr.defaultPostcondition, expr.call)
-            CallApproximationType.POST -> CallApproximationState(expr.eliminateCall, expr.preconditions, expr.postconditions, expr.callState, value, expr.call)
+            CallApproximationType.PRE -> CallApproximationState(expr.preconditions, expr.postconditions, value, expr.defaultPostcondition, expr.call)
+            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions, expr.callState, value, expr.call)
         } else when (type) {
-            CallApproximationType.PRE -> CallApproximationState(expr.eliminateCall, expr.preconditions.toMutableList().apply { set(idx, value) }, expr.postconditions, expr.callState, expr.defaultPostcondition, expr.call)
-            CallApproximationType.POST -> CallApproximationState(expr.eliminateCall, expr.preconditions, expr.postconditions.toMutableList().apply { set(idx, value) }, expr.callState, expr.defaultPostcondition, expr.call)
+            CallApproximationType.PRE -> CallApproximationState(expr.preconditions.toMutableList().apply { set(idx, value) }, expr.postconditions, expr.callState, expr.defaultPostcondition, expr.call)
+            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions.toMutableList().apply { set(idx, value) }, expr.callState, expr.defaultPostcondition, expr.call)
         }
     }
 }

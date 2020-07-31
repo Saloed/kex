@@ -28,7 +28,7 @@ class FixpointSolverDebug : KexTest() {
     @Test
     fun debugAnalyzer() = run("last-fail.json") { args: CallResolvingRefinementSourcesAnalyzer.SolverQueryArgument ->
         log.debug(args)
-        val res = Z3FixpointSolver(cm.type).mkFixpointQueryV2(args.state, args.sources, args.normals)
+        val res = Z3FixpointSolver(cm.type).mkFixpointQueryV2(args.state, args.sources, args.normals, args.ignoredCalls)
         assert(res is FixpointResult.Sat) { res }
         println((res as FixpointResult.Sat).result)
     }

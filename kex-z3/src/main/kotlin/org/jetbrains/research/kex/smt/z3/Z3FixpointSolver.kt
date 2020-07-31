@@ -216,7 +216,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult {
+    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>): FixpointResult {
         val initializer = ContextMemoryInitializer(state, query, *positivePaths.toTypedArray())
         return CallCtx(tf, initializer) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
@@ -230,8 +230,11 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 //            log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
             val calls = callPredicateConverter.getCallsInfo()
+            val ignoredCallIds = ignoredCalls.mapNotNull { callPredicateConverter.callInfo[it] }.map { it.index }.toSet()
             val declarationExprs = ctx.knownDeclarations.map { it.expr }
-            val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+            val argumentDeclarations = ctx.knownDeclarations
+                    .filter { it.isValuable() }
+                    .filterNot { it is DeclarationTracker.Declaration.Call && it.index in ignoredCallIds }
             val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
             declarationMapping.initializeCalls(calls)
 
