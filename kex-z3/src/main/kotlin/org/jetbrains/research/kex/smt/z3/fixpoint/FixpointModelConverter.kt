@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import com.abdullin.kthelper.collection.dequeOf
+import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import com.microsoft.z3.enumerations.Z3_lbool
@@ -182,7 +183,8 @@ class FixpointModelConverter(
 
     private fun convertTerm(expr: Expr): TermWithAxiom = when {
         expr.isVar -> convertVariableTerm(expr)
-        expr.isSelect && expr.numArgs == 2 -> convertMemoryLoad(expr.args[0], expr.args[1])
+        expr.isSelect && expr.numArgs == 2 && expr.args[0].isVar -> convertMemoryLoad(expr.args[0], expr.args[1])
+        expr.isSelect -> convertComplexMemoryLoad(expr)
         expr.isITE -> convertITETerm(expr)
         expr is BoolExpr -> convertBoolTerm(expr)
         expr is IntExpr -> convertIntTerm(expr)
@@ -260,33 +262,104 @@ class FixpointModelConverter(
     private fun convertITETerm(expr: Expr): TermWithAxiom {
         val (condition, trueBranch, falseBranch) = expr.convertArgs()
         check(trueBranch.term.type == falseBranch.term.type) { "Types of expression branches must be equal" }
-        return TermWithAxiom.wrap { IfTerm(trueBranch.term.type, condition.term, trueBranch.term, falseBranch.term) }
-                .binaryOperation(condition) { res, _ -> res }
-                .binaryOperation(trueBranch) { res, _ -> res }
-                .binaryOperation(falseBranch) { res, _ -> res }
+        return TermWithAxiom.wrap { IfTerm(trueBranch.term.type, condition.term, trueBranch.term, falseBranch.term) }.mergeAxioms(condition, trueBranch, falseBranch)
+    }
+
+    private fun convertComplexMemoryLoad(expr: Expr): TermWithAxiom {
+        log.warn("Load from complex memory")
+        val ctx = z3Context.factory.ctx
+        val params = ctx.mkParams().apply {
+            add("expand_store_eq", true)
+            add("expand_select_store", true)
+            add("elim_ite", true)
+            add("ite_extra_rules", true)
+        }
+        val simplified = expr.simplify(params)
+        if (!simplified.isSelect) return convertTerm(simplified)
+        if (simplified.numArgs != 2) error("Unexpected select arguments")
+        val (memoryExpr, locationExpr) = simplified.args
+        if (memoryExpr.isVar) return convertTerm(simplified)
+        val (memory, memoryDecl) = convertComplexMemoryExpr(memoryExpr)
+        val result = convertMemoryLoad(memoryDecl, locationExpr)
+        return memory.binaryOperation(result) { _, res -> res }
+    }
+
+    private fun convertComplexMemoryExpr(expr: Expr) = when {
+        expr.isITE -> convertComplexMemoryITE(expr)
+        expr is ArrayExpr -> convertComplexMemoryArray(expr)
+        else -> TODO()
+    }
+
+    private fun convertComplexMemoryArray(expr: ArrayExpr) = when {
+        expr.isVar -> {
+            val decl = mapping.declarations[expr.index]
+            val term = TermWithAxiom.wrap { const(true) }
+            term to decl
+        }
+        expr.isStore && expr.numArgs == 3 -> {
+            val (memory, location, value) = expr.args
+            convertComplexMemoryArrayStore(memory, location, value)
+        }
+        else -> TODO()
+    }
+
+    private fun convertComplexMemoryArrayStore(memoryExpr: Expr, locationExpr: Expr, valueExpr: Expr): Pair<TermWithAxiom, DeclarationTracker.Declaration> {
+        val (memory, memoryDecl) = convertComplexMemoryExpr(memoryExpr)
+        val location = convertTerm(locationExpr)
+        val value = convertTerm(valueExpr)
+        when (memoryDecl) {
+            is DeclarationTracker.Declaration.ClassProperty -> {
+                val (owner, cls, propertyName) = preprocessClassProperty(memoryDecl, location)
+                val field = cls.findField(propertyName) ?: error("No field found")
+                val axiom = basic {
+                    state { owner.term.field(field.type.kexType, field.name).store(value.term) }
+                }
+                val term = TermWithAxiom(term { const(true) }, axiom).mergeAxioms(memory, location, value)
+                return term to memoryDecl
+            }
+            else -> TODO()
+        }
+    }
+
+    private fun convertComplexMemoryITE(expr: Expr): Pair<TermWithAxiom, DeclarationTracker.Declaration> {
+        val (condExpr, trueExpr, falseExpr) = expr.args
+        val condition = convertTerm(condExpr)
+        val (trueBranch, trueDecl) = convertComplexMemoryExpr(trueExpr)
+        val (falseBranch, falseDecl) = convertComplexMemoryExpr(falseExpr)
+        check(trueDecl == falseDecl) { "Different memory declarations" }
+        check(trueBranch.term.type == falseBranch.term.type) { "Different types in branches" }
+        val trueCondition = basic { path { condition.term equality true } }
+        val falseCondition = basic { path { condition.term equality false } }
+        val result = term { value(trueBranch.term.type, "ite__${expr.hashCode()}") }
+        val trueAxiom = listOfNotNull(condition.axiom, trueCondition, trueBranch.axiom, basic { state { result equality trueBranch.term } }).reduce { acc, ps -> ChainState(acc, ps) }
+        val falseAxiom = listOfNotNull(condition.axiom, falseCondition, falseBranch.axiom, basic { state { result equality falseBranch.term } }).reduce { acc, ps -> ChainState(acc, ps) }
+        val axiom = ChoiceState(listOf(trueAxiom, falseAxiom))
+        return TermWithAxiom(result, axiom) to trueDecl
     }
 
     private fun convertMemoryLoad(memory: Expr, location: Expr): TermWithAxiom {
-        if (!memory.isVar) throw IllegalStateException("Memory is not var $memory")
+        check(memory.isVar) { "Memory is not var $memory" }
         val decl = mapping.declarations[memory.index]
-        return when {
-            decl is DeclarationTracker.Declaration.NormalProperty -> readProperty(convertTerm(location), decl)
-            decl is DeclarationTracker.Declaration.NormalMemory && mapping.isArrayMemory(decl) -> {
-                if (!(location.isAdd && location.args.size == 2)) {
-                    throw IllegalStateException("Unexpected array memory location $location")
-                }
-                val (lhs, rhs) = location.convertArgs()
-                val (base, index) = when {
-                    lhs.term.type is KexArray -> lhs to rhs
-                    rhs.term.type is KexArray -> rhs to lhs
-                    else -> throw IllegalStateException("Array load has no base and index")
-                }
-                val arrayIndex = base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i) }
-                arrayIndex.transformTerm { tf.getArrayLoad(it) }
+        return convertMemoryLoad(decl, location)
+    }
+
+    private fun convertMemoryLoad(decl: DeclarationTracker.Declaration, location: Expr): TermWithAxiom = when {
+        decl is DeclarationTracker.Declaration.NormalProperty -> readProperty(convertTerm(location), decl)
+        decl is DeclarationTracker.Declaration.NormalMemory && mapping.isArrayMemory(decl) -> {
+            if (!(location.isAdd && location.args.size == 2)) {
+                throw IllegalStateException("Unexpected array memory location $location")
             }
-            decl is DeclarationTracker.Declaration.Call.CallProperty -> readCallProperty(convertTerm(location), decl)
-            else -> throw IllegalStateException("Unexpected memory $memory : $decl")
+            val (lhs, rhs) = location.convertArgs()
+            val (base, index) = when {
+                lhs.term.type is KexArray -> lhs to rhs
+                rhs.term.type is KexArray -> rhs to lhs
+                else -> throw IllegalStateException("Array load has no base and index")
+            }
+            val arrayIndex = base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i) }
+            arrayIndex.transformTerm { tf.getArrayLoad(it) }
         }
+        decl is DeclarationTracker.Declaration.Call.CallProperty -> readCallProperty(convertTerm(location), decl)
+        else -> throw IllegalStateException("Unexpected memory $decl")
     }
 
     private fun readCallProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Call.CallProperty): TermWithAxiom {
@@ -298,18 +371,8 @@ class FixpointModelConverter(
 
     private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {
         is DeclarationTracker.Declaration.ClassProperty -> {
-            val owner = when {
-                obj.term.type.getKfgType(tf) is ClassType -> obj
-                obj.term is ConstIntTerm -> {
-                    val objId = obj.term.value
-                    val identifier = z3Context.getLocals().entries
-                            .firstOrNull { (_, id) -> id == objId }?.key
-                            ?: error("No info about object $objId")
-                    TermWithAxiom.wrap { LocalObjectTerm("local__$objId", identifier) }
-                }
-                else -> throw IllegalArgumentException("Only class types supported")
-            }
-            getFieldLoad(owner, tf.cm[property.className], property.propertyName)
+            val (owner, cls, propertyName) = preprocessClassProperty(property, obj)
+            getFieldLoad(owner, cls, propertyName)
         }
         else -> when {
             property.fullName == Z3Context.TYPE_PROPERTY -> obj.transformTerm { InstanceOfTerm(UnknownType, it) }
@@ -317,6 +380,21 @@ class FixpointModelConverter(
             else -> TODO("Unknown property $property")
         }
 
+    }
+
+    private fun preprocessClassProperty(property: DeclarationTracker.Declaration.ClassProperty, obj: TermWithAxiom): Triple<TermWithAxiom, Class, String> {
+        val owner = when {
+            obj.term.type.getKfgType(tf) is ClassType -> obj
+            obj.term is ConstIntTerm -> {
+                val objId = obj.term.value
+                val identifier = z3Context.getLocals().entries
+                        .firstOrNull { (_, id) -> id == objId }?.key
+                        ?: error("No info about object $objId")
+                TermWithAxiom.wrap { LocalObjectTerm("local__$objId", identifier) }
+            }
+            else -> throw IllegalArgumentException("Only class types supported")
+        }
+        return Triple(owner, tf.cm[property.className], property.propertyName)
     }
 
     private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String): TermWithAxiom {
@@ -386,4 +464,7 @@ class FixpointModelConverter(
                 ?: (listOf(superClass) + interfaces).filterNotNull().mapNotNull { it as? OuterClass }.map { it.findFieldConcrete(name) }.firstOrNull()
 
     }
+
+    private fun TermWithAxiom.mergeAxioms(vararg other: TermWithAxiom): TermWithAxiom =
+            other.fold(this) { result, current -> result.binaryOperation(current) { res, _ -> res } }
 }
