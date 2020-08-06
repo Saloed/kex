@@ -510,3 +510,5 @@ inline fun < reified BV : $Bitvector > bvMakeConst(ctx: $context, value: Int) = 
     $Bitvector64::class -> ${Bitvector64}.makeConst(ctx, value.toLong())
     else -> ${Bitvector}.makeConst(ctx, value.toLong())
 }
+
+fun ${valexpr}.axiomExpr(): $Bool = ${Bool}(ctx, axiom)

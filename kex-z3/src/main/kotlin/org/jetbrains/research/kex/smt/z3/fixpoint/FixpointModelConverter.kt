@@ -75,11 +75,13 @@ class FixpointModelConverter(
             val lhv = term.lhv as? BinaryTerm ?: return null
             val lhvRhv = lhv.rhv as? BinaryTerm ?: return null
             val lhvRhvLhv = lhvRhv.lhv as? ConstIntTerm ?: return null
-            if (rhv.value != 0) return null
             if (lhv.opcode !is BinaryOpcode.Add) return null
             if (lhvRhv.opcode !is BinaryOpcode.Mul) return null
             if (lhvRhvLhv.value != -1) return null
-            return CmpTerm(term.type, term.opcode, lhv.lhv, lhvRhv.rhv)
+            return when (rhv.value) {
+                0 -> CmpTerm(term.type, term.opcode, lhv.lhv, lhvRhv.rhv)
+                else -> CmpTerm(term.type, term.opcode, lhv.lhv, term { lhvRhv.rhv add rhv })
+            }
         }
     }
 

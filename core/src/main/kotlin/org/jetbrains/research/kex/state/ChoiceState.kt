@@ -39,10 +39,9 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
     override fun iterator() = choices.iterator()
 
     override fun performSimplify(): PredicateState {
-        val simplifiedChoices = choices.map { it.simplify() }
+        val simplifiedChoices = choices.map { it.simplify() }.distinct()
         return when {
             simplifiedChoices.isEmpty() -> falseState()
-            simplifiedChoices.any { it.isEmpty } -> trueState()
             simplifiedChoices.size == 1 -> simplifiedChoices.first()
             simplifiedChoices == choices -> this
             else -> ChoiceState(simplifiedChoices)

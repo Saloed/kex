@@ -104,7 +104,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val ptr = convert(store.arrayRef, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr ref term in `store`") }
         val value = convert(store.value, ef, ctx)
         ctx.writeMemory(ptr, value, memspace,  ${solver}Type(store.componentType))
-        return ef.makeTrue()
+        return ef.makeTrue().withAxiom(ptr.axiomExpr()).withAxiom(value.axiomExpr())
     }
 
     open fun convert(call: CallPredicate, ef: $factory, ctx: ${solver}Context): Bool_ =
@@ -149,7 +149,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val name = field.fieldNameString
         val klass = field.klass
         ctx.writeProperty(ptr, memspace, "${ klass }.${ name }", value,  ${solver}Type(store.value.type))
-        return ef.makeTrue()
+        return ef.makeTrue().withAxiom(ptr.axiomExpr()).withAxiom(value.axiomExpr())
     }
 
     fun convert(newarray: NewArrayPredicate, ef: $factory, ctx: ${solver}Context): Bool_ {
@@ -181,7 +181,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
     fun convert(argument: ArgumentTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
         val expr = ef.getVarByTypeAndName(argument.type, argument.name)
         val result =  addTypeAxioms(argument, expr, ef, ctx)
-        if(argument.type !is KexPointer) return result
+        if (argument.type !is KexPointer) return result
         return result.withAxiom(expr lt ef.makeIntConst(${solver}Context.BASE_LOCAL_PTR - 1))
     }
 
@@ -197,7 +197,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val memspace = arraylength.arrayRef.memspace
         val ptr = convert(arraylength.arrayRef, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term in `arraylength`") }
 
-        return ctx.readProperty< Int_ >(ptr, memspace, "length", Int_::class)
+        return ctx.readProperty< Int_ >(ptr, memspace, "length", Int_::class).withAxiom(ptr.axiomExpr())
     }
 
     fun convert(arrayload: ArrayLoadTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
@@ -205,7 +205,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val arrayref = convert(arrayload.arrayRef, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr operand of array load") }
 
         val ret = ctx.readMemory< Dynamic_ >(arrayref, memspace, ${solver}Type(arrayload.type))
-        return cast(arrayload.type, ret)
+        return cast(arrayload.type, ret).withAxiom(arrayref.axiomExpr())
     }
 
     fun convert(binary: BinaryTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ {
@@ -293,7 +293,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
         val name = field.fieldNameString
         val klass = field.klass
         val res = ctx.readProperty< Dynamic_ >(ptr, memspace, "${ klass }.${ name }", ${solver}Type(fieldload.type))
-        return cast(fieldload.type, res)
+        return cast(fieldload.type, res).withAxiom(ptr.axiomExpr())
     }
 
     fun convert(field: FieldTerm, ef: $factory, ctx: ${solver}Context): Dynamic_ =
@@ -307,7 +307,7 @@ open class ${solver}Converter(val tf: TypeFactory) : ${solver}SMTConverter() {
                     ?: unreachable { log.error("Non-ptr ref in instance of") }
             val argType = ctx.readType(arg, instanceof.operand.memspace)
             val typeIndex = ctx.getTypeIdx(instanceof.checkedType)
-            argType eq ef.makeIntConst(typeIndex)
+            argType eq ef.makeIntConst(typeIndex).withAxiom(arg.axiomExpr())
         }
     }
 

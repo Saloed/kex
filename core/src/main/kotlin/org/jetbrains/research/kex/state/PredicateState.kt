@@ -36,22 +36,12 @@ class StateBuilder() : PredicateBuilder() {
         current += predicate
     }
 
-    operator fun plus(state: PredicateState) = when {
-        state.isEmpty -> this
-        current.isEmpty -> StateBuilder(state)
-        else -> StateBuilder(ChainState(current, state))
-    }
-
+    operator fun plus(state: PredicateState) = StateBuilder(ChainState(current, state))
     operator fun plusAssign(state: PredicateState) {
         current = ChainState(current, state)
     }
 
-    operator fun plus(choices: List<PredicateState>) = when {
-        choices.isEmpty() -> this
-        current.isEmpty -> StateBuilder(ChoiceState(choices))
-        else -> StateBuilder(ChainState(current, ChoiceState(choices)))
-    }
-
+    operator fun plus(choices: List<PredicateState>) = StateBuilder(ChainState(current, ChoiceState(choices)))
     operator fun plusAssign(choices: List<PredicateState>) {
         val choice = ChoiceState(choices)
         current = ChainState(current, choice)

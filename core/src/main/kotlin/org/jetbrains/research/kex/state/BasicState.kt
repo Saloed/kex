@@ -47,6 +47,6 @@ class BasicState(@Required val predicates: List<Predicate> = listOf()) : Predica
     override fun iterator() = predicates.iterator()
 
     override fun performSimplify(): PredicateState = BasicState(predicates.distinct())
-    override fun checkEvaluationToTrue(): Boolean = isEmpty || predicates.all { it is ConstantPredicate && it.value }
+    override fun checkEvaluationToTrue(): Boolean = predicates.all { it is ConstantPredicate && it.value }
     override fun checkEvaluationToFalse(): Boolean = predicates.any { it is ConstantPredicate && !it.value }
 }

@@ -4,8 +4,10 @@ import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.*
+import org.jetbrains.research.kex.state.BasicState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.ir.Field
@@ -196,7 +198,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             }.toMap()
             val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct()
             val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).distinct()
-            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative)
+            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative, BasicState(additionalArgs.map { EqualityPredicate(it, it) }))
             additionalArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
 
             val predicate = Predicate(0)

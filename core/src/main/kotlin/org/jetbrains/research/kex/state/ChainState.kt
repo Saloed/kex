@@ -41,12 +41,7 @@ class ChainState(val base: PredicateState, val curr: PredicateState) : Predicate
     override fun performSimplify(): PredicateState {
         val sbase = base.simplify()
         val scurr = curr.simplify()
-        return when {
-            sbase.isNotEmpty && scurr.isNotEmpty -> (sbase.builder() + scurr).apply()
-            sbase.isNotEmpty -> sbase
-            scurr.isNotEmpty -> scurr
-            else -> emptyState()
-        }
+        return ChainState(sbase, scurr)
     }
 
     override fun checkEvaluationToTrue(): Boolean = base.evaluatesToTrue && curr.evaluatesToTrue
