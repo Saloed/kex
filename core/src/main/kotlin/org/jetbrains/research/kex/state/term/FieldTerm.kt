@@ -6,11 +6,12 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term) : Term() {
+class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     val fieldNameString = (fieldName as ConstStringTerm).value
     override val name = "$owner.$fieldNameString"
     override val subterms by lazy { listOf(owner, fieldName) }
@@ -29,5 +30,6 @@ class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term
             else -> term { tf.getField(type, towner, tname) }
         }
     }
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = FieldTerm(type, owner, fieldName, memoryVersion)
 
 }

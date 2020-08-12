@@ -3,11 +3,12 @@ package org.jetbrains.research.kex.state.term
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class BoundTerm(override val type: KexType, val ptr: Term) : Term() {
+class BoundTerm(override val type: KexType, val ptr: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     override val name = "bound($ptr)"
     override val subterms by lazy { listOf(ptr) }
 
@@ -16,4 +17,5 @@ class BoundTerm(override val type: KexType, val ptr: Term) : Term() {
                 ptr -> this
                 else -> term { tf.getBound(nptr) }
             }
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = BoundTerm(type, ptr, memoryVersion)
 }

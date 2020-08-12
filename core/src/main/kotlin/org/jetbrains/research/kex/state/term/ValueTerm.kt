@@ -3,13 +3,15 @@ package org.jetbrains.research.kex.state.term
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class ValueTerm(override val type: KexType, val valueName: Term) : Term() {
+class ValueTerm(override val type: KexType, val valueName: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     override val name = (valueName as ConstStringTerm).value
     override val subterms by lazy { listOf(valueName) }
 
     override fun <T: Transformer<T>> accept(t: Transformer<T>) = this
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = ValueTerm(type, valueName, memoryVersion)
 }

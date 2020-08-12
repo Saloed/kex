@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.BaseType
 import org.jetbrains.research.kex.InheritanceInfo
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.TypeInfo
 import org.jetbrains.research.kex.state.transformer.Transformer
 
@@ -16,6 +17,7 @@ abstract class Term : TypeInfo {
     abstract val name: String
     abstract val subterms: List<Term>
     abstract val type: KexType
+    abstract val memoryVersion: MemoryVersion
 
     companion object {
 
@@ -35,6 +37,7 @@ abstract class Term : TypeInfo {
     }
 
     abstract fun <T : Transformer<T>> accept(t: Transformer<T>): Term
+    abstract fun withMemoryVersion(memoryVersion: MemoryVersion): Term
 
     override fun toString() = name
     override fun hashCode() = defaultHashCode(name, type, subterms)

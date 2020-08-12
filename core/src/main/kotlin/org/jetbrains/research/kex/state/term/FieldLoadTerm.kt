@@ -5,11 +5,12 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class FieldLoadTerm(override val type: KexType, val field: Term) : Term() {
+class FieldLoadTerm(override val type: KexType, val field: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     override val name = "*($field)"
     override val subterms by lazy { listOf(this.field) }
 
@@ -21,4 +22,5 @@ class FieldLoadTerm(override val type: KexType, val field: Term) : Term() {
                 field -> this
                 else -> term { tf.getFieldLoad(type, tfield) }
              }
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = FieldLoadTerm(type, field, memoryVersion)
 }

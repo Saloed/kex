@@ -5,6 +5,7 @@ import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 
@@ -14,7 +15,8 @@ class CmpTerm(
         override val type: KexType,
         @Contextual val opcode: CmpOpcode,
         val lhv: Term,
-        val rhv: Term) : Term() {
+        val rhv: Term,
+        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     override val name = "$lhv $opcode $rhv"
     override val subterms by lazy { listOf(lhv, rhv) }
 
@@ -33,4 +35,5 @@ class CmpTerm(
         other as CmpTerm
         return super.equals(other) && this.opcode == other.opcode
     }
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = CmpTerm(type, opcode, lhv, rhv, memoryVersion)
 }

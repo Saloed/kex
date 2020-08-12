@@ -5,11 +5,12 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class InstanceOfTerm(val checkedType: KexType, val operand: Term) : Term() {
+class InstanceOfTerm(val checkedType: KexType, val operand: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
     override val name = "$operand instanceof $checkedType"
     override val type: KexType = KexBool()
     override val subterms by lazy { listOf(operand) }
@@ -26,4 +27,5 @@ class InstanceOfTerm(val checkedType: KexType, val operand: Term) : Term() {
         other as InstanceOfTerm
         return super.equals(other) && this.checkedType == other.checkedType
     }
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = InstanceOfTerm(checkedType, operand, memoryVersion)
 }
