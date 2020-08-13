@@ -3,7 +3,6 @@ package org.jetbrains.research.kex.state.term
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
@@ -12,8 +11,7 @@ class IfTerm(
         override val type: KexType,
         val condition: Term,
         val trueBranch: Term,
-        val falseBranch: Term,
-        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
+        val falseBranch: Term) : Term() {
     override val name = "if($condition) then ($trueBranch) else ($falseBranch)"
     override val subterms by lazy { listOf(condition, trueBranch, falseBranch) }
 
@@ -26,5 +24,4 @@ class IfTerm(
             else -> IfTerm(type, tCond, tTrue, tFalse)
         }
     }
-    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = IfTerm(type, condition, trueBranch, falseBranch, memoryVersion)
 }

@@ -7,9 +7,9 @@ import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.MemoryDependentTerm
 import org.jetbrains.research.kex.state.term.Term
 
 
@@ -35,21 +35,28 @@ internal sealed class MemoryVersionSource : Viewable {
 
 internal class MemoryVersionInitial : MemoryVersionSource() {
     override val version: MemoryVersion
-        get() = MemoryVersion(0, MemoryVersionType.INITIAL, null)
+        get() = MemoryVersion(0, MemoryVersionType.INITIAL, emptySet())
     override val graphNode: GraphView
         get() = GraphView("initial", "initial")
 }
 
-internal data class MemoryVersionNew(val parent: MemoryVersionSource, val term: Term) : MemoryVersionSource() {
+internal data class MemoryVersionNew(val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
     override val version: MemoryVersion
-        get() = MemoryVersion(parent.hashCode() * 17 + term.hashCode(), MemoryVersionType.NORMAL, null)
+        get() = MemoryVersion(parent.hashCode() * 17 + condition.hashCode(), MemoryVersionType.NEW, emptySet())
     override val graphNode: GraphView
-        get() = GraphView("$version", "New $version: $term")
+        get() = GraphView("$version", "New $version: $condition")
+}
+
+internal data class MemoryVersionNormal(val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
+    override val version: MemoryVersion
+        get() = MemoryVersion(parent.hashCode() * 17 + condition.hashCode(), MemoryVersionType.NORMAL, emptySet())
+    override val graphNode: GraphView
+        get() = GraphView("$version", "Normal $version: $condition")
 }
 
 internal data class MemoryVersionMerge(val memories: List<MemoryVersionSource>) : MemoryVersionSource() {
     override val version: MemoryVersion
-        get() = MemoryVersion(memories.hashCode(), MemoryVersionType.MERGE, null)
+        get() = MemoryVersion(memories.hashCode(), MemoryVersionType.MERGE, emptySet())
     override val graphNode: GraphView
         get() = GraphView("$version", "Merge $version")
 }
@@ -82,48 +89,82 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
     override fun transformCall(predicate: CallPredicate): Predicate {
         val call = predicate.call as CallTerm
         val newCall = transform(call) as CallTerm
-        val memoryBeforeCall = memory
-        val newMemory = MemoryVersionNew(memoryBeforeCall, newCall)
-        memoryBeforeCall.children += newMemory
-        memory = newMemory
+        memory = newMemory(MemoryVersionNew(memory, newCall))
         val newLhv = predicate.lhvUnsafe?.let { transform(it) }
         return CallPredicate(newLhv, newCall, predicate.type, predicate.location)
     }
 
-    override fun transformTerm(term: Term): Term = term.withMemoryVersion(memory.version)
+    override fun transformArrayStorePredicate(predicate: ArrayStorePredicate): Predicate {
+        memory = newMemory(MemoryVersionNormal(memory, predicate))
+        return super.transformArrayStorePredicate(predicate)
+    }
+
+    override fun transformFieldStorePredicate(predicate: FieldStorePredicate): Predicate {
+        memory = newMemory(MemoryVersionNormal(memory, predicate))
+        return super.transformFieldStorePredicate(predicate)
+    }
+
+    override fun transformNewArray(predicate: NewArrayPredicate): Predicate {
+        val tdimentions = predicate.dimentions.map { transform(it) }
+        memory = newMemory(MemoryVersionNormal(memory, predicate))
+        val tlhv = transform(predicate.lhv)
+        return NewArrayPredicate(tlhv, tdimentions, predicate.elementType, predicate.instruction, predicate.type, predicate.location)
+    }
+
+    override fun transformNew(predicate: NewPredicate): Predicate {
+        memory = newMemory(MemoryVersionNormal(memory, predicate))
+        return super.transformNew(predicate)
+    }
+
+    override fun transformTerm(term: Term): Term = when (term) {
+        is MemoryDependentTerm -> term.withMemoryVersion(memory.version)
+        else -> term
+    }
 
     override fun apply(ps: PredicateState): PredicateState {
         val memoryRoot = memory
         val state = super.apply(ps)
         val versionMappings = memoryVersionNormalizer(memoryRoot)
-        return MemoryVersionMapper(versionMappings).apply(state)
+        val result = MemoryVersionMapper(versionMappings).apply(state)
+        VersionVerifier.apply(result)
+        return result
+    }
+
+    private fun newMemory(newMem: MemoryVersionSource): MemoryVersionSource {
+        memory.children += newMem
+        return newMem
     }
 
     private class MemoryVersionMapper(val mapping: Map<MemoryVersion, MemoryVersion>) : Transformer<MemoryVersionMapper> {
-        override fun transformTerm(term: Term): Term = when (val newVersion = mapping[term.memoryVersion]) {
-            null -> term
-            else -> term.withMemoryVersion(newVersion)
+        override fun transformTerm(term: Term): Term = when (term) {
+            is MemoryDependentTerm -> {
+                val newVersion = mapping[term.memoryVersion] ?: error("Version must be updated")
+                term.withMemoryVersion(newVersion)
+            }
+            else -> term
         }
     }
 
     private fun memoryVersionNormalizer(root: MemoryVersionSource): Map<MemoryVersion, MemoryVersion> {
-        var idx = 0
+        var newIdx = 0
+        var normalIdx = 0
         var memoryMerges = 0
         val versionMapping: MutableMap<MemoryVersion, MemoryVersion> = hashMapOf()
-        val manager = MemoryVersionManager(hashMapOf())
         val queue = dequeOf(root)
         loop@ while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
             when (node) {
                 is MemoryVersionInitial -> {
-                    check(idx == 0) { "Initial memory is not first" }
-                    val newVersion = versionMapping.getOrPut(node.version) { MemoryVersion(idx++, MemoryVersionType.INITIAL, manager) }
-                    manager.registerMemoryVersion(newVersion, emptySet())
+                    check(newIdx == 0) { "Initial memory is not first" }
+                    versionMapping.getOrPut(node.version) { MemoryVersion(newIdx++, MemoryVersionType.INITIAL, emptySet()) }
                 }
                 is MemoryVersionNew -> {
                     val parentVersion = versionMapping[node.parent.version] ?: error("Parent version is not computed")
-                    val newVersion = versionMapping.getOrPut(node.version) { MemoryVersion(idx++, MemoryVersionType.NORMAL, manager) }
-                    manager.registerMemoryVersion(newVersion, setOf(parentVersion))
+                    versionMapping.getOrPut(node.version) { MemoryVersion(newIdx++, MemoryVersionType.NEW, setOf(parentVersion)) }
+                }
+                is MemoryVersionNormal -> {
+                    val parentVersion = versionMapping[node.parent.version] ?: error("Parent version is not computed")
+                    versionMapping.getOrPut(node.version) { MemoryVersion(normalIdx++, MemoryVersionType.NORMAL, setOf(parentVersion)) }
                 }
                 is MemoryVersionMerge -> {
                     val parentVersionsRaw = node.memories.map { versionMapping[it.version] }
@@ -132,8 +173,12 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
                         queue.addLast(node)
                         continue@loop
                     }
-                    val newVersion = versionMapping.getOrPut(node.version) { MemoryVersion(memoryMerges++, MemoryVersionType.MERGE, manager) }
-                    manager.registerMemoryVersion(newVersion, parentVersions.toSet())
+                    val uniquePredecessors = parentVersions.toSet()
+                    when (uniquePredecessors.size) {
+                        0 -> error("Empty memory merge")
+                        1 -> versionMapping.getOrPut(node.version) { uniquePredecessors.first() }
+                        else -> versionMapping.getOrPut(node.version) { MemoryVersion(memoryMerges++, MemoryVersionType.MERGE, uniquePredecessors) }
+                    }
                 }
                 is MemoryVersionSplit -> {
                 }
@@ -141,5 +186,14 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
             queue += node.children
         }
         return versionMapping
+    }
+}
+
+object VersionVerifier : Transformer<VersionVerifier> {
+    override fun transformTerm(term: Term): Term {
+        if (term is MemoryDependentTerm && term.memoryVersion.type == MemoryVersionType.DEFAULT) {
+            error("term with default memory: $term")
+        }
+        return term
     }
 }

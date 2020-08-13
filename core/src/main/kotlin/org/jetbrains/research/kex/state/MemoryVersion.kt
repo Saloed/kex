@@ -2,21 +2,18 @@ package org.jetbrains.research.kex.state
 
 import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
+import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.term.MemoryDependentTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.transformer.Transformer
 
 @Serializable
 enum class MemoryVersionType {
-    INITIAL, NORMAL, MERGE, DEFAULT
+    INITIAL, NEW, NORMAL, MERGE, DEFAULT
 }
 
 @Serializable
-class MemoryVersion(val version: Int, val type: MemoryVersionType, private val unsafeMemoryVersionManager: MemoryVersionManager?) {
-
-    val manager: MemoryVersionManager
-        get() = when (type) {
-            MemoryVersionType.DEFAULT -> error("Getting manager of default memory is error")
-            else -> unsafeMemoryVersionManager ?: error("Memory manager is not initialized")
-        }
-
+class MemoryVersion(val version: Int, val type: MemoryVersionType, val predecessors: Set<MemoryVersion>) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -30,13 +27,16 @@ class MemoryVersion(val version: Int, val type: MemoryVersionType, private val u
     override fun toString(): String = "MemoryVersion(version=$version, type=$type)"
 
     companion object {
-        fun default() = MemoryVersion(0, MemoryVersionType.DEFAULT, null)
+        fun default() = MemoryVersion(0, MemoryVersionType.DEFAULT, emptySet())
     }
 }
 
-@Serializable
-class MemoryVersionManager(private val predecessorTree: MutableMap<MemoryVersion, Set<MemoryVersion>>) {
-    fun registerMemoryVersion(memoryVersion: MemoryVersion, predecessors: Set<MemoryVersion>) {
-        predecessorTree.getOrPut(memoryVersion) { predecessors }
+private class MemoryVersionSetter(val version: MemoryVersion) : Transformer<MemoryVersionSetter> {
+    override fun transformTerm(term: Term): Term = when (term) {
+        is MemoryDependentTerm -> term.withMemoryVersion(version)
+        else -> term
     }
 }
+
+fun Predicate.withMemoryVersion(version: MemoryVersion) = accept(MemoryVersionSetter(version))
+fun PredicateState.withMemoryVersion(version: MemoryVersion) = MemoryVersionSetter(version).transform(this)

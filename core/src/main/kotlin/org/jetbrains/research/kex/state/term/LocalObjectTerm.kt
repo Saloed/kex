@@ -9,7 +9,7 @@ import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-data class LocalObjectTerm(val id: String, val identifier: NewObjectIdentifier, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
+data class LocalObjectTerm(val id: String, val identifier: NewObjectIdentifier, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryDependentTerm {
     override val type: KexType
         get() = identifier.type
     override val name = id

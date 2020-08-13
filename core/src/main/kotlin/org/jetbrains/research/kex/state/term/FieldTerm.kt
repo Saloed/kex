@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.state.term
 
 import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.defaultHashCode
 import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
@@ -11,7 +12,7 @@ import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
+class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryDependentTerm {
     val fieldNameString = (fieldName as ConstStringTerm).value
     override val name = "$owner.$fieldNameString"
     override val subterms by lazy { listOf(owner, fieldName) }
@@ -27,9 +28,12 @@ class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term
         val tname = t.transform(fieldName)
         return when {
             towner == owner && tname == fieldName -> this
-            else -> term { tf.getField(type, towner, tname) }
+            else -> FieldTerm(type, towner, tname, memoryVersion)
         }
     }
+
     override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = FieldTerm(type, owner, fieldName, memoryVersion)
 
+    override fun equals(other: Any?) = super.equals(other) && memoryVersion == (other as? MemoryDependentTerm)?.memoryVersion
+    override fun hashCode() = defaultHashCode(super.hashCode(), memoryVersion)
 }

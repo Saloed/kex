@@ -5,7 +5,6 @@ import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 
@@ -15,8 +14,7 @@ class BinaryTerm(
         override val type: KexType,
         @Contextual val opcode: BinaryOpcode,
         val lhv: Term,
-        val rhv: Term,
-        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term() {
+        val rhv: Term) : Term() {
     override val name = "$lhv $opcode $rhv"
     override val subterms by lazy { listOf(lhv, rhv) }
 
@@ -35,5 +33,4 @@ class BinaryTerm(
         other as BinaryTerm
         return super.equals(other) && this.opcode == other.opcode
     }
-    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = BinaryTerm(type, opcode, lhv, rhv, memoryVersion)
 }
