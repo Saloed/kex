@@ -13,21 +13,19 @@ enum class MemoryVersionType {
 }
 
 @Serializable
-class MemoryVersion(val version: Int, val type: MemoryVersionType, val predecessors: Set<MemoryVersion>) {
+class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersionType, val predecessors: Set<MemoryVersion>) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
         other as MemoryVersion
-        if (version != other.version) return false
-        if (type != other.type) return false
-        return true
+        return type == other.type && version == other.version && subversion == other.subversion
     }
 
-    override fun hashCode(): Int = defaultHashCode(version, type)
-    override fun toString(): String = "MemoryVersion(version=$version, type=$type)"
+    override fun hashCode(): Int = defaultHashCode(type, version, subversion)
+    override fun toString(): String = "MemoryVersion($type $version.$subversion)"
 
     companion object {
-        fun default() = MemoryVersion(0, MemoryVersionType.DEFAULT, emptySet())
+        fun default() = MemoryVersion(0, 0, MemoryVersionType.DEFAULT, emptySet())
     }
 }
 
