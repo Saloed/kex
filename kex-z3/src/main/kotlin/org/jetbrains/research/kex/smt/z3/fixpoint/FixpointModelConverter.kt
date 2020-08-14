@@ -59,6 +59,7 @@ class FixpointModelConverter(
                 .let { Optimizer().apply(it) }
                 .let { InstanceOfCorrector(z3Context).apply(it) }
                 .simplify()
+        VersionVerifier.apply(state)
         return RecoveredModel(state, callDependencies.toSet())
     }
 

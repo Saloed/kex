@@ -76,7 +76,7 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
     override fun transformChoice(ps: ChoiceState): PredicateState {
         val currentMemory = memory
         val newChoices = arrayListOf<PredicateState>()
-        val memories = arrayListOf<MemoryVersionSource>()
+        val memories = arrayListOf(currentMemory)
         for (choice in ps.choices) {
             val newMemory = MemoryVersionSplit(currentMemory)
             currentMemory.children += newMemory
@@ -158,15 +158,18 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
             when (node) {
                 is MemoryVersionInitial -> {
                     check(memoryVersionIdx == 0) { "Initial memory is not first" }
-                    versionMapping.getOrPut(node.version) { MemoryVersion(memoryVersionIdx++, 0, MemoryVersionType.INITIAL, emptySet()) }
+                    versionMapping.getOrPut(node.version) {
+                        memoryVersionIdx++
+                        MemoryVersion.initial()
+                    }
                 }
                 is MemoryVersionNew -> {
                     val parentVersion = versionMapping[node.parent.version] ?: error("Parent version is not computed")
-                    versionMapping.getOrPut(node.version) { MemoryVersion(memoryVersionIdx++, 0, MemoryVersionType.NEW, setOf(parentVersion)) }
+                    versionMapping.getOrPut(node.version) { parentVersion.resetToVersion(memoryVersionIdx++) }
                 }
                 is MemoryVersionNormal -> {
                     val parentVersion = versionMapping[node.parent.version] ?: error("Parent version is not computed")
-                    versionMapping.getOrPut(node.version) { MemoryVersion(parentVersion.version, parentVersion.subversion + 1, MemoryVersionType.NORMAL, setOf(parentVersion)) }
+                    versionMapping.getOrPut(node.version) { parentVersion.increaseSubversion() }
                 }
                 is MemoryVersionMerge -> {
                     val parentVersionsRaw = node.memories.map { versionMapping[it.version] }
@@ -175,12 +178,7 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
                         queue.addLast(node)
                         continue@loop
                     }
-                    val uniquePredecessors = parentVersions.toSet()
-                    when (uniquePredecessors.size) {
-                        0 -> error("Empty memory merge")
-                        1 -> versionMapping.getOrPut(node.version) { uniquePredecessors.first() }
-                        else -> versionMapping.getOrPut(node.version) { MemoryVersion(memoryVersionIdx++, 0, MemoryVersionType.MERGE, uniquePredecessors) }
-                    }
+                    versionMapping.getOrPut(node.version) { MemoryVersion.merge(parentVersions) }
                 }
                 is MemoryVersionSplit -> {
                 }

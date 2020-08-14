@@ -32,10 +32,12 @@ class DeclarationTracker {
         }
 
         interface Memory {
+            val version: Int
             val memspace: Int
         }
 
         interface Property {
+            val version: Int
             val memspace: Int
             val fullName: String
         }
@@ -45,9 +47,9 @@ class DeclarationTracker {
             val propertyName: String
         }
 
-        data class NormalMemory(override val memspace: Int, override val info: DeclarationInfo? = null) : Declaration(info), Memory
-        open class NormalProperty(override val fullName: String, override val memspace: Int, info: DeclarationInfo? = null) : Declaration(info), Property {
-            override fun toString(): String = "Property(fullName='$fullName', memspace=$memspace info=$info)"
+        data class NormalMemory(override val version: Int, override val memspace: Int, override val info: DeclarationInfo? = null) : Declaration(info), Memory
+        open class NormalProperty(override val fullName: String, override val version: Int, override val memspace: Int, info: DeclarationInfo? = null) : Declaration(info), Property {
+            override fun toString(): String = "Property(fullName='$fullName', version=$version, memspace=$memspace info=$info)"
             override fun hashCode() = defaultHashCode(fullName, memspace)
             override fun equals(other: Any?): Boolean {
                 if (this === other) return true
@@ -59,15 +61,16 @@ class DeclarationTracker {
         data class NormalClassProperty(
                 override val className: String,
                 override val propertyName: String,
+                override val version: Int,
                 override val memspace: Int,
                 override val info: DeclarationInfo? = null
-        ) : NormalProperty("$className.$propertyName", memspace, info), ClassProperty
+        ) : NormalProperty("$className.$propertyName", version, memspace, info), ClassProperty
 
         sealed class Call(open val index: Int, override val info: DeclarationInfo) : Declaration(info) {
             data class CallResult(override val index: Int, override val info: DeclarationInfo) : Call(index, info)
-            data class CallMemory(override val memspace: Int, override val index: Int, override val info: DeclarationInfo) : Call(index, info), Memory
-            open class CallProperty(override val fullName: String, override val memspace: Int, index: Int, info: DeclarationInfo) : Call(index, info), Property {
-                override fun toString(): String = "CallProperty(index = $index fullName='$fullName', memspace=$memspace info=$info)"
+            data class CallMemory(override val version: Int, override val memspace: Int, override val index: Int, override val info: DeclarationInfo) : Call(index, info), Memory
+            open class CallProperty(override val fullName: String, override val version: Int, override val memspace: Int, index: Int, info: DeclarationInfo) : Call(index, info), Property {
+                override fun toString(): String = "CallProperty(index = $index fullName='$fullName', version=$version memspace=$memspace info=$info)"
                 override fun hashCode() = defaultHashCode(fullName, memspace)
                 override fun equals(other: Any?): Boolean {
                     if (this === other) return true
@@ -79,10 +82,11 @@ class DeclarationTracker {
             data class CallClassProperty(
                     override val className: String,
                     override val propertyName: String,
+                    override val version: Int,
                     override val memspace: Int,
                     override val index: Int,
                     override val info: DeclarationInfo
-            ) : CallProperty("$className.$propertyName", memspace, index, info), ClassProperty
+            ) : CallProperty("$className.$propertyName", version, memspace, index, info), ClassProperty
         }
 
         fun isValuable() = when (this) {
@@ -98,26 +102,26 @@ class DeclarationTracker {
         companion object {
             private val thisRegex = Regex("^this$")
             private val argRegexp = Regex("arg\\$(\\d+)")
-            private val memoryRegexp = Regex("${Z3Context.MEMORY_NAME}(\\d+)")
-            private val classPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}([A-Za-z0-9_/\$]+)\\.(\\w+)__(\\d+)")
-            private val otherPropertyRegexp = Regex("${Z3Context.PROPERTY_NAME}(\\w+)__(\\d+)")
+            private val memoryRegexp = Regex("INITIAL_(\\d+)${Z3Context.MEMORY_NAME}(\\d+)")
+            private val classPropertyRegexp = Regex("INITIAL_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__([A-Za-z0-9_/\$]+)\\.(\\w+)")
+            private val otherPropertyRegexp = Regex("INITIAL_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__(\\w+)")
             private val callResultRegexp = Regex("call__(\\d+)__result")
-            private val callMemoryRegexp = Regex("call__(\\d+)__${memoryRegexp.pattern}")
-            private val callClassProperty = Regex("call__(\\d+)__${classPropertyRegexp.pattern}")
-            private val callOtherProperty = Regex("call__(\\d+)__${otherPropertyRegexp.pattern}")
+            private val callMemoryRegexp = Regex("NEW_(\\d+)${Z3Context.MEMORY_NAME}(\\d+)")
+            private val callClassProperty = Regex("NEW_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__([A-Za-z0-9_/\$]+)\\.(\\w+)")
+            private val callOtherProperty = Regex("NEW_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__(\\w+)")
 
             fun create(name: String, sort: Sort, expr: Expr): Declaration {
                 val declarationInfo = DeclarationInfo(name, sort, expr)
                 return regexWhen(name) {
                     like(thisRegex) { This(declarationInfo) }
                             ?: like(argRegexp) { (idx) -> Argument(idx.toInt(), declarationInfo) }
-                            ?: like(memoryRegexp) { (memspace) -> NormalMemory(memspace.toInt(), declarationInfo) }
-                            ?: like(classPropertyRegexp) { (className, propertyName, memspace) -> NormalClassProperty(className, propertyName, memspace.toInt(), declarationInfo) }
-                            ?: like(otherPropertyRegexp) { (propertyName, memspace) -> NormalProperty(propertyName, memspace.toInt(), declarationInfo) }
+                            ?: like(memoryRegexp) { (version, memspace) -> NormalMemory(version.toInt(), memspace.toInt(), declarationInfo) }
+                            ?: like(classPropertyRegexp) { (version, memspace, className, propertyName) -> NormalClassProperty(className, propertyName, version.toInt(), memspace.toInt(), declarationInfo) }
+                            ?: like(otherPropertyRegexp) { (version, memspace, propertyName) -> NormalProperty(propertyName, version.toInt(), memspace.toInt(), declarationInfo) }
                             ?: like(callResultRegexp) { (idx) -> Call.CallResult(idx.toInt(), declarationInfo) }
-                            ?: like(callMemoryRegexp) { (idx, memspace) -> Call.CallMemory(memspace.toInt(), idx.toInt(), declarationInfo) }
-                            ?: like(callClassProperty) { (idx, className, propertyName, memspace) -> Call.CallClassProperty(className, propertyName, memspace.toInt(), idx.toInt(), declarationInfo) }
-                            ?: like(callOtherProperty) { (idx, propertyName, memspace) -> Call.CallProperty(propertyName, memspace.toInt(), idx.toInt(), declarationInfo) }
+                            ?: like(callMemoryRegexp) { (idx, memspace) -> Call.CallMemory(idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
+                            ?: like(callClassProperty) { (idx, memspace, className, propertyName) -> Call.CallClassProperty(className, propertyName, idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
+                            ?: like(callOtherProperty) { (idx, memspace, propertyName) -> Call.CallProperty(propertyName, idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
                             ?: `else` { Other(declarationInfo) }
                 }
             }

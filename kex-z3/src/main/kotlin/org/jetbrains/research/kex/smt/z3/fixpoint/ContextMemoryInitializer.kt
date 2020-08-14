@@ -1,9 +1,9 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.smt.z3.VersionedMemory
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Converter
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.ArrayStorePredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -49,9 +49,9 @@ class ContextMemoryInitializer(vararg states: PredicateState) {
         private fun initializePropertyMemory(memspace: Int, name: String, type: KexType) {
             val propertyName = Z3Context.propertyName(memspace, name)
             val memory = emptyMemory(propertyName, type)
-            ctx.setProperties(memspace, name, memory)
+            ctx.setProperties(name, memspace, memory)
         }
 
-        private fun emptyMemory(name: String, type: KexType) = VersionedMemory(ctx.factory.makeEmptyMemory(name, converter.Z3Type(type)), type = converter.Z3Type(type))
+        private fun emptyMemory(name: String, type: KexType) = ctx.emptyMemory(name, MemoryVersion.initial(), converter.Z3Type(type))
     }
 }

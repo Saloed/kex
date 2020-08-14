@@ -4,6 +4,7 @@ import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
+import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
@@ -58,7 +59,7 @@ class Z3ContextWithRecursion(
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            val property = DeclarationTracker.Declaration.NormalClassProperty(field.`class`.fullname, field.name, loadTerm.field.memspace)
+            val property = DeclarationTracker.Declaration.NormalClassProperty(field.`class`.fullname, field.name, 0, loadTerm.field.memspace)
             propertyTypes[property] = loadTerm.type
             property
         }
@@ -76,7 +77,7 @@ class Z3ContextWithRecursion(
 
     private fun readProperty(property: DeclarationTracker.Declaration.NormalProperty, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
         val type = Z3Type(propertyTypes[property]!!)
-        val memory = ctx.getProperties(property.memspace, property.fullName, type).memory
+        val memory = ctx.getProperties(property.fullName, MemoryVersion.initial(), property.memspace,  type).memory
         memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory
         return memory.inner
     }

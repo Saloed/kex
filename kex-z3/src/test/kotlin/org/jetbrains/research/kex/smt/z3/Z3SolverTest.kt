@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.smt.z3
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Status
 import org.jetbrains.research.kex.KexTest
+import org.jetbrains.research.kex.state.MemoryVersion
 import kotlin.test.*
 
 class Z3SolverTest : KexTest() {
@@ -63,15 +64,15 @@ class Z3SolverTest : KexTest() {
         val condA = cond eq a
         val condB = cond eq b
 
-        memA.writeMemory(ptr, a, 0, Int_::class)
-        memB.writeMemory(ptr, b, 0, Int_::class)
+        memA.writeMemory(ptr, a, MemoryVersion.initial(), 0, Int_::class)
+        memB.writeMemory(ptr, b, MemoryVersion.initial(), 0, Int_::class)
 
-        val merged = Z3Context.mergeContexts("merged", default, mapOf(
+        default.mergeMemory("merged", mapOf(
                 condA to memA,
                 condB to memB
         ))
 
-        val c = merged.readMemory<Int_>(ptr, 0, Int_::class)
+        val c = default.readMemory<Int_>(ptr, MemoryVersion.initial(), 0, Int_::class)
 
         val checkExprIn = { e: Bool_, `in`: Dynamic_ ->
             val solver = ef.ctx.mkSolver()
