@@ -6,13 +6,9 @@ import com.abdullin.kthelper.assert.unreachable
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
-import org.jetbrains.research.kex.state.ChoiceState
-import org.jetbrains.research.kex.state.MemoryVersion
-import org.jetbrains.research.kex.state.MemoryVersionType
-import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.CallTerm
-import org.jetbrains.research.kex.state.term.MemoryDependentTerm
 import org.jetbrains.research.kex.state.term.Term
 
 
@@ -24,6 +20,7 @@ private val viewer by lazy {
 
 internal sealed class MemoryVersionSource : Viewable {
     abstract val version: MemoryVersion
+    abstract val descriptor: MemoryDescriptor
     val children = arrayListOf<MemoryVersionSource>()
     abstract val graphNode: GraphView
     override val graphView: List<GraphView>
@@ -36,96 +33,100 @@ internal sealed class MemoryVersionSource : Viewable {
     fun view() = view("MemoryVersions", dot, viewer)
 }
 
-internal class MemoryVersionInitial : MemoryVersionSource() {
+internal data class MemoryVersionInitial(override val descriptor: MemoryDescriptor) : MemoryVersionSource() {
     override val version: MemoryVersion
         get() = MemoryVersion(0, 0, MemoryVersionType.INITIAL, emptySet())
     override val graphNode: GraphView
         get() = GraphView("initial", "initial")
 }
 
-internal data class MemoryVersionNew(val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
+internal data class MemoryVersionNew(override val descriptor: MemoryDescriptor, val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
     override val version: MemoryVersion
         get() = MemoryVersion(parent.hashCode() * 17 + condition.hashCode(), 0, MemoryVersionType.NEW, emptySet())
     override val graphNode: GraphView
         get() = GraphView("$version", "New $version: $condition")
 }
 
-internal data class MemoryVersionNormal(val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
+internal data class MemoryVersionNormal(override val descriptor: MemoryDescriptor, val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
     override val version: MemoryVersion
         get() = MemoryVersion(parent.hashCode() * 17 + condition.hashCode(), 0, MemoryVersionType.NORMAL, emptySet())
     override val graphNode: GraphView
         get() = GraphView("$version", "Normal $version: $condition")
 }
 
-internal data class MemoryVersionMerge(val memories: List<MemoryVersionSource>) : MemoryVersionSource() {
+internal data class MemoryVersionMerge(override val descriptor: MemoryDescriptor, val memories: List<MemoryVersionSource>) : MemoryVersionSource() {
     override val version: MemoryVersion
         get() = MemoryVersion(memories.hashCode(), 0, MemoryVersionType.MERGE, emptySet())
     override val graphNode: GraphView
         get() = GraphView("$version", "Merge $version")
 }
 
-internal data class MemoryVersionSplit(val parent: MemoryVersionSource) : MemoryVersionSource() {
+internal data class MemoryVersionSplit(override val descriptor: MemoryDescriptor, val parent: MemoryVersionSource) : MemoryVersionSource() {
     override val version: MemoryVersion
         get() = parent.version
     override val graphNode: GraphView
         get() = GraphView("split_${parent.graphNode.name}", "Split $version")
 }
 
-class MemoryVersioner : Transformer<MemoryVersioner> {
-    private var memory: MemoryVersionSource = MemoryVersionInitial()
+private fun List<Pair<MemoryDescriptor, MemoryVersionSource>>.toMemoryMap() = toMap(mutableMapOf())
+
+class MemoryVersioner : MemoryVersionTransformer {
+    private lateinit var memory: MutableMap<MemoryDescriptor, MemoryVersionSource>
+
     override fun transformChoice(ps: ChoiceState): PredicateState {
         val currentMemory = memory
         val newChoices = arrayListOf<PredicateState>()
         val memories = arrayListOf(currentMemory)
         for (choice in ps.choices) {
-            val newMemory = MemoryVersionSplit(currentMemory)
-            currentMemory.children += newMemory
-            memory = newMemory
+            memory = splitMemory(currentMemory)
             newChoices += transformBase(choice)
             memories += memory
         }
-        memory = MemoryVersionMerge(memories)
-        memories.forEach { it.children += memory }
+        memory = mergeMemory(memories)
         return ChoiceState(newChoices)
     }
+
+    private fun splitMemory(beforeSplit: Map<MemoryDescriptor, MemoryVersionSource>) = beforeSplit.map { (descriptor, memory) ->
+        val newMemory = MemoryVersionSplit(descriptor, memory)
+        memory.children += newMemory
+        descriptor to newMemory
+    }.toMemoryMap()
+
+    private fun mergeMemory(memories: List<Map<MemoryDescriptor, MemoryVersionSource>>) = memories.first().keys.map { descriptor ->
+        val memorySources = memories.map { it[descriptor] ?: error("No descriptor $descriptor") }
+        val newMemory = MemoryVersionMerge(descriptor, memorySources)
+        memorySources.forEach { it.children += newMemory }
+        descriptor to newMemory
+    }.toMemoryMap()
+
+    private fun newMemory(currentMemory: Map<MemoryDescriptor, MemoryVersionSource>, condition: Any) = currentMemory.map { (descriptor, memory) ->
+        val newMemory = MemoryVersionNew(descriptor, memory, condition)
+        memory.children += newMemory
+        descriptor to newMemory
+    }.toMemoryMap()
 
     override fun transformCall(predicate: CallPredicate): Predicate {
         val call = predicate.call as CallTerm
         val newCall = transform(call) as CallTerm
-        memory = newMemory(MemoryVersionNew(memory, newCall))
+        memory = newMemory(memory, newCall)
         val newLhv = predicate.lhvUnsafe?.let { transform(it) }
         return CallPredicate(newLhv, newCall, predicate.type, predicate.location)
     }
 
-    override fun transformArrayStorePredicate(predicate: ArrayStorePredicate): Predicate {
-        memory = newMemory(MemoryVersionNormal(memory, predicate))
-        return super.transformArrayStorePredicate(predicate)
-    }
-
-    override fun transformFieldStorePredicate(predicate: FieldStorePredicate): Predicate {
-        memory = newMemory(MemoryVersionNormal(memory, predicate))
-        return super.transformFieldStorePredicate(predicate)
-    }
-
-    override fun transformNewArray(predicate: NewArrayPredicate): Predicate {
-        val tdimentions = predicate.dimentions.map { transform(it) }
-        memory = newMemory(MemoryVersionNormal(memory, predicate))
-        val tlhv = transform(predicate.lhv)
-        return NewArrayPredicate(tlhv, tdimentions, predicate.elementType, predicate.instruction, predicate.type, predicate.location)
-    }
-
-    override fun transformNew(predicate: NewPredicate): Predicate {
-        memory = newMemory(MemoryVersionNormal(memory, predicate))
-        return super.transformNew(predicate)
-    }
-
-    override fun transformTerm(term: Term): Term = when (term) {
-        is MemoryDependentTerm -> term.withMemoryVersion(memory.version)
-        else -> term
+    override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
+        val descriptor = element.descriptor()
+        val currentMemory = memory[descriptor] ?: error("No memory for descriptor $descriptor")
+        if (element.accessType == MemoryAccessType.WRITE) {
+            memory[descriptor] = MemoryVersionNormal(descriptor, currentMemory, element)
+        }
+        return element.withMemoryVersion(currentMemory.version)
     }
 
     override fun apply(ps: PredicateState): PredicateState {
-        val initialMemory = memory
+        val accesses = MemoryAccessCollector.collect(ps)
+        val descriptors = accesses.map { it.descriptor() }.toSet()
+        val initialMemory = descriptors.map { it to MemoryVersionInitial(it) }.toMemoryMap()
+        memory = initialMemory
         val state = super.apply(ps)
         val finalMemory = memory
         val versionMappings = memoryVersionNormalizer(initialMemory)
@@ -134,20 +135,7 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
         return result
     }
 
-    private fun newMemory(newMem: MemoryVersionSource): MemoryVersionSource {
-        memory.children += newMem
-        return newMem
-    }
-
-    private class MemoryVersionMapper(val mapping: Map<MemoryVersion, MemoryVersion>) : Transformer<MemoryVersionMapper> {
-        override fun transformTerm(term: Term): Term = when (term) {
-            is MemoryDependentTerm -> {
-                val newVersion = mapping[term.memoryVersion] ?: error("Version must be updated")
-                term.withMemoryVersion(newVersion)
-            }
-            else -> term
-        }
-    }
+    private fun memoryVersionNormalizer(initialMemory: Map<MemoryDescriptor, MemoryVersionSource>) = initialMemory.mapValues { (_, memory) -> memoryVersionNormalizer(memory) }
 
     private fun memoryVersionNormalizer(root: MemoryVersionSource): Map<MemoryVersion, MemoryVersion> {
         var memoryVersionIdx = 0
@@ -189,11 +177,48 @@ class MemoryVersioner : Transformer<MemoryVersioner> {
     }
 }
 
-class MemoryVersionViewer private constructor() : Viewable, Transformer<MemoryVersionViewer> {
+interface MemoryVersionTransformer : Transformer<MemoryVersionTransformer> {
+    fun <T> transformMemoryVersion(element: MemoryAccess<T>): T = element.withMemoryVersion(element.memoryVersion)
+
+    @Suppress("UNCHECKED_CAST")
+    override fun transformTerm(term: Term): Term = when (term) {
+        is MemoryAccess<*> -> transformMemoryVersion(term as MemoryAccess<Term>)
+        else -> term
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    override fun transformPredicate(predicate: Predicate): Predicate = when (predicate) {
+        is MemoryAccess<*> -> transformMemoryVersion(predicate as MemoryAccess<Predicate>)
+        else -> predicate
+    }
+}
+
+private class MemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>) : MemoryVersionTransformer {
+    override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
+        val descriptor = element.descriptor()
+        val memoryMapping = mapping[descriptor] ?: error("No memory mapping for $descriptor")
+        val newVersion = memoryMapping[element.memoryVersion] ?: error("Version must be updated")
+        return element.withMemoryVersion(newVersion)
+    }
+}
+
+class MemoryAccessCollector private constructor() : MemoryVersionTransformer {
+    private val memoryAccesses = arrayListOf<MemoryAccess<*>>()
+    override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
+        memoryAccesses += element
+        return super.transformMemoryVersion(element)
+    }
+
+    companion object {
+        fun collect(ps: PredicateState) = MemoryAccessCollector().apply { apply(ps) }.memoryAccesses
+    }
+}
+
+class MemoryVersionViewer private constructor(val memoryAccess: List<MemoryAccess<*>>) : Viewable {
     private val memoryVersions = hashSetOf<MemoryVersion>()
-    override fun transformTerm(term: Term): Term {
-        if (term is MemoryDependentTerm) deepAddMemoryVersion(term.memoryVersion)
-        return super.transformTerm(term)
+
+    init {
+        memoryAccess.forEach { deepAddMemoryVersion(it.memoryVersion) }
     }
 
     private fun deepAddMemoryVersion(memoryVersion: MemoryVersion) {
@@ -214,18 +239,18 @@ class MemoryVersionViewer private constructor() : Viewable, Transformer<MemoryVe
 
     companion object {
         fun view(ps: PredicateState) {
-            val viewBuilder = MemoryVersionViewer()
-            viewBuilder.apply(ps)
+            val memoryAccess = MemoryAccessCollector.collect(ps)
+            val viewBuilder = MemoryVersionViewer(memoryAccess)
             viewBuilder.view("MemoryVersions", dot, viewer)
         }
     }
 }
 
-object VersionVerifier : Transformer<VersionVerifier> {
-    override fun transformTerm(term: Term): Term {
-        if (term is MemoryDependentTerm && term.memoryVersion.type == MemoryVersionType.DEFAULT) {
-            error("term with default memory: $term")
+object VersionVerifier : MemoryVersionTransformer {
+    override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
+        if (element.memoryVersion.type == MemoryVersionType.DEFAULT) {
+            error("Default memory: $element")
         }
-        return term
+        return super.transformMemoryVersion(element)
     }
 }

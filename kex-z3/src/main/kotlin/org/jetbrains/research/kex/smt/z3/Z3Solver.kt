@@ -11,10 +11,9 @@ import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.smt.*
 import org.jetbrains.research.kex.smt.Solver
+import org.jetbrains.research.kex.state.MemoryType
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.term.FieldTerm
-import org.jetbrains.research.kex.state.term.MemoryDependentTerm
-import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.TermCollector
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.collectVariables
@@ -173,8 +172,8 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
                     val name = "${ptr.klass}.${ptr.fieldNameString}"
-                    val startProp = ctx.getInitialProperties(name, ptr.memoryVersion, memspace, converter.Z3Type((ptr.type as KexReference).reference))
-                    val endProp = ctx.getProperties(name, ptr.memoryVersion, memspace,  converter.Z3Type((ptr.type as KexReference).reference))
+                    val startProp = ctx.getInitialMemory(MemoryType.CLASS_PROPERTY, name, memspace, converter.Z3Type((ptr.type as KexReference).reference))
+                    val endProp = ctx.getMemory(MemoryType.CLASS_PROPERTY, name, memspace,  converter.Z3Type((ptr.type as KexReference).reference))
 
                     val startV = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
                     val endV = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
@@ -193,11 +192,9 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                     val converter = Z3Converter(tf)
                     val ptrExpr = converter.convert(ptr, ef, ctx) as? Ptr_
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
-                    val memoryVersion = (ptr as? MemoryDependentTerm)?.memoryVersion
-                            ?: unreachable { log.error("Non memory dependent ptr") }
 
-                    val startMem = ctx.getInitialMemory(memoryVersion, memspace, converter.Z3Type(ptr.type))
-                    val endMem = ctx.getMemory(memoryVersion, memspace, converter.Z3Type(ptr.type))
+                    val startMem = ctx.getInitialMemory(MemoryType.ARRAY, ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, converter.Z3Type(ptr.type))
+                    val endMem = ctx.getMemory(MemoryType.ARRAY,  ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, converter.Z3Type(ptr.type))
 
                     val startV = startMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
                     val endV = endMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
@@ -211,8 +208,8 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                     memories.getValue(memspace).second[modelPtr] = modelEndV
 
                     if (ptr.type is KexArray) {
-                        val startProp = ctx.getInitialProperties( "length", memoryVersion,  memspace, converter.Z3Type(KexInt()))
-                        val endProp = ctx.getProperties( "length", memoryVersion, memspace, converter.Z3Type(KexInt()))
+                        val startProp = ctx.getInitialMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, converter.Z3Type(KexInt()))
+                        val endProp = ctx.getMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, converter.Z3Type(KexInt()))
 
                         val startLength = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))
                         val endLength = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))

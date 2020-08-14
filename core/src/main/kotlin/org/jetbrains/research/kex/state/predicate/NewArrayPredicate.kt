@@ -5,6 +5,11 @@ import kotlinx.serialization.*
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryAccess
+import org.jetbrains.research.kex.state.MemoryAccessType
+import org.jetbrains.research.kex.state.MemoryType
+import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.term.ArrayLengthTerm
 import org.jetbrains.research.kex.state.term.ConstIntTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
@@ -20,11 +25,18 @@ class NewArrayPredicate(
         val elementType: KexType,
         @Required @Polymorphic val instruction: Instruction,
         @Required override val type: PredicateType = PredicateType.State(),
-        @Required @Contextual override val location: Location = Location()) : Predicate(), NewObjectPredicate {
+        @Required @Contextual override val location: Location = Location(),
+        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), NewObjectPredicate, MemoryAccess<NewArrayPredicate> {
     override val operands by lazy { listOf(lhv) + dimentions }
 
     override val identifier: NewObjectIdentifier
         get() = NewArrayPredicateIdentifier(instruction, elementType, lhv.memspace).also { it.dimensions = dimentions }
+
+    override val memoryType: MemoryType = MemoryType.SPECIAL
+    override val accessType: MemoryAccessType = MemoryAccessType.WRITE
+    override val memoryName: String = ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME
+    override val memorySpace: Int
+        get() = identifier.memspace
 
     val numDimentions: Int
         get() = dimentions.size
@@ -42,12 +54,13 @@ class NewArrayPredicate(
         val tdimentions = dimentions.map { t.transform(it) }
         return when {
             tlhv == lhv && tdimentions == dimentions -> this
-            else -> predicate(type, location) { tlhv.new(tdimentions, instruction) }
+            else -> NewArrayPredicate(tlhv, tdimentions, elementType, instruction, type, location, memoryVersion)
         }
     }
 
-    override fun hashCode(): Int = defaultHashCode(super.hashCode(), instruction)
-    override fun equals(other: Any?): Boolean = super.equals(other) && instruction == (other as? NewArrayPredicate)?.instruction
+    override fun hashCode(): Int = defaultHashCode(super.hashCode(), instruction, memoryHash())
+    override fun equals(other: Any?): Boolean = super.equals(other) && instruction == (other as? NewArrayPredicate)?.instruction && memoryEquals(other)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion)
 }
 
 @Serializable

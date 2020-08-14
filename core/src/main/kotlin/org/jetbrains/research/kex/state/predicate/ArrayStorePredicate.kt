@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.state.predicate
 
 import com.abdullin.kthelper.assert.unreachable
+import com.abdullin.kthelper.defaultHashCode
 import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Required
@@ -8,8 +9,14 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryAccess
+import org.jetbrains.research.kex.state.MemoryAccessType
+import org.jetbrains.research.kex.state.MemoryType
+import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.term.ArrayLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
+import org.jetbrains.research.kex.state.transformer.memspace
 import org.jetbrains.research.kfg.ir.Location
 
 @InheritorOf("Predicate")
@@ -18,7 +25,8 @@ class ArrayStorePredicate(
         val arrayRef: Term,
         val value: Term,
         @Required override val type: PredicateType = PredicateType.State(),
-        @Required @Contextual override val location: Location = Location()) : Predicate() {
+        @Required @Contextual override val location: Location = Location(),
+        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), MemoryAccess<ArrayStorePredicate> {
     override val operands by lazy { listOf(arrayRef, value) }
 
     val componentType: KexType
@@ -31,7 +39,17 @@ class ArrayStorePredicate(
         val store = t.transform(value)
         return when {
             ref == arrayRef && store == value -> this
-            else -> predicate(type, location) { ref.store(store) }
+            else -> ArrayStorePredicate(ref, store, type, location, memoryVersion)
         }
     }
+
+    override val accessType: MemoryAccessType = MemoryAccessType.WRITE
+    override val memoryType: MemoryType = MemoryType.ARRAY
+    override val memoryName: String = ArrayLoadTerm.ARRAY_MEMORY_NAME
+    override val memorySpace: Int
+        get() = arrayRef.memspace
+
+    override fun withMemoryVersion(memoryVersion: MemoryVersion): ArrayStorePredicate = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion)
+    override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
+    override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
 }

@@ -4,14 +4,22 @@ import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.MemoryAccess
+import org.jetbrains.research.kex.state.MemoryAccessType
+import org.jetbrains.research.kex.state.MemoryType
 import org.jetbrains.research.kex.state.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class CastTerm(override val type: KexType, val operand: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryDependentTerm {
+class CastTerm(override val type: KexType, val operand: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryAccess<CastTerm> {
     override val name = "($operand as $type)"
     override val subterms by lazy { listOf(operand) }
+
+    override val memoryType: MemoryType = MemoryType.SPECIAL
+    override val accessType: MemoryAccessType = MemoryAccessType.WRITE
+    override val memorySpace: Int = 0
+    override val memoryName: String = InstanceOfTerm.TYPE_MEMORY_NAME
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val toperand = t.transform(operand)) {
@@ -19,8 +27,8 @@ class CastTerm(override val type: KexType, val operand: Term, override val memor
                 else -> CastTerm(type, toperand, memoryVersion)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion): Term = CastTerm(type, operand, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = CastTerm(type, operand, memoryVersion)
 
-    override fun equals(other: Any?) = super.equals(other) && memoryVersion == (other as? MemoryDependentTerm)?.memoryVersion
-    override fun hashCode() = defaultHashCode(super.hashCode(), memoryVersion)
+    override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
+    override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
 }
