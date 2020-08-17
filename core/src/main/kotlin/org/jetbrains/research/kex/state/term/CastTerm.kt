@@ -3,11 +3,12 @@ package org.jetbrains.research.kex.state.term
 import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
+import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
@@ -20,6 +21,7 @@ class CastTerm(override val type: KexType, val operand: Term, override val memor
     override val accessType: MemoryAccessType = MemoryAccessType.WRITE
     override val memorySpace: Int = 0
     override val memoryName: String = InstanceOfTerm.TYPE_MEMORY_NAME
+    override val memoryValueType: KexType = KexInt()
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val toperand = t.transform(operand)) {

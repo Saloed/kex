@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.smt.z3
 
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.NewObjectIdentifier
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
@@ -10,13 +10,12 @@ typealias ExprFactory = Z3ExprFactory
 typealias ValueExpr = Z3ValueExpr
 
 data class VersionedMemory(val memory: Memory_, val version: MemoryVersion, val type: KClass<out ValueExpr>) {
-    companion object {
-        fun merge(name: String, default: VersionedMemory, cases: List<Pair<Bool_, VersionedMemory>>): VersionedMemory {
-            check(cases.all { it.second.type == default.type }) { "Try to merge memories with different element types" }
-            val mergedVersion = MemoryVersion.merge(listOf(default.version) + cases.map { it.second.version })
-            val memories = cases.map { it.first to it.second.memory }
-            return VersionedMemory(Memory_.merge(default.memory, memories), mergedVersion, default.type)
-        }
+    @Suppress("UNUSED_PARAMETER")
+    fun merge(name: String, cases: List<Pair<Bool_, VersionedMemory>>): VersionedMemory {
+        check(cases.all { it.second.type == type }) { "Try to merge memories with different element types" }
+        val mergedVersion = MemoryVersion.merge(listOf(version) + cases.map { it.second.version })
+        val memories = cases.map { it.first to it.second.memory }
+        return VersionedMemory(Memory_.merge(memory, memories), mergedVersion, type)
     }
 
     fun <T : ValueExpr> load(ptr: Ptr_, type: KClass<out ValueExpr>) = memory.load<T>(ptr, type)
@@ -25,7 +24,7 @@ data class VersionedMemory(val memory: Memory_, val version: MemoryVersion, val 
     operator fun <T : Dynamic_> set(index: Ptr_, element: T, type: KClass<out ValueExpr>) = store(index, element, type)
 }
 
-internal data class VersionedMemoryDescriptor(val descriptor: MemoryDescriptor, val primaryVersion: Int)
+internal data class VersionedMemoryDescriptor(val descriptor: MemoryDescriptor, val version: MemoryVersion)
 
 class Z3Context : Z3SMTContext {
     companion object {
@@ -85,12 +84,6 @@ class Z3Context : Z3SMTContext {
             AtomicInteger(BASE_TYPE_IDX), hashMapOf()
     )
 
-    fun emptyMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out ValueExpr>): VersionedMemory {
-        val memoryName = memoryName(descriptor, version)
-        val memory = factory.makeEmptyMemory(memoryName, type)
-        return VersionedMemory(memory, version, type)
-    }
-
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
         val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace)
@@ -103,37 +96,25 @@ class Z3Context : Z3SMTContext {
         return activeMemories.getOrElse(descriptor) { getInitialMemory(memoryType, memoryName, memorySpace, type) }
     }
 
-    private fun getInitialMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out ValueExpr>) = initialMemories.getOrPut(descriptor) { emptyMemory(descriptor, version, type) }
-    private fun getMemoryInternal(memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>): VersionedMemory {
-        val descriptor = memoryAccess.descriptor()
-        val version = memoryAccess.memoryVersion
-        check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
-        val versionedDescriptor = VersionedMemoryDescriptor(descriptor, version.version)
-        val memory = activeMemories.getOrElse(descriptor) { archiveMemories[versionedDescriptor] }
-                ?: error("Memory is not initialized for $descriptor")
-        check(memory.version == version) { "Try to get memories with different versions" }
-        return memory
+    @Deprecated("Access memory without memory access descriptor is deprecated")
+    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, type)
+    @Deprecated("Access memory without memory access descriptor is deprecated")
+    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, type))
+
+    fun initialize(memoryAccess: List<MemoryAccess<*>>, converter: Z3Converter) = memoryAccess
+            .groupBy { it.descriptor() }
+            .mapValues { (_, v) -> v.first() }
+            .forEach { (_, memoryAccess) ->
+                val memoryType = converter.Z3Type(memoryAccess.memoryValueType)
+                initialMemories[memoryAccess.descriptor()] = emptyMemory(memoryAccess.descriptor(), MemoryVersion.initial(), memoryType)
+            }
+
+    fun resetActiveMemory() {
+        activeMemories = initialMemories.toMutableMap()
     }
 
-    private fun setMemoryInternal(memoryAccess: MemoryAccess<*>, memory: VersionedMemory) {
-        val descriptor = memoryAccess.descriptor()
-        val version = memoryAccess.memoryVersion
-        check(version == memory.version) { "Memory access and memory versions are different" }
-        val currentMemory = activeMemories[descriptor] ?: error("No active memory for $descriptor")
-        check(currentMemory.version in version.predecessors) { "Incorrect memory write order" }
-        activeMemories[descriptor] = memory
-    }
-
-    fun getInitialMemory(memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = initialMemories.getOrElse(memoryAccess.descriptor()) { getMemory(memoryAccess, type) }
-    fun getInitialProperties(memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = initialMemories.getOrElse(memoryAccess.descriptor()) { getProperties(memoryAccess, type) }
-
-    fun getMemory(memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemoryInternal(memoryAccess, type)
-    fun setMemory(memoryAccess: MemoryAccess<*>, memory: VersionedMemory) = setMemoryInternal(memoryAccess, memory)
-    fun getProperties(memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemoryInternal(memoryAccess, type)
-    fun setProperties(memoryAccess: MemoryAccess<*>, memory: VersionedMemory) = setMemoryInternal(memoryAccess, memory)
-
-    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemory(memoryAccess, type).load<T>(ptr, type)
-    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = setMemory(memoryAccess, getMemory(memoryAccess, type).store(ptr, value, type))
+    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemory(memoryAccess).load<T>(ptr, type)
+    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
 
     fun getLocalPtr(identifier: NewObjectIdentifier, size: Int): Ptr_ {
         val ptr = localObjPointers.getOrPut(identifier) { localPointer.getAndAdd(size) }
@@ -155,12 +136,55 @@ class Z3Context : Z3SMTContext {
     fun getStaticsTypeMapping() = staticTypes.toMap()
     fun getLocals() = localObjPointers.toMap()
     fun getStatics() = staticObjPointers.toMap()
-    fun accessRawMemories() = this.activeMemories
 
-    fun splitMemory() = Z3Context(factory, activeMemories.toMutableMap(), initialMemories, archiveMemories, localPointer, staticPointer, localObjPointers, staticObjPointers, localTypes, staticTypes, typeIndex, typeMap)
+    fun splitMemory() = Z3Context(factory,
+            activeMemories.toMutableMap(), initialMemories, archiveMemories,
+            localPointer, staticPointer, localObjPointers, staticObjPointers,
+            localTypes, staticTypes, typeIndex, typeMap)
+
+    fun resetMemoryToVersion(version: MemoryVersion) = activeMemories
+            .mapValues { (descriptor, memory) -> emptyMemory(descriptor, version, memory.type) }
+            .forEach { (descriptor, newMemory) -> setMemory(descriptor, version, newMemory) }
+
     fun mergeMemory(name: String, contexts: Map<Bool_, Z3Context>) {
-        TODO()
+        check(contexts.values.all { it.activeMemories.keys == activeMemories.keys }) { "Inconsistent memory keys in merge" }
+        activeMemories = activeMemories.mapValues { (descriptor, defaultMemory) ->
+            val alternatives = contexts.map { (condition, ctx) -> condition to ctx.activeMemories.getValue(descriptor) }
+            (alternatives.map { it.second } + defaultMemory).forEach { updateArchive(descriptor, it) }
+            defaultMemory.merge(name, alternatives)
+        }.toMutableMap()
     }
 
+    private fun emptyMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out ValueExpr>): VersionedMemory {
+        val memoryName = memoryName(descriptor, version)
+        val memory = factory.makeEmptyMemory(memoryName, type)
+        return VersionedMemory(memory, version, type)
+    }
+
+    private fun getMemory(memoryAccess: MemoryAccess<*>) = getMemory(memoryAccess.descriptor(), memoryAccess.memoryVersion)
+    private fun setMemory(memoryAccess: MemoryAccess<*>, memory: VersionedMemory) = setMemory(memoryAccess.descriptor(), memory.version, memory)
+
+    private fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
+        check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
+        val versionedDescriptor = VersionedMemoryDescriptor(descriptor, version)
+        val memory = activeMemories.getOrElse(descriptor) { archiveMemories[versionedDescriptor] }
+                ?: error("Memory is not initialized for $descriptor")
+        check(memory.version == version) { "Try to get memories with different versions" }
+        return memory
+    }
+
+    private fun setMemory(descriptor: MemoryDescriptor, version: MemoryVersion, memory: VersionedMemory) {
+        check(version == memory.version) { "Memory access and memory versions are different" }
+        val currentMemory = activeMemories[descriptor] ?: error("No active memory for $descriptor")
+        check(currentMemory.version in version.predecessors) { "Incorrect memory write order" }
+        updateArchive(descriptor, currentMemory)
+        activeMemories[descriptor] = memory
+    }
+
+    private fun updateArchive(descriptor: MemoryDescriptor, memory: VersionedMemory) {
+        val versionedDescriptor = VersionedMemoryDescriptor(descriptor, memory.version)
+        val oldArchiveRecord = archiveMemories.put(versionedDescriptor, memory) ?: return
+        check(oldArchiveRecord == memory) { "Incorrect archive memory write" }
+    }
 
 }

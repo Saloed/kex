@@ -67,9 +67,12 @@ abstract class PredicateBuilder : TermBuilder() {
 
     val pf = PredicateFactory
 
+
+    fun FieldTerm.store(other: Term) = pf.getFieldStore(this, other, this@PredicateBuilder.type, location)
+    fun ArrayIndexTerm.store(other: Term) = pf.getArrayStore(this, other, this@PredicateBuilder.type, location)
     fun Term.store(other: Term): Predicate = when (this) {
-        is ArrayIndexTerm -> pf.getArrayStore(this, other, this@PredicateBuilder.type, location)
-        is FieldTerm -> pf.getFieldStore(this, other, this@PredicateBuilder.type, location)
+        is ArrayIndexTerm -> store(other)
+        is FieldTerm -> store(other)
         else -> unreachable { log.error("Trying to store to unknown term: $this") }
     }
 

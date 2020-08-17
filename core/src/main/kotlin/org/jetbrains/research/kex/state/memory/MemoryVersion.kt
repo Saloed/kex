@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.state
+package org.jetbrains.research.kex.state.memory
 
 import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable

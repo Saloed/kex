@@ -4,11 +4,12 @@ import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.*
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
+import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.term.ArrayLengthTerm
 import org.jetbrains.research.kex.state.term.ConstIntTerm
 import org.jetbrains.research.kex.state.term.Term
@@ -37,6 +38,7 @@ class NewArrayPredicate(
     override val memoryName: String = ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME
     override val memorySpace: Int
         get() = identifier.memspace
+    override val memoryValueType: KexType = KexInt()
 
     val numDimentions: Int
         get() = dimentions.size

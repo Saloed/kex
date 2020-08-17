@@ -79,7 +79,7 @@ object TermFactory {
     fun getArrayLength(arrayRef: Term) = getArrayLength(KexInt(), arrayRef)
     fun getArrayLength(type: KexType, arrayRef: Term) = ArrayLengthTerm(type, arrayRef)
 
-    fun getArrayIndex(arrayRef: Term, index: Term): Term {
+    fun getArrayIndex(arrayRef: Term, index: Term): ArrayIndexTerm {
         val arrayType = arrayRef.type as? KexArray
                 ?: unreachable { log.debug("Non-array type of array load term operand") }
         return getArrayIndex(KexReference(arrayType.element), arrayRef, index)
@@ -90,7 +90,7 @@ object TermFactory {
     fun getNegTerm(operand: Term) = getNegTerm(operand.type, operand)
     fun getNegTerm(type: KexType, operand: Term) = NegTerm(type, operand)
 
-    fun getArrayLoad(arrayRef: Term): Term {
+    fun getArrayLoad(arrayRef: Term): ArrayLoadTerm {
         val arrayType = arrayRef.type as? KexReference
                 ?: unreachable { log.debug("Non-array type of array load term operand") }
         return getArrayLoad(arrayType.reference, arrayRef)
@@ -185,12 +185,11 @@ abstract class TermBuilder {
     operator fun Term.get(index: Term) = tf.getArrayIndex(this, index)
     operator fun Term.get(index: Int) = tf.getArrayIndex(this, const(index))
 
-    fun Term.load() = when (this) {
-        is ArrayIndexTerm -> tf.getArrayLoad(this)
-        is FieldTerm -> {
-            val type = (this.type as KexReference).reference
-            tf.getFieldLoad(type, this)
-        }
+    fun FieldTerm.load() = tf.getFieldLoad((this.type as KexReference).reference, this)
+    fun ArrayIndexTerm.load() = tf.getArrayLoad(this)
+    fun Term.load(): Term = when (this) {
+        is ArrayIndexTerm -> load()
+        is FieldTerm -> load()
         else -> unreachable { log.error("Unknown term type in load: $this") }
     }
 

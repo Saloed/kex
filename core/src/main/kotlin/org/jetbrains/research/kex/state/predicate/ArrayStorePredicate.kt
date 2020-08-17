@@ -9,10 +9,10 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.term.ArrayLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
@@ -48,6 +48,8 @@ class ArrayStorePredicate(
     override val memoryName: String = ArrayLoadTerm.ARRAY_MEMORY_NAME
     override val memorySpace: Int
         get() = arrayRef.memspace
+    override val memoryValueType: KexType
+        get() = componentType
 
     override fun withMemoryVersion(memoryVersion: MemoryVersion): ArrayStorePredicate = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

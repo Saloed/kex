@@ -5,6 +5,8 @@ import kotlinx.serialization.Contextual
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
+import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.Location
@@ -28,6 +30,9 @@ class CallPredicate(
 
     val call: Term
         get() = if (hasLhv) operands[1] else operands[0]
+
+    val memoryVersion: MemoryVersion
+        get() = (callTerm as CallTerm).memoryVersion
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate {
         val tlhv = if (hasLhv) t.transform(lhv) else null

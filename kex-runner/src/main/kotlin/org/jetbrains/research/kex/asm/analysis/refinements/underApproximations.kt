@@ -5,6 +5,7 @@ import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
+import org.jetbrains.research.kex.state.transformer.optimize
 
 
 class MethodApproximationManager {
@@ -14,7 +15,7 @@ class MethodApproximationManager {
         underApproximations[call] = currentApproximations.add(approximation)
     }
 
-    fun extendWithUnderApproximations(state: PredicateState): PredicateState = ApproximationInliner(underApproximations).apply(state)
+    fun extendWithUnderApproximations(state: PredicateState): PredicateState = ApproximationInliner(underApproximations).apply(state).optimize()
 }
 
 data class MethodUnderApproximation(val pre: PredicateState, val post: PredicateState)

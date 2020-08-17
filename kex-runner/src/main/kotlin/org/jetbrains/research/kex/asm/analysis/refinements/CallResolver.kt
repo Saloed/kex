@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
-import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
@@ -8,18 +7,20 @@ import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.z3.fixpoint.DependencyType
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
+import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kfg.ir.Method
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager) {
 
@@ -60,7 +61,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     fun resolveCalls(model: RecoveredModel) {
         if (model.isFinal) return
-        val calls = model.callDependencies.groupBy { it.call }
+        val calls = model.dependencies.groupBy { it.call }
         if (calls.isEmpty()) return
         if (calls.size > 1) return tryResolveMultipleCalls(model)
         val (call, dependencies) = calls.entries.last()
@@ -68,8 +69,8 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     private fun tryResolveMultipleCalls(model: RecoveredModel) {
-        val maxId = model.callDependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
-        val depsToResolve = model.callDependencies.filter { it.callIdx == maxId }
+        val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
+        val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
         val callToResolve = depsToResolve.first().call
         resolveSingleCall(model.state, callToResolve, depsToResolve)
     }
@@ -84,12 +85,22 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val suffixGen = TermSuffixGenerator()
         val positiveState = preprocessState(state, suffixGen, dependencies, forwardMapping)
         val negativeState = positiveState.negateWRTStatePredicates().optimize()
+        MemoryUtils.verifyVersions(positiveState)
+        MemoryUtils.verifyVersions(negativeState)
+
+//        MemoryUtils.view(positiveState)
+
         val argument = SolverArgument(positiveState, negativeState, arguments, emptySet())
         val resolver = CallResolver(methodAnalyzer, approximationManager)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
             log.debug(solverArg)
             val result = FixpointSolver(methodAnalyzer.cm).querySingle(
-                    { refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments) },
+                    {
+                        it.dumpSolverArguments(solverArg, debug = true)
+                        MemoryUtils.verifyVersions(solverArg.positive)
+                        MemoryUtils.verifyVersions(solverArg.negative)
+                        refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments)
+                    },
                     { ex ->
                         dumpSolverArguments(solverArg)
                         throw IllegalStateException("$ex")
@@ -101,79 +112,73 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         return postprocessState(result, backwardMapping)
     }
 
-    private fun preprocessState(state: PredicateState, suffixGen: TermSuffixGenerator, dependencies: List<TermDependency>, forwardMapping: TermRemapper): PredicateState =
-            transform(state) {
-                +CallDependencyResolver(methodAnalyzer.psa, suffixGen, dependencies)
-                +forwardMapping
-            }
+    private fun preprocessState(state: PredicateState, suffixGen: TermSuffixGenerator, dependencies: List<TermDependency>, forwardMapping: TermRemapper): PredicateState {
+        val stateWithDependencyInlined = inlineCallDependencies(state, methodAnalyzer.psa, suffixGen, dependencies)
+        return transform(stateWithDependencyInlined) {
+            +forwardMapping
+        }.optimize()
+    }
 
     private fun postprocessState(state: PredicateState, backwardMapping: TermRemapper): PredicateState = transform(state) {
         +backwardMapping
     }
 
-    private class CallDependencyResolver(val psa: PredicateStateAnalysis, val suffixGen: TermSuffixGenerator, dependencies: List<TermDependency>) : RecollectingTransformer<MethodInliner> {
-        private val termDependencies = dependencies.map { it.term to it }.toMap()
-        private val im = MethodManager.InlineManager
-        override val builders = dequeOf(StateBuilder())
+    private fun inlineCallDependencies(state: PredicateState, psa: PredicateStateAnalysis, suffixGen: TermSuffixGenerator, dependencies: List<TermDependency>): PredicateState {
+        val callsToInline = dependencies.map { it.call.call as CallTerm }.distinct()
+        check(callsToInline.size == 1) { "Too many calls to inline" }
+        val call = callsToInline.first()
+        val inlineStatus = MethodManager.InlineManager.isInlinable(call.method)
+        if (inlineStatus == MethodManager.InlineManager.InlineStatus.NO_INLINE) error("Method is not inlineable")
+        if (inlineStatus == MethodManager.InlineManager.InlineStatus.MAY_INLINE) TODO("Inheritance")
 
-        override fun transformTerm(term: Term): Term {
-            val res = super.transformTerm(term)
-            val dependency = termDependencies[res] ?: return res
-            resolveDependency(dependency)
-            return term
+        val mappings = hashMapOf<Term, Term>()
+        if (!call.isStatic) {
+            val `this` = term { `this`(call.owner.type) }
+            mappings[`this`] = call.owner
         }
-
-        private fun resolveDependency(dependency: TermDependency) {
-            val call = dependency.call.call as CallTerm
-            val calledMethod = call.method
-            val inlineStatus = im.isInlinable(calledMethod)
-            if (inlineStatus == MethodManager.InlineManager.InlineStatus.NO_INLINE) return
-            if (inlineStatus == MethodManager.InlineManager.InlineStatus.MAY_INLINE) TODO("Inheritance")
-            val mappings = callArgumentMapping(call, dependency)
-            currentBuilder += methodState(call, calledMethod, mappings) ?: return
+        for ((index, argType) in call.method.argTypes.withIndex()) {
+            val argTerm = term { arg(argType.kexType, index) }
+            val calledArg = call.arguments[index]
+            mappings[argTerm] = calledArg
         }
+        val retval = term { `return`(call.method) }
+        val retvalPlaceholder = term { value(retval.type, "retval_${call.hashCode()}") }
+        mappings[retval] = retvalPlaceholder
 
-        fun callArgumentMapping(call: CallTerm, dependency: TermDependency): Map<Term, Term> {
-            val calledMethod = call.method
-            val mappings = hashMapOf<Term, Term>()
-            if (!call.isStatic) {
-                val `this` = term { `this`(call.owner.type) }
-                mappings[`this`] = call.owner
+        check(call.method.isNotEmpty()) { "Try to inline empty method" }
+
+        val methodState = psa.builder(call.method).methodState ?: error("No state for method ${call.method}")
+        val endState = transform(methodState) {
+            +ConstructorDeepInliner(psa)
+//                +SimpleMethodInliner(psa)
+            +IntrinsicAdapter
+        }
+        val preparedMethodState = renameTermsAfterInlining(call, endState, mappings, suffixGen)
+        val retvalBindings = basic {
+            dependencies.filterIsInstance<TermDependency.CallResultDependency>().forEach { dependency ->
+                predicate(PredicateType.State()) { dependency.term equality retvalPlaceholder }
             }
-            for ((index, argType) in calledMethod.argTypes.withIndex()) {
-                val argTerm = term { arg(argType.kexType, index) }
-                val calledArg = call.arguments[index]
-                mappings[argTerm] = calledArg
-            }
-            if (dependency.type == DependencyType.RETURN_VALUE) {
-                val retval = term { `return`(calledMethod) }
-                mappings[retval] = dependency.term
-            }
-            return mappings
         }
+        val methodStateForInlining = ChainState(preparedMethodState, retvalBindings)
+        val (updatedState, versionedMethodState) = MemoryUtils.initializeMemoryVersionsAndPrepareForReplacement(state, methodStateForInlining, call.memoryVersion)
 
-        fun methodState(call: CallTerm, method: Method, mappings: Map<Term, Term>): PredicateState? {
-            if (method.isEmpty()) return null
-            val methodState = psa.builder(method).methodState ?: return null
-            val endState = transform(methodState) {
-                +ConstructorDeepInliner(psa)
-                +IntrinsicAdapter
-            }
-            return renameTermsAfterInlining(call, endState, mappings)
-        }
+        return ChainState(versionedMethodState, updatedState)
+    }
 
-        fun renameTermsAfterInlining(call: CallTerm, state: PredicateState, mappings: Map<Term, Term>): PredicateState {
-            return MethodInliner.TermRenamer(suffixGen.getSuffix(call), mappings).apply(state)
-        }
-
+    private fun renameTermsAfterInlining(call: CallTerm, state: PredicateState, mappings: Map<Term, Term>, suffixGen: TermSuffixGenerator): PredicateState {
+        return MethodInliner.TermRenamer(suffixGen.getSuffix(call), mappings).apply(state)
     }
 
     private fun collectArguments(state: PredicateState, calls: List<CallPredicate>, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
-        val dependentTerms = dependencies.map { it.term }.toSet()
         val callArguments = calls.flatMap { call -> VariableCollector().apply { transform(call.call) }.variables }
-        val stateArguments = collectVariables(state).filter { it !is FieldTerm }.filter { it !in dependentTerms }
-        val argumentsMapping = (callArguments + stateArguments).map { arg -> arg to term { value(arg.type, "refine_arg_${arg.name}") } }.toMap()
-        val backwardMapping = argumentsMapping.map { it.value to it.key }.toMap()
+        val callResultDependentTerms = dependencies.filterIsInstance<TermDependency.CallResultDependency>().map { it.term }.toSet()
+        val memoryDependency = dependencies.filterIsInstance<TermDependency.MemoryDependency>().map { it.memoryAccess }.toSet()
+        val stateArguments = collectVariables(state)
+                .filterNot { it is FieldTerm }
+                .filterNot { it in callResultDependentTerms }
+                .filterNot { it is MemoryAccess<*> && it in memoryDependency }
+        val argumentsMapping = (callArguments + stateArguments).distinct().mapIndexed { i, term -> term to term { arg(term.type, i) } }.toMap()
+        val backwardMapping = argumentsMapping.entries.associateBy({ it.value }, { it.key })
         val argumentTerms = backwardMapping.keys.toList()
         return Triple(argumentTerms, TermRemapper(argumentsMapping), TermRemapper(backwardMapping))
     }

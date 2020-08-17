@@ -6,6 +6,8 @@ import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.memory.MemoryUtils
+import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
@@ -53,7 +55,10 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
                     .fmap { inlineRefinementIntoState(predicate.wrap(), mapOf(predicate to it)) }
 
     private fun extendWithRefinements(builder: MethodRefinementSourceAnalyzer): PredicateState {
-        val originalState = builder.methodRawFullState().let { ConstructorDeepInliner(psa).apply(it) }
+        val originalState = transform(builder.methodRawFullState()) {
+            +ConstructorDeepInliner(psa)
+            +SimpleMethodInliner(psa)
+        }
         val calls = PredicateCollector.collectIsInstance<CallPredicate>(originalState)
         val exceptionalPaths = calls.map { predicate ->
             val instructionState = psa.builder(method).getInstructionState(predicate.instruction)
@@ -63,7 +68,12 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
             ChainState(withoutCurrentCall, refinement.allStates())
         }
         val expandedState = ChoiceState(listOf(originalState) + exceptionalPaths)
-        return CallRefinementsInliner().apply(expandedState).optimize()
+        val result = transform(expandedState) {
+            +CallRefinementsInliner()
+            +MemoryVersioner()
+        }.optimize()
+        MemoryUtils.verifyVersions(result)
+        return result
     }
 
     private fun nestedExecutionPaths(state: PredicateState): Pair<PredicateState, RefinementSources> {

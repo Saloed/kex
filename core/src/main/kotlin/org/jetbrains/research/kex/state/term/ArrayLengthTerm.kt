@@ -5,10 +5,10 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.state.transformer.memspace
 
@@ -23,6 +23,7 @@ class ArrayLengthTerm(override val type: KexType, val arrayRef: Term, override v
     override val memorySpace: Int
         get() = arrayRef.memspace
     override val memoryName: String = ARRAY_LENGTH_MEMORY_NAME
+    override val memoryValueType: KexType = KexInt()
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val tarrayRef = t.transform(arrayRef)) {

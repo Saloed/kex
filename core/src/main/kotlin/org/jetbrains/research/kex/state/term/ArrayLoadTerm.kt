@@ -4,10 +4,10 @@ import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.state.transformer.memspace
 
@@ -19,6 +19,8 @@ class ArrayLoadTerm(override val type: KexType, val arrayRef: Term, override val
     override val memoryType: MemoryType = MemoryType.ARRAY
     override val accessType: MemoryAccessType = MemoryAccessType.READ
     override val memoryName: String = ARRAY_MEMORY_NAME
+    override val memoryValueType: KexType
+        get() = type
     override val memorySpace: Int
         get() = arrayRef.memspace
 

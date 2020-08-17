@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.state.transformer
 
+import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.emptyState
@@ -54,5 +55,23 @@ class ConstructorDeepInliner(psa: PredicateStateAnalysis) : MethodDeepInliner(ps
     companion object {
         private val JAVA_PACKAGE = Package.parse("java/lang")
         private val KOTLIN_PACKAGE = Package.parse("kotlin")
+    }
+}
+
+
+class SimpleMethodInliner(psa: PredicateStateAnalysis) : MethodDeepInliner(psa, { isSimpleInlinable(psa, it) }) {
+    override fun create(): MethodDeepInliner = SimpleMethodInliner(psa)
+
+    companion object {
+        private fun isSimpleInlinable(psa: PredicateStateAnalysis, callPredicate: CallPredicate): Boolean {
+            val method = (callPredicate.call as CallTerm).method
+            val inlineStatus = MethodManager.InlineManager.isInlinable(method)
+            if (inlineStatus != MethodManager.InlineManager.InlineStatus.INLINE) return false
+            if (method.isEmpty()) return false
+            val state = psa.builder(method).methodState ?: return false
+            val nestedCalls = PredicateCollector.collectIsInstance<CallPredicate>(state)
+            if (nestedCalls.isNotEmpty()) return false
+            return true
+        }
     }
 }

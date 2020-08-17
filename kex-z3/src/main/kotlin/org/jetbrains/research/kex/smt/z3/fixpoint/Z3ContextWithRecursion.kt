@@ -4,7 +4,9 @@ import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryDescriptor
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
@@ -17,18 +19,18 @@ class Z3ContextWithRecursion(
         callPrototype: CallPredicate,
         private val predicateName: String, tf: TypeFactory) : Z3Converter(tf) {
 
-    private val orderedDeclarations: MutableList<DeclarationTracker.Declaration>
-    private val orderedProperties: List<DeclarationTracker.Declaration.NormalProperty>
-    private val propertyTypes = hashMapOf<DeclarationTracker.Declaration.NormalProperty, KexType>()
+    private val orderedDeclarations: MutableList<Declaration>
+    private val orderedProperties: List<Declaration.Memory>
+    private val propertyTypes = hashMapOf<Declaration.Memory, KexType>()
     val mapper: ModelDeclarationMapping
 
     init {
         val receiver = callPrototype.lhvUnsafe
                 ?: throw IllegalStateException("Call prototype must have a receiver")
         val call = callPrototype.call as CallTerm
-        val argumentDecls = call.arguments.mapIndexed { index, _ -> DeclarationTracker.Declaration.Argument(index) }
-        val ownerDecl = DeclarationTracker.Declaration.This()
-        val receiverDecl = DeclarationTracker.Declaration.Other()
+        val argumentDecls = call.arguments.mapIndexed { index, _ -> Declaration.Argument(index) }
+        val ownerDecl = Declaration.This()
+        val receiverDecl = Declaration.Other()
         orderedProperties = prepareMemoryProperties()
         orderedDeclarations = (listOf(ownerDecl) + argumentDecls + listOf(receiverDecl) + orderedProperties).toMutableList()
         mapper = ModelDeclarationMapping(orderedDeclarations)
@@ -52,14 +54,15 @@ class Z3ContextWithRecursion(
         return Z3Bool(ef.ctx, predicateApplication, spliceAxioms(ef.ctx, predicateAxioms))
     }
 
-    private fun prepareMemoryProperties(): List<DeclarationTracker.Declaration.NormalProperty> {
+    private fun prepareMemoryProperties(): List<Declaration.Memory> {
         val allCallProperties = recursiveCalls.values
         val propertyPrototype = allCallProperties.first()
         if (allCallProperties.any { it != propertyPrototype }) {
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            val property = DeclarationTracker.Declaration.NormalClassProperty(field.`class`.fullname, field.name, 0, loadTerm.field.memspace)
+            val descriptor = MemoryDescriptor(MemoryType.PROPERTY, "${field.`class`.fullname}.${field.name}", loadTerm.field.memspace)
+            val property = Declaration.Memory(descriptor, MemoryVersion.initial())
             propertyTypes[property] = loadTerm.type
             property
         }
@@ -75,9 +78,9 @@ class Z3ContextWithRecursion(
                 )
     }
 
-    private fun readProperty(property: DeclarationTracker.Declaration.NormalProperty, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
+    private fun readProperty(property: Declaration.Memory, ef: Z3ExprFactory, ctx: Z3Context): Z3ValueExpr {
         val type = Z3Type(propertyTypes[property]!!)
-        val memory = ctx.getProperties(property.fullName, MemoryVersion.initial(), property.memspace,  type).memory
+        val memory = ctx.getMemory(property.descriptor.memoryType, property.descriptor.memoryName, property.descriptor.memorySpace, type).memory
         memory.load<Z3ValueExpr>(Z3BV32.makeConst(ef.ctx, 0), type) // force array creation for empty memory
         return memory.inner
     }

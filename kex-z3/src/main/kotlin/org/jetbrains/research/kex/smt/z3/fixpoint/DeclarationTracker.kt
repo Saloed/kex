@@ -3,133 +3,90 @@ package org.jetbrains.research.kex.smt.z3.fixpoint
 import com.abdullin.kthelper.defaultHashCode
 import com.microsoft.z3.Expr
 import com.microsoft.z3.Sort
-import org.jetbrains.research.kex.smt.z3.Z3Context
-
+import org.jetbrains.research.kex.state.memory.MemoryDescriptor
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryVersionType
 
 class DeclarationTracker {
     val declarations = hashSetOf<Declaration>()
 
     data class DeclarationInfo(val name: String, val sort: Sort, val expr: Expr)
-    sealed class Declaration(open val info: DeclarationInfo? = null) {
-        val name: String
-            get() = info?.name ?: throw IllegalArgumentException("Declaration without info")
-        val expr: Expr
-            get() = info?.expr ?: throw IllegalArgumentException("Declaration without info")
-        val sort: Sort
-            get() = info?.sort ?: throw IllegalArgumentException("Declaration without info")
-
-
-        data class Other(override val info: DeclarationInfo? = null) : Declaration(info)
-        data class This(override val info: DeclarationInfo? = null) : Declaration(info)
-
-        data class Argument(val index: Int, override val info: DeclarationInfo? = null) : Declaration(info) {
-            override fun hashCode() = defaultHashCode(index)
-            override fun equals(other: Any?): Boolean {
-                if (this === other) return true
-                if (other !is Argument) return false
-                return index == other.index
-            }
-        }
-
-        interface Memory {
-            val version: Int
-            val memspace: Int
-        }
-
-        interface Property {
-            val version: Int
-            val memspace: Int
-            val fullName: String
-        }
-
-        interface ClassProperty : Property {
-            val className: String
-            val propertyName: String
-        }
-
-        data class NormalMemory(override val version: Int, override val memspace: Int, override val info: DeclarationInfo? = null) : Declaration(info), Memory
-        open class NormalProperty(override val fullName: String, override val version: Int, override val memspace: Int, info: DeclarationInfo? = null) : Declaration(info), Property {
-            override fun toString(): String = "Property(fullName='$fullName', version=$version, memspace=$memspace info=$info)"
-            override fun hashCode() = defaultHashCode(fullName, memspace)
-            override fun equals(other: Any?): Boolean {
-                if (this === other) return true
-                if (other !is NormalProperty) return false
-                return memspace == other.memspace && fullName == other.fullName
-            }
-        }
-
-        data class NormalClassProperty(
-                override val className: String,
-                override val propertyName: String,
-                override val version: Int,
-                override val memspace: Int,
-                override val info: DeclarationInfo? = null
-        ) : NormalProperty("$className.$propertyName", version, memspace, info), ClassProperty
-
-        sealed class Call(open val index: Int, override val info: DeclarationInfo) : Declaration(info) {
-            data class CallResult(override val index: Int, override val info: DeclarationInfo) : Call(index, info)
-            data class CallMemory(override val version: Int, override val memspace: Int, override val index: Int, override val info: DeclarationInfo) : Call(index, info), Memory
-            open class CallProperty(override val fullName: String, override val version: Int, override val memspace: Int, index: Int, info: DeclarationInfo) : Call(index, info), Property {
-                override fun toString(): String = "CallProperty(index = $index fullName='$fullName', version=$version memspace=$memspace info=$info)"
-                override fun hashCode() = defaultHashCode(fullName, memspace)
-                override fun equals(other: Any?): Boolean {
-                    if (this === other) return true
-                    if (other !is CallProperty) return false
-                    return memspace == other.memspace && fullName == other.fullName && info == other.info && index == other.index
-                }
-            }
-
-            data class CallClassProperty(
-                    override val className: String,
-                    override val propertyName: String,
-                    override val version: Int,
-                    override val memspace: Int,
-                    override val index: Int,
-                    override val info: DeclarationInfo
-            ) : CallProperty("$className.$propertyName", version, memspace, index, info), ClassProperty
-        }
-
-        fun isValuable() = when (this) {
-            is This, is Argument, is NormalMemory, is NormalProperty, is Call -> true
-            else -> false
-        }
-
-        fun isMemoryOrCall() = when (this) {
-            is NormalMemory, is NormalProperty, is Call -> true
-            else -> false
-        }
-
-        companion object {
-            private val thisRegex = Regex("^this$")
-            private val argRegexp = Regex("arg\\$(\\d+)")
-            private val memoryRegexp = Regex("INITIAL_(\\d+)${Z3Context.MEMORY_NAME}(\\d+)")
-            private val classPropertyRegexp = Regex("INITIAL_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__([A-Za-z0-9_/\$]+)\\.(\\w+)")
-            private val otherPropertyRegexp = Regex("INITIAL_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__(\\w+)")
-            private val callResultRegexp = Regex("call__(\\d+)__result")
-            private val callMemoryRegexp = Regex("NEW_(\\d+)${Z3Context.MEMORY_NAME}(\\d+)")
-            private val callClassProperty = Regex("NEW_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__([A-Za-z0-9_/\$]+)\\.(\\w+)")
-            private val callOtherProperty = Regex("NEW_(\\d+)${Z3Context.PROPERTY_NAME}(\\d+)__(\\w+)")
-
-            fun create(name: String, sort: Sort, expr: Expr): Declaration {
-                val declarationInfo = DeclarationInfo(name, sort, expr)
-                return regexWhen(name) {
-                    like(thisRegex) { This(declarationInfo) }
-                            ?: like(argRegexp) { (idx) -> Argument(idx.toInt(), declarationInfo) }
-                            ?: like(memoryRegexp) { (version, memspace) -> NormalMemory(version.toInt(), memspace.toInt(), declarationInfo) }
-                            ?: like(classPropertyRegexp) { (version, memspace, className, propertyName) -> NormalClassProperty(className, propertyName, version.toInt(), memspace.toInt(), declarationInfo) }
-                            ?: like(otherPropertyRegexp) { (version, memspace, propertyName) -> NormalProperty(propertyName, version.toInt(), memspace.toInt(), declarationInfo) }
-                            ?: like(callResultRegexp) { (idx) -> Call.CallResult(idx.toInt(), declarationInfo) }
-                            ?: like(callMemoryRegexp) { (idx, memspace) -> Call.CallMemory(idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
-                            ?: like(callClassProperty) { (idx, memspace, className, propertyName) -> Call.CallClassProperty(className, propertyName, idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
-                            ?: like(callOtherProperty) { (idx, memspace, propertyName) -> Call.CallProperty(propertyName, idx.toInt(), memspace.toInt(), idx.toInt(), declarationInfo) }
-                            ?: `else` { Other(declarationInfo) }
-                }
-            }
-        }
-    }
 
     fun add(name: String, sort: Sort, expr: Expr) {
         declarations.add(Declaration.create(name, sort, expr))
+    }
+}
+
+sealed class Declaration(open val info: DeclarationTracker.DeclarationInfo? = null) {
+    val name: String
+        get() = info?.name ?: throw IllegalArgumentException("Declaration without info")
+    val expr: Expr
+        get() = info?.expr ?: throw IllegalArgumentException("Declaration without info")
+    val sort: Sort
+        get() = info?.sort ?: throw IllegalArgumentException("Declaration without info")
+
+    data class Other(override val info: DeclarationTracker.DeclarationInfo? = null) : Declaration(info)
+    data class This(override val info: DeclarationTracker.DeclarationInfo? = null) : Declaration(info) {
+        override fun hashCode(): Int = defaultHashCode(javaClass)
+        override fun equals(other: Any?): Boolean = this === other || javaClass == other?.javaClass
+    }
+
+    data class Argument(val index: Int, override val info: DeclarationTracker.DeclarationInfo? = null) : Declaration(info) {
+        override fun hashCode() = defaultHashCode(index, javaClass)
+        override fun equals(other: Any?): Boolean = this === other || (javaClass == other?.javaClass && index == (other as Argument).index)
+    }
+
+    data class Memory(val descriptor: MemoryDescriptor, val version: MemoryVersion, override val info: DeclarationTracker.DeclarationInfo? = null) : Declaration(info) {
+        override fun hashCode(): Int = defaultHashCode(javaClass, descriptor, version)
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as Memory
+            return descriptor == other.descriptor && version == other.version
+        }
+
+        fun classPropertyNames() = when (descriptor.memoryType) {
+            MemoryType.PROPERTY -> {
+                val regex = Regex("([A-Za-z0-9_/\$]+)\\.([A-Za-z0-9_/\$]+)")
+                val (className, propertyName) = regex.matchEntire(descriptor.memoryName)?.destructured
+                        ?: error("Incorrect class property name: ${descriptor.memoryName}")
+                className to propertyName
+            }
+            else -> error("Only class properties has class name and property name")
+        }
+    }
+
+    data class CallResult(val index: Int, override val info: DeclarationTracker.DeclarationInfo? = null) : Declaration(info) {
+        override fun hashCode() = defaultHashCode(index, javaClass)
+        override fun equals(other: Any?): Boolean = this === other || (javaClass == other?.javaClass && index == (other as CallResult).index)
+    }
+
+    fun isValuable() = when (this) {
+        is This, is Argument, is CallResult, is Memory -> true
+        else -> false
+    }
+
+    companion object {
+        private val thisRegex = Regex("^this$")
+        private val argRegex = Regex("^arg\\$(\\d+)$")
+        private val callResultRegex = Regex("^call__(\\d+)__result$")
+        private val memoryRegex = Regex("^(\\w+)_(\\d+)_(\\d+)__([A-Za-z0-9]+)__([A-Za-z0-9_/$.]+)$")
+
+        fun create(name: String, sort: Sort, expr: Expr): Declaration {
+            val declarationInfo = DeclarationTracker.DeclarationInfo(name, sort, expr)
+            return regexWhen(name) {
+                like(thisRegex) { This(declarationInfo) }
+                        ?: like(argRegex) { (idx) -> Argument(idx.toInt(), declarationInfo) }
+                        ?: like(callResultRegex) { (idx) -> CallResult(idx.toInt(), declarationInfo) }
+                        ?: like(memoryRegex) { (vtype, vver, dmspace, dmtype, dmname) ->
+                            val version = MemoryVersion(vver.toInt(), 0, MemoryVersionType.valueOf(vtype), emptySet())
+                            val descriptor = MemoryDescriptor(MemoryType.valueOf(dmtype), dmname, dmspace.toInt())
+                            Memory(descriptor, version, declarationInfo)
+                        }
+                        ?: `else` { Other(declarationInfo) }
+            }
+        }
     }
 }
 
@@ -138,5 +95,3 @@ private inline class RegexWhen(val regexWhenArg: String) {
     inline fun <R : Any> like(expr: Regex, block: (MatchResult.Destructured) -> R): R? = expr.matchEntire(regexWhenArg)?.destructured?.let(block)
     inline fun <R : Any> `else`(block: () -> R): R = block()
 }
-
-

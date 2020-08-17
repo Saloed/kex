@@ -79,7 +79,7 @@ open class $valexpr : ${solver}SMTExpr {
         if (this === other) return true
         if (other?.javaClass != this.javaClass) return false
         other as $valexpr
-        return engine.equality(ctx, expr, other.expr) and engine.equality(ctx, expr, other.axiom)
+        return engine.equality(ctx, expr, other.expr) and engine.equality(ctx, axiom, other.axiom)
     }
 
     fun name() = engine.name(ctx, expr)

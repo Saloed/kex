@@ -4,11 +4,12 @@ import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexBool
+import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
@@ -37,6 +38,7 @@ class InstanceOfTerm(val checkedType: KexType, val operand: Term, override val m
     override val accessType: MemoryAccessType = MemoryAccessType.READ
     override val memorySpace: Int = 0
     override val memoryName: String = TYPE_MEMORY_NAME
+    override val memoryValueType: KexType = KexInt()
 
     companion object {
         const val TYPE_MEMORY_NAME = "__TYPE__"

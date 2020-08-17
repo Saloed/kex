@@ -5,10 +5,12 @@ import kotlinx.serialization.Contextual
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
-import org.jetbrains.research.kex.state.MemoryAccess
-import org.jetbrains.research.kex.state.MemoryAccessType
-import org.jetbrains.research.kex.state.MemoryType
-import org.jetbrains.research.kex.state.MemoryVersion
+import org.jetbrains.research.kex.ktype.KexReference
+import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryAccessType
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
@@ -25,12 +27,14 @@ class FieldStorePredicate(
         override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), MemoryAccess<FieldStorePredicate> {
     override val operands by lazy { listOf(this.field, this.value) }
 
-    override val memoryType: MemoryType = MemoryType.CLASS_PROPERTY
+    override val memoryType: MemoryType = MemoryType.PROPERTY
     override val accessType: MemoryAccessType = MemoryAccessType.WRITE
     override val memorySpace: Int
         get() = this.field.memspace
     override val memoryName: String
         get() = "${(this.field as FieldTerm).klass}.${this.field.fieldNameString}"
+    override val memoryValueType: KexType
+        get() = (this.field.type as KexReference).reference
 
     override fun print() = "*($field) = $value"
 

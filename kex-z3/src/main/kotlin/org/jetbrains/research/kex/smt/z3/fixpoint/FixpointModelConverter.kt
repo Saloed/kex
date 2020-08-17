@@ -9,9 +9,19 @@ import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.predicate.*
+import org.jetbrains.research.kex.state.memory.MemoryAccess
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryUtils
+import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.predicate
 import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.transformer.Optimizer
+import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
+import org.jetbrains.research.kex.state.transformer.TermCollector
+import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.ConcreteClass
 import org.jetbrains.research.kfg.ir.Field
@@ -23,15 +33,17 @@ import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
 import java.util.*
 
-enum class DependencyType {
-    RETURN_VALUE, MEMORY;
+sealed class TermDependency {
+    abstract val callIdx: Int
+    abstract val call: CallPredicate
+
+    data class CallResultDependency(val term: Term, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
+    data class MemoryDependency(val memoryAccess: MemoryAccess<*>, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
 }
 
-data class TermDependency(val term: Term, val callIdx: Int, val call: CallPredicate, val type: DependencyType)
-
-data class RecoveredModel(val state: PredicateState, val callDependencies: Set<TermDependency>) {
+data class RecoveredModel(val state: PredicateState, val dependencies: Set<TermDependency>) {
     val isFinal: Boolean
-        get() = callDependencies.isEmpty()
+        get() = dependencies.isEmpty()
 
     fun finalStateOrException(): PredicateState = when {
         isFinal -> state
@@ -59,9 +71,15 @@ class FixpointModelConverter(
                 .let { Optimizer().apply(it) }
                 .let { InstanceOfCorrector(z3Context).apply(it) }
                 .simplify()
-        VersionVerifier.apply(state)
+        analyzeMemoryDependencies(state)
+        MemoryUtils.verifyVersions(state)
         return RecoveredModel(state, callDependencies.toSet())
     }
+
+    private fun analyzeMemoryDependencies(state: PredicateState) = callDependencies.plusAssign(
+            MemoryUtils.collectMemoryAccesses(state)
+                    .mapNotNull { memAccess -> mapping.callDependentDeclarations[memAccess.descriptor() to memAccess.memoryVersion]?.let { TermDependency.MemoryDependency(memAccess, it.index, it.predicate) } }
+    )
 
     private object UnknownType : KexType() {
         override val name: String = "Unknown"
@@ -295,7 +313,8 @@ class FixpointModelConverter(
 
     private fun convertComplexMemoryArray(expr: ArrayExpr) = when {
         expr.isVar -> {
-            val decl = mapping.declarations[expr.index]
+            val decl = mapping.declarations[expr.index] as? Declaration.Memory
+                    ?: error("Non memory declaration")
             val term = TermWithAxiom.wrap { const(true) }
             term to decl
         }
@@ -306,16 +325,16 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertComplexMemoryArrayStore(memoryExpr: Expr, locationExpr: Expr, valueExpr: Expr): Pair<TermWithAxiom, DeclarationTracker.Declaration> {
+    private fun convertComplexMemoryArrayStore(memoryExpr: Expr, locationExpr: Expr, valueExpr: Expr): Pair<TermWithAxiom, Declaration.Memory> {
         val (memory, memoryDecl) = convertComplexMemoryExpr(memoryExpr)
         val location = convertTerm(locationExpr)
         val value = convertTerm(valueExpr)
-        when (memoryDecl) {
-            is DeclarationTracker.Declaration.ClassProperty -> {
+        when (memoryDecl.descriptor.memoryType) {
+            MemoryType.PROPERTY -> {
                 val (owner, cls, propertyName) = preprocessClassProperty(memoryDecl, location)
                 val field = cls.findField(propertyName) ?: error("No field found")
                 val axiom = basic {
-                    state { owner.term.field(field.type.kexType, field.name).store(value.term) }
+                    state { owner.term.field(field.type.kexType, field.name).store(value.term).withMemoryVersion(memoryDecl.version) }
                 }
                 val term = TermWithAxiom(term { const(true) }, axiom).mergeAxioms(memory, location, value)
                 return term to memoryDecl
@@ -324,7 +343,7 @@ class FixpointModelConverter(
         }
     }
 
-    private fun convertComplexMemoryITE(expr: Expr): Pair<TermWithAxiom, DeclarationTracker.Declaration> {
+    private fun convertComplexMemoryITE(expr: Expr): Pair<TermWithAxiom, Declaration.Memory> {
         val (condExpr, trueExpr, falseExpr) = expr.args
         val condition = convertTerm(condExpr)
         val (trueBranch, trueDecl) = convertComplexMemoryExpr(trueExpr)
@@ -342,13 +361,17 @@ class FixpointModelConverter(
 
     private fun convertMemoryLoad(memory: Expr, location: Expr): TermWithAxiom {
         check(memory.isVar) { "Memory is not var $memory" }
-        val decl = mapping.declarations[memory.index]
+        val decl = mapping.declarations[memory.index] as? Declaration.Memory
+                ?: error("Non memory descriptor")
         return convertMemoryLoad(decl, location)
     }
 
-    private fun convertMemoryLoad(decl: DeclarationTracker.Declaration, location: Expr): TermWithAxiom = when {
-        decl is DeclarationTracker.Declaration.NormalProperty -> readProperty(convertTerm(location), decl)
-        decl is DeclarationTracker.Declaration.NormalMemory && mapping.isArrayMemory(decl) -> {
+    private fun convertMemoryLoad(decl: Declaration.Memory, location: Expr): TermWithAxiom = when (decl.descriptor.memoryType) {
+        MemoryType.PROPERTY -> {
+            val (owner, cls, propertyName) = preprocessClassProperty(decl, convertTerm(location))
+            getFieldLoad(owner, cls, propertyName, decl.version)
+        }
+        MemoryType.ARRAY -> {
             if (!(location.isAdd && location.args.size == 2)) {
                 throw IllegalStateException("Unexpected array memory location $location")
             }
@@ -358,34 +381,17 @@ class FixpointModelConverter(
                 rhs.term.type is KexArray -> rhs to lhs
                 else -> throw IllegalStateException("Array load has no base and index")
             }
-            val arrayIndex = base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i) }
-            arrayIndex.transformTerm { tf.getArrayLoad(it) }
+            base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i).load().withMemoryVersion(decl.version) }
         }
-        decl is DeclarationTracker.Declaration.Call.CallProperty -> readCallProperty(convertTerm(location), decl)
+        MemoryType.SPECIAL -> when (decl.descriptor.memoryName) {
+            InstanceOfTerm.TYPE_MEMORY_NAME -> convertTerm(location).transformTerm { InstanceOfTerm(UnknownType, it, decl.version) }
+            ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME -> convertTerm(location).transformTerm { ArrayLengthTerm(KexInt(), it, decl.version) }
+            else -> error("Unknown special memory ${decl.descriptor}")
+        }
         else -> throw IllegalStateException("Unexpected memory $decl")
     }
 
-    private fun readCallProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Call.CallProperty): TermWithAxiom {
-        val callInfo = mapping.calls[property.index]!!
-        val loadTerm = readProperty(obj, property)
-        callDependencies.add(TermDependency(loadTerm.term, callInfo.index, callInfo.predicate, DependencyType.MEMORY))
-        return loadTerm
-    }
-
-    private fun readProperty(obj: TermWithAxiom, property: DeclarationTracker.Declaration.Property): TermWithAxiom = when (property) {
-        is DeclarationTracker.Declaration.ClassProperty -> {
-            val (owner, cls, propertyName) = preprocessClassProperty(property, obj)
-            getFieldLoad(owner, cls, propertyName)
-        }
-        else -> when {
-            property.fullName == Z3Context.TYPE_PROPERTY -> obj.transformTerm { InstanceOfTerm(UnknownType, it) }
-            obj.term.type is KexArray && property.fullName == "length" -> obj.transformTerm { ArrayLengthTerm(KexInt(), it) }
-            else -> TODO("Unknown property $property")
-        }
-
-    }
-
-    private fun preprocessClassProperty(property: DeclarationTracker.Declaration.ClassProperty, obj: TermWithAxiom): Triple<TermWithAxiom, Class, String> {
+    private fun preprocessClassProperty(property: Declaration.Memory, obj: TermWithAxiom): Triple<TermWithAxiom, Class, String> {
         val owner = when {
             obj.term.type.getKfgType(tf) is ClassType -> obj
             obj.term is ConstIntTerm -> {
@@ -397,13 +403,14 @@ class FixpointModelConverter(
             }
             else -> throw IllegalArgumentException("Only class types supported")
         }
-        return Triple(owner, tf.cm[property.className], property.propertyName)
+        val (className, propertyName) = property.classPropertyNames()
+        return Triple(owner, tf.cm[className], propertyName)
     }
 
-    private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String): TermWithAxiom {
+    private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String, version: MemoryVersion): TermWithAxiom {
         val field = cls.findField(fieldName)
         if (field != null) {
-            return owner.transformTerm { it.field(field.type.kexType, field.name).load() }
+            return owner.transformTerm { it.field(field.type.kexType, field.name).load().withMemoryVersion(version) }
         }
         val fields = tf.cm.concreteClasses
                 .filter { it.isInheritorOf(cls) }
@@ -416,10 +423,10 @@ class FixpointModelConverter(
         val axioms = fields.map {
             basic {
                 path {
-                    owner.term.instanceOf(it.`class`) equality const(true)
+                    owner.term.instanceOf(it.`class`, version) equality const(true)
                 }
                 state {
-                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load()
+                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load().withMemoryVersion(version)
                 }
             }
         }
@@ -427,9 +434,9 @@ class FixpointModelConverter(
         return owner.binaryOperation(result) { _, fieldLoad -> fieldLoad }
     }
 
-    private fun Term.instanceOf(cls: Class): Term = cls.allInheritors()
+    private fun Term.instanceOf(cls: Class, version: MemoryVersion): Term = cls.allInheritors()
             .map { it.kexType }
-            .map { term { tf.getInstanceOf(it, this@instanceOf) } }
+            .map { term { tf.getInstanceOf(it, this@instanceOf).withMemoryVersion(version) } }
             .reduce { t1: Term, t2: Term -> term { t1 or t2 } }
 
     private fun Class.allInheritors() = cm.concreteClasses.filter { it.isInheritorOf(this) }.toSet()

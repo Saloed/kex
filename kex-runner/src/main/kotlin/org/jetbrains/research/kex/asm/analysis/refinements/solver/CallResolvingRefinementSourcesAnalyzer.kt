@@ -5,6 +5,7 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.asm.analysis.refinements.*
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
 
@@ -30,6 +31,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
 
     override fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources): Refinements {
         if (sources.value.isEmpty()) return Refinements.unknown(methodAnalyzer.method)
+        MemoryUtils.verifyVersions(state)
         val conditions = sources.value.map { it.condition }
         val argument = SolverQueryArgument(state, normals, conditions, emptySet())
         val callResolver = CallResolver(methodAnalyzer, methodsUnderApproximations)
@@ -37,7 +39,8 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
             log.debug(arg)
             val result = FixpointSolver(methodAnalyzer.cm).query(
                     {
-                        it.dumpSolverArguments(arg, debug = true)
+//                        it.dumpSolverArguments(arg, debug = true)
+                        MemoryUtils.verifyVersions(arg.state)
                         mkFixpointQueryV2(arg.state, arg.sources, arg.normals, arg.ignoredCalls)
                     },
                     { ex ->
