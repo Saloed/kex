@@ -21,7 +21,7 @@ internal class MemoryVersionViewer private constructor(val memoryAccess: List<Me
     }
 
     fun addCallInfo(callMemoryTree: Map<MemoryVersion, Set<MemoryVersion>>) {
-        val data = memoryVersions.getOrPut(MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17)) { hashSetOf() }
+        val data = memoryVersions.getOrPut(MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17, "")) { hashSetOf() }
         callMemoryTree.keys.forEach { deepAdd(data, it) }
         callMemoryTree.values.flatten().forEach { deepAdd(data, it) }
     }
@@ -37,12 +37,7 @@ internal class MemoryVersionViewer private constructor(val memoryAccess: List<Me
             return views.values.toList()
         }
 
-    private fun Pair<MemoryVersion, MemoryDescriptor>.graphView() = GraphView("${first.name()}__${second.name()}", "${first.label()}: ${second.label()}")
-
-    private fun MemoryDescriptor.name() = "${memoryType}__${memoryName}__${memorySpace}"
-    private fun MemoryDescriptor.label() = "$memoryType $memoryName $memorySpace"
-    private fun MemoryVersion.name() = "${type}__${version}__${subversion}"
-    private fun MemoryVersion.label() = "$type ${version}.${subversion}"
+    private fun Pair<MemoryVersion, MemoryDescriptor>.graphView() = GraphView("${first.machineName}__${second.machineName}", "${first.humanReadableName}${second.humanReadableName}")
 
     companion object {
         fun view(ps: PredicateState) {

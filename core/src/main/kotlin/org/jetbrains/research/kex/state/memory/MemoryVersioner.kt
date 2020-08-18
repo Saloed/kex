@@ -16,7 +16,7 @@ import org.jetbrains.research.kex.state.term.CallTerm
 
 class MemoryVersioner : MemoryVersionTransformer {
     private lateinit var memory: MutableMap<MemoryDescriptor, MemoryVersionSource>
-    internal val callDescriptor = MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17)
+    internal val callDescriptor = MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17, "")
 
     override fun transformChoice(ps: ChoiceState): PredicateState {
         val currentMemory = memory

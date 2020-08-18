@@ -13,7 +13,11 @@ import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
 @Serializable
-class CastTerm(override val type: KexType, val operand: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryAccess<CastTerm> {
+class CastTerm(
+        override val type: KexType,
+        val operand: Term,
+        override val memoryVersion: MemoryVersion = MemoryVersion.default(),
+        override val additionalInfo: String = "") : Term(), MemoryAccess<CastTerm> {
     override val name = "($operand as $type)"
     override val subterms by lazy { listOf(operand) }
 
@@ -26,10 +30,11 @@ class CastTerm(override val type: KexType, val operand: Term, override val memor
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val toperand = t.transform(operand)) {
                 operand -> this
-                else -> CastTerm(type, toperand, memoryVersion)
+                else -> CastTerm(type, toperand, memoryVersion, additionalInfo)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = CastTerm(type, operand, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = CastTerm(type, operand, memoryVersion, additionalInfo)
+    override fun withAdditionalInfo(additionalInfo: String) = CastTerm(type, operand, memoryVersion, additionalInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

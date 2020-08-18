@@ -33,7 +33,7 @@ class Z3Context : Z3SMTContext {
         const val BASE_TYPE_IDX = 100
         const val TYPE_IDX_MULTIPLIER = 10
 
-        fun memoryName(descriptor: MemoryDescriptor, version: MemoryVersion) = "${version.type}_${version.version}_${descriptor.memorySpace}__${descriptor.memoryType}__${descriptor.memoryName}"
+        fun memoryName(descriptor: MemoryDescriptor, version: MemoryVersion) = "${version.machineName}__${descriptor.machineName}"
 
         fun create(factory: ExprFactory) = Z3Context(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
     }
@@ -86,13 +86,13 @@ class Z3Context : Z3SMTContext {
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
-        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace)
+        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, "")
         return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), type) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
-        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace)
+        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, "")
         return activeMemories.getOrElse(descriptor) { getInitialMemory(memoryType, memoryName, memorySpace, type) }
     }
 

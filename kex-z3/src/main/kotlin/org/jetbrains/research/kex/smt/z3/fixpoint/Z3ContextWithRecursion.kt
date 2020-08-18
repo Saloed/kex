@@ -61,7 +61,7 @@ class Z3ContextWithRecursion(
             TODO("Recursion with different memory properties")
         }
         return propertyPrototype.map { (field, loadTerm) ->
-            val descriptor = MemoryDescriptor(MemoryType.PROPERTY, "${field.`class`.fullname}.${field.name}", loadTerm.field.memspace)
+            val descriptor = MemoryDescriptor(MemoryType.PROPERTY, "${field.`class`.fullname}.${field.name}", loadTerm.field.memspace, "")
             val property = Declaration.Memory(descriptor, MemoryVersion.initial())
             propertyTypes[property] = loadTerm.type
             property

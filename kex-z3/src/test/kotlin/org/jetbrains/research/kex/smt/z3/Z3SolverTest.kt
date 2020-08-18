@@ -6,7 +6,10 @@ import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.memory.MemoryVersion
-import kotlin.test.*
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class Z3SolverTest : KexTest() {
     @Test
@@ -66,15 +69,15 @@ class Z3SolverTest : KexTest() {
         val condA = cond eq a
         val condB = cond eq b
 
-        memA.writeMemory(ptr, a, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0), MemoryVersion.initial(), Int_::class)
-        memB.writeMemory(ptr, b, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0), MemoryVersion.initial(), Int_::class)
+        memA.writeMemory(ptr, a, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
+        memB.writeMemory(ptr, b, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
 
         default.mergeMemory("merged", mapOf(
                 condA to memA,
                 condB to memB
         ))
 
-        val c = default.readMemory<Int_>(ptr,  MemoryDescriptor(MemoryType.SPECIAL, "memory", 0), MemoryVersion.initial(), Int_::class)
+        val c = default.readMemory<Int_>(ptr,  MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
 
         val checkExprIn = { e: Bool_, `in`: Dynamic_ ->
             val solver = ef.ctx.mkSolver()

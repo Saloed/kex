@@ -160,6 +160,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
             }
         }
         val methodStateForInlining = ChainState(preparedMethodState, retvalBindings)
+        MemoryUtils.newAsSeparateInitialVersions(state)
         val (updatedState, versionedMethodState) = MemoryUtils.initializeMemoryVersionsAndPrepareForReplacement(state, methodStateForInlining, call.memoryVersion)
 
         return ChainState(versionedMethodState, updatedState)

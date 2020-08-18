@@ -6,7 +6,6 @@ import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.memory.MemoryVersion
-import org.jetbrains.research.kex.state.memory.MemoryVersionType
 
 class DeclarationTracker {
     val declarations = hashSetOf<Declaration>()
@@ -68,10 +67,10 @@ sealed class Declaration(open val info: DeclarationTracker.DeclarationInfo? = nu
     }
 
     companion object {
-        private val thisRegex = Regex("^this$")
-        private val argRegex = Regex("^arg\\$(\\d+)$")
-        private val callResultRegex = Regex("^call__(\\d+)__result$")
-        private val memoryRegex = Regex("^(\\w+)_(\\d+)_(\\d+)__([A-Za-z0-9]+)__([A-Za-z0-9_/$.]+)$")
+        private val thisRegex = Regex("^this\$")
+        private val argRegex = Regex("^arg\\$(\\d+)\$")
+        private val callResultRegex = Regex("^call__(\\d+)__result\$")
+        private val memoryRegex = Regex("^(?<version>${MemoryVersion.machineNameRegex.pattern})__(?<descriptor>${MemoryDescriptor.machineNameRegex.pattern})\$")
 
         fun create(name: String, sort: Sort, expr: Expr): Declaration {
             val declarationInfo = DeclarationTracker.DeclarationInfo(name, sort, expr)
@@ -79,10 +78,10 @@ sealed class Declaration(open val info: DeclarationTracker.DeclarationInfo? = nu
                 like(thisRegex) { This(declarationInfo) }
                         ?: like(argRegex) { (idx) -> Argument(idx.toInt(), declarationInfo) }
                         ?: like(callResultRegex) { (idx) -> CallResult(idx.toInt(), declarationInfo) }
-                        ?: like(memoryRegex) { (vtype, vver, dmspace, dmtype, dmname) ->
-                            val version = MemoryVersion(vver.toInt(), 0, MemoryVersionType.valueOf(vtype), emptySet())
-                            val descriptor = MemoryDescriptor(MemoryType.valueOf(dmtype), dmname, dmspace.toInt())
-                            Memory(descriptor, version, declarationInfo)
+                        ?: likeNamed(memoryRegex) { match ->
+                            val descriptor = match["descriptor"]?.value ?: error("No descriptor group")
+                            val version = match["version"]?.value ?: error("No version group")
+                            Memory(MemoryDescriptor.fromMachineName(descriptor), MemoryVersion.fromMachineName(version), declarationInfo)
                         }
                         ?: `else` { Other(declarationInfo) }
             }
@@ -93,5 +92,6 @@ sealed class Declaration(open val info: DeclarationTracker.DeclarationInfo? = nu
 private inline fun <R> regexWhen(string: String, block: RegexWhen.() -> R): R = RegexWhen(string).block()
 private inline class RegexWhen(val regexWhenArg: String) {
     inline fun <R : Any> like(expr: Regex, block: (MatchResult.Destructured) -> R): R? = expr.matchEntire(regexWhenArg)?.destructured?.let(block)
+    inline fun <R : Any> likeNamed(expr: Regex, block: (MatchNamedGroupCollection) -> R): R? = (expr.matchEntire(regexWhenArg)?.groups as? MatchNamedGroupCollection)?.let(block)
     inline fun <R : Any> `else`(block: () -> R): R = block()
 }

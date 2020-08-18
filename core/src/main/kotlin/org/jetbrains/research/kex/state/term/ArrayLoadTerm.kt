@@ -13,7 +13,11 @@ import org.jetbrains.research.kex.state.transformer.memspace
 
 @InheritorOf("Term")
 @Serializable
-class ArrayLoadTerm(override val type: KexType, val arrayRef: Term, override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Term(), MemoryAccess<ArrayLoadTerm> {
+class ArrayLoadTerm(
+        override val type: KexType,
+        val arrayRef: Term,
+        override val memoryVersion: MemoryVersion = MemoryVersion.default(),
+        override val additionalInfo: String = "") : Term(), MemoryAccess<ArrayLoadTerm> {
     override val name = "*($arrayRef)"
     override val subterms by lazy { listOf(arrayRef) }
     override val memoryType: MemoryType = MemoryType.ARRAY
@@ -27,14 +31,16 @@ class ArrayLoadTerm(override val type: KexType, val arrayRef: Term, override val
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val tarrayRef = t.transform(arrayRef)) {
                 arrayRef -> this
-                else -> ArrayLoadTerm(type, tarrayRef, memoryVersion)
+                else -> ArrayLoadTerm(type, tarrayRef, memoryVersion, additionalInfo)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion): ArrayLoadTerm = ArrayLoadTerm(type, arrayRef, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayLoadTerm(type, arrayRef, memoryVersion, additionalInfo)
+    override fun withAdditionalInfo(additionalInfo: String) = ArrayLoadTerm(type, arrayRef, memoryVersion, additionalInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
-    companion object{
+
+    companion object {
         const val ARRAY_MEMORY_NAME = "Array"
     }
 }

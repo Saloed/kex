@@ -39,5 +39,11 @@ object MemoryUtils {
         version.predecessors.forEach { updateMemoryVersionDescendantTree(dependencyData, it) }
     }
 
+    fun newAsSeparateInitialVersions(state: PredicateState) {
+        val calls = collectCallMemory(state)
+        check(calls.isEmpty()) { "Translating new to separate initials is not supported for calls" }
+
+    }
+
 
 }

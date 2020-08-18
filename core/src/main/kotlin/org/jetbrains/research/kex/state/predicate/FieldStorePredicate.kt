@@ -24,7 +24,8 @@ class FieldStorePredicate(
         val value: Term,
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
-        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), MemoryAccess<FieldStorePredicate> {
+        override val memoryVersion: MemoryVersion = MemoryVersion.default(),
+        override val additionalInfo: String = "") : Predicate(), MemoryAccess<FieldStorePredicate> {
     override val operands by lazy { listOf(this.field, this.value) }
 
     override val memoryType: MemoryType = MemoryType.PROPERTY
@@ -43,11 +44,12 @@ class FieldStorePredicate(
         val tvalue = t.transform(value)
         return when {
             tfield == field && tvalue == value -> this
-            else -> FieldStorePredicate(tfield, tvalue, type, location, memoryVersion)
+            else -> FieldStorePredicate(tfield, tvalue, type, location, memoryVersion, additionalInfo)
         }
     }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldStorePredicate(field, value, type, location, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldStorePredicate(field, value, type, location, memoryVersion, additionalInfo)
+    override fun withAdditionalInfo(additionalInfo: String) = FieldStorePredicate(field, value, type, location, memoryVersion, additionalInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

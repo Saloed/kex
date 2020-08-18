@@ -1,7 +1,10 @@
 package org.jetbrains.research.kex.state.predicate
 
 import com.abdullin.kthelper.defaultHashCode
-import kotlinx.serialization.*
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.Polymorphic
+import kotlinx.serialization.Required
+import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexInt
@@ -27,7 +30,8 @@ class NewArrayPredicate(
         @Required @Polymorphic val instruction: Instruction,
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
-        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), NewObjectPredicate, MemoryAccess<NewArrayPredicate> {
+        override val memoryVersion: MemoryVersion = MemoryVersion.default(),
+        override val additionalInfo: String = "") : Predicate(), NewObjectPredicate, MemoryAccess<NewArrayPredicate> {
     override val operands by lazy { listOf(lhv) + dimentions }
 
     override val identifier: NewObjectIdentifier
@@ -56,13 +60,14 @@ class NewArrayPredicate(
         val tdimentions = dimentions.map { t.transform(it) }
         return when {
             tlhv == lhv && tdimentions == dimentions -> this
-            else -> NewArrayPredicate(tlhv, tdimentions, elementType, instruction, type, location, memoryVersion)
+            else -> NewArrayPredicate(tlhv, tdimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
         }
     }
 
     override fun hashCode(): Int = defaultHashCode(super.hashCode(), instruction, memoryHash())
     override fun equals(other: Any?): Boolean = super.equals(other) && instruction == (other as? NewArrayPredicate)?.instruction && memoryEquals(other)
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
+    override fun withAdditionalInfo(additionalInfo: String) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
 }
 
 @Serializable

@@ -26,7 +26,8 @@ class ArrayStorePredicate(
         val value: Term,
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
-        override val memoryVersion: MemoryVersion = MemoryVersion.default()) : Predicate(), MemoryAccess<ArrayStorePredicate> {
+        override val memoryVersion: MemoryVersion = MemoryVersion.default(),
+        override val additionalInfo: String = "") : Predicate(), MemoryAccess<ArrayStorePredicate> {
     override val operands by lazy { listOf(arrayRef, value) }
 
     val componentType: KexType
@@ -39,7 +40,7 @@ class ArrayStorePredicate(
         val store = t.transform(value)
         return when {
             ref == arrayRef && store == value -> this
-            else -> ArrayStorePredicate(ref, store, type, location, memoryVersion)
+            else -> ArrayStorePredicate(ref, store, type, location, memoryVersion, additionalInfo)
         }
     }
 
@@ -51,7 +52,8 @@ class ArrayStorePredicate(
     override val memoryValueType: KexType
         get() = componentType
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion): ArrayStorePredicate = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, additionalInfo)
+    override fun withAdditionalInfo(additionalInfo: String) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, additionalInfo)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
 }
