@@ -1,9 +1,6 @@
 package org.jetbrains.research.kex.serialization
 
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.PolymorphicSerializer
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.Serializer
+import kotlinx.serialization.*
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -85,7 +82,7 @@ private fun classSerializers() = SerializersModule {
 }
 
 private fun instructionSerializers() = SerializersModule {
-    polymorphic(Instruction::class, InstructionSerializer) {
+    polymorphic(Instruction::class) {
         subclass(CallInst::class, CallInstSerializer.apply { reset() })
         subclass(NewInst::class, NewInstSerializer.apply { reset() })
         subclass(NewArrayInst::class, NewArrayInstSerializer.apply { reset() })
@@ -93,7 +90,7 @@ private fun instructionSerializers() = SerializersModule {
 }
 
 private fun nameSerializers() = SerializersModule {
-    polymorphic(Name::class, NameSerializer) {
+    polymorphic(Name::class) {
         subclass(StringName::class, StringNameSerializer.apply { reset() })
         subclass(Slot::class, SlotSerializer.apply { reset() })
     }
@@ -103,6 +100,7 @@ private fun nameSerializers() = SerializersModule {
 private inline fun <reified Base : Any, reified T : Base> SerializersModuleBuilder.unsafeContextual(kClass: KClass<T>, serializer: KSerializer<Base>) =
         contextual(kClass, serializer as KSerializer<T>)
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = BinaryOpcode::class)
 object BinaryOpcodeSerializer : KSerializer<BinaryOpcode> {
     override val descriptor: SerialDescriptor
@@ -118,6 +116,7 @@ object BinaryOpcodeSerializer : KSerializer<BinaryOpcode> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = CmpOpcode::class)
 object CmpOpcodeSerializer : KSerializer<CmpOpcode> {
     override val descriptor: SerialDescriptor
@@ -133,6 +132,7 @@ object CmpOpcodeSerializer : KSerializer<CmpOpcode> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = CallOpcode::class)
 object CallOpcodeSerializer : KSerializer<CallOpcode> {
     override val descriptor: SerialDescriptor
@@ -148,6 +148,7 @@ object CallOpcodeSerializer : KSerializer<CallOpcode> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = Location::class)
 object LocationSerializer : KSerializer<Location> {
     override val descriptor: SerialDescriptor
@@ -184,6 +185,7 @@ object LocationSerializer : KSerializer<Location> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = Class::class)
 internal object ClassSerializer : KSerializer<Class> {
     lateinit var cm: ClassManager
@@ -198,6 +200,7 @@ internal object ClassSerializer : KSerializer<Class> {
     override fun deserialize(decoder: Decoder) = cm[decoder.decodeString()]
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = Method::class)
 internal object MethodSerializer : KSerializer<Method> {
     override val descriptor: SerialDescriptor
@@ -238,6 +241,7 @@ internal object MethodSerializer : KSerializer<Method> {
     }
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = Type::class)
 internal object TypeSerializer : KSerializer<Type> {
     lateinit var cm: ClassManager
@@ -268,8 +272,7 @@ internal object TypeSerializer : KSerializer<Type> {
     }
 }
 
-internal val InstructionSerializer = PolymorphicSerializer(Instruction::class)
-
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = CallInst::class)
 internal object CallInstSerializer : KSerializer<CallInst> {
     private val referenceSerializer = object : ReferenceSerializer<CallInst>(CallInst::class) {
@@ -313,17 +316,18 @@ internal object CallInstSerializer : KSerializer<CallInst> {
     fun reset() = referenceSerializer.reset()
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = NewInst::class)
 internal object NewInstSerializer : KSerializer<NewInst> {
     private val referenceSerializer = object : ReferenceSerializer<NewInst>(NewInst::class) {
         override fun ClassSerialDescriptorBuilder.buildDescriptor() {
-            element("name", NameSerializer.descriptor)
+            element("name", PolymorphicSerializer(Name::class).descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
         }
 
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewInst) {
-            encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+            encodeSerializableElement(descriptor, 0, PolymorphicSerializer(Name::class), value.name)
             encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
             encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
         }
@@ -334,7 +338,7 @@ internal object NewInstSerializer : KSerializer<NewInst> {
             lateinit var location: Location
             val ref = deserializeObjectAndReference { descriptor, i ->
                 when (i) {
-                    0 -> name = decodeSerializableElement(descriptor, i, NameSerializer)
+                    0 -> name = decodeSerializableElement(descriptor, i, PolymorphicSerializer(Name::class))
                     1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
                     2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
                     else -> throw SerializationException("Unknown index $i")
@@ -352,17 +356,18 @@ internal object NewInstSerializer : KSerializer<NewInst> {
     fun reset() = referenceSerializer.reset()
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = NewArrayInst::class)
 internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
     private val referenceSerializer = object : ReferenceSerializer<NewArrayInst>(NewArrayInst::class) {
         override fun ClassSerialDescriptorBuilder.buildDescriptor() {
-            element("name", NameSerializer.descriptor)
+            element("name", PolymorphicSerializer(Name::class).descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
         }
 
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewArrayInst) {
-            encodeSerializableElement(descriptor, 0, NameSerializer, value.name)
+            encodeSerializableElement(descriptor, 0, PolymorphicSerializer(Name::class), value.name)
             encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
             encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
         }
@@ -373,7 +378,7 @@ internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
             lateinit var location: Location
             val ref = deserializeObjectAndReference { descriptor, i ->
                 when (i) {
-                    0 -> name = decodeSerializableElement(descriptor, i, NameSerializer)
+                    0 -> name = decodeSerializableElement(descriptor, i, PolymorphicSerializer(Name::class))
                     1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
                     2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
                     else -> throw SerializationException("Unknown index $i")
@@ -391,8 +396,7 @@ internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
     fun reset() = referenceSerializer.reset()
 }
 
-internal val NameSerializer = PolymorphicSerializer(Name::class)
-
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = StringName::class)
 internal object StringNameSerializer : KSerializer<StringName> {
     private val referenceSerializer = object : ReferenceSerializer<StringName>(StringName::class) {
@@ -423,6 +427,7 @@ internal object StringNameSerializer : KSerializer<StringName> {
     fun reset() = referenceSerializer.reset()
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializer(forClass = Slot::class)
 internal object SlotSerializer : KSerializer<Slot> {
     private val referenceSerializer = object : ReferenceSerializer<Slot>(Slot::class) {
@@ -447,6 +452,7 @@ internal abstract class ReferenceSerializer<T : Any>(val type: KClass<T>) {
     private val referenceCache = hashMapOf<String, T>()
     abstract fun ClassSerialDescriptorBuilder.buildDescriptor()
 
+    @OptIn(ExperimentalSerializationApi::class)
     private val refIndex: Int
         get() = descriptor.elementsCount - 1
 

@@ -7,8 +7,6 @@ import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
 
-@InheritorOf("KexType")
-@Serializable
 sealed class KexPointer : KexType() {
     abstract val memspace: Int
 

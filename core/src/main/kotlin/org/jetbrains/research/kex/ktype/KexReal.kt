@@ -6,8 +6,6 @@ import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
 
-@InheritorOf("KexType")
-@Serializable
 sealed class KexReal : KexType()
 
 @InheritorOf("KexType")
