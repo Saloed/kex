@@ -5,10 +5,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.state.transformer.memspace
 
@@ -18,7 +15,7 @@ class ArrayLengthTerm(
         override val type: KexType,
         val arrayRef: Term,
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Term(), MemoryAccess<ArrayLengthTerm> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Term(), MemoryAccess<ArrayLengthTerm> {
     override val name = "$arrayRef.length"
     override val subterms by lazy { listOf(arrayRef) }
 
@@ -32,11 +29,11 @@ class ArrayLengthTerm(
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val tarrayRef = t.transform(arrayRef)) {
                 arrayRef -> this
-                else -> ArrayLengthTerm(KexInt(), tarrayRef, memoryVersion, additionalInfo)
+                else -> ArrayLengthTerm(KexInt(), tarrayRef, memoryVersion, scopeInfo)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayLengthTerm(type, arrayRef, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = ArrayLengthTerm(type, arrayRef, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayLengthTerm(type, arrayRef, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = ArrayLengthTerm(type, arrayRef, memoryVersion, scopeInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

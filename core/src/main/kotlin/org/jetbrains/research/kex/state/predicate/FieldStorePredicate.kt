@@ -7,10 +7,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
@@ -25,7 +22,7 @@ class FieldStorePredicate(
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Predicate(), MemoryAccess<FieldStorePredicate> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Predicate(), MemoryAccess<FieldStorePredicate> {
     override val operands by lazy { listOf(this.field, this.value) }
 
     override val memoryType: MemoryType = MemoryType.PROPERTY
@@ -44,12 +41,12 @@ class FieldStorePredicate(
         val tvalue = t.transform(value)
         return when {
             tfield == field && tvalue == value -> this
-            else -> FieldStorePredicate(tfield, tvalue, type, location, memoryVersion, additionalInfo)
+            else -> FieldStorePredicate(tfield, tvalue, type, location, memoryVersion, scopeInfo)
         }
     }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldStorePredicate(field, value, type, location, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = FieldStorePredicate(field, value, type, location, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldStorePredicate(field, value, type, location, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = FieldStorePredicate(field, value, type, location, memoryVersion, scopeInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

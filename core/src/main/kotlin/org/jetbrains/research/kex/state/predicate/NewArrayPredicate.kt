@@ -9,10 +9,7 @@ import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.term.ArrayLengthTerm
 import org.jetbrains.research.kex.state.term.ConstIntTerm
 import org.jetbrains.research.kex.state.term.Term
@@ -31,7 +28,7 @@ class NewArrayPredicate(
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Predicate(), NewObjectPredicate, MemoryAccess<NewArrayPredicate> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Predicate(), NewObjectPredicate, MemoryAccess<NewArrayPredicate> {
     override val operands by lazy { listOf(lhv) + dimentions }
 
     override val identifier: NewObjectIdentifier
@@ -60,14 +57,14 @@ class NewArrayPredicate(
         val tdimentions = dimentions.map { t.transform(it) }
         return when {
             tlhv == lhv && tdimentions == dimentions -> this
-            else -> NewArrayPredicate(tlhv, tdimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
+            else -> NewArrayPredicate(tlhv, tdimentions, elementType, instruction, type, location, memoryVersion, scopeInfo)
         }
     }
 
     override fun hashCode(): Int = defaultHashCode(super.hashCode(), instruction, memoryHash())
     override fun equals(other: Any?): Boolean = super.equals(other) && instruction == (other as? NewArrayPredicate)?.instruction && memoryEquals(other)
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = NewArrayPredicate(lhv, dimentions, elementType, instruction, type, location, memoryVersion, scopeInfo)
 }
 
 @Serializable

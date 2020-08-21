@@ -9,10 +9,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.term.ArrayLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.Transformer
@@ -27,7 +24,7 @@ class ArrayStorePredicate(
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location(),
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Predicate(), MemoryAccess<ArrayStorePredicate> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Predicate(), MemoryAccess<ArrayStorePredicate> {
     override val operands by lazy { listOf(arrayRef, value) }
 
     val componentType: KexType
@@ -40,7 +37,7 @@ class ArrayStorePredicate(
         val store = t.transform(value)
         return when {
             ref == arrayRef && store == value -> this
-            else -> ArrayStorePredicate(ref, store, type, location, memoryVersion, additionalInfo)
+            else -> ArrayStorePredicate(ref, store, type, location, memoryVersion, scopeInfo)
         }
     }
 
@@ -52,8 +49,8 @@ class ArrayStorePredicate(
     override val memoryValueType: KexType
         get() = componentType
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = ArrayStorePredicate(arrayRef, value, type, location, memoryVersion, scopeInfo)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
 }

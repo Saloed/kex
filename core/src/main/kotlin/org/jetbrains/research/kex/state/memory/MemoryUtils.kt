@@ -17,7 +17,6 @@ object MemoryUtils {
             .groupBy { it.key }
             .mapValues { it.value.flatMap { it.value }.toSet() }
 
-    fun initializeMemoryVersionsAndPrepareForReplacement(state: PredicateState, replacementState: PredicateState, replaceVersion: MemoryVersion) = MemoryVersionReplacer(state, replaceVersion, replacementState).replace()
 
     fun memoryVersionDescendantTree(memoryAccess: List<MemoryAccess<*>>): Map<MemoryDescriptor, Map<MemoryVersion, Set<MemoryVersion>>> {
         val memoryDependency = hashMapOf<MemoryDescriptor, MutableMap<MemoryVersion, MutableSet<MemoryVersion>>>()
@@ -40,4 +39,9 @@ object MemoryUtils {
     }
 
     fun newAsSeparateInitialVersions(state: PredicateState) = MemoryNewAsInitial().newAsSeparateInitialVersions(state)
+    fun mapMemoryScope(state: PredicateState, mapping: Map<MemoryDescriptor, MemoryAccessScope>): PredicateState = ScopeInfoMapper(mapping).apply(state)
+    fun mapMemory(state: PredicateState, mapping: MemoryMappingType) = MemoryMapper(mapping).apply(state)
+    fun replaceMemoryVersion(state: PredicateState, from: MemoryVersion, to: MemoryVersion) = MemoryVersionReplacer.replace(state, from, to)
+    fun replaceMemoryVersion(state: PredicateState, replacement: Map<MemoryDescriptor, Pair<MemoryVersion, MemoryVersion>>) = MemoryVersionReplacer.replace(state, replacement)
+
 }

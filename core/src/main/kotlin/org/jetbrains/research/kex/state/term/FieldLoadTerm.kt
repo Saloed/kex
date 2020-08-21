@@ -6,10 +6,7 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kex.state.transformer.memspace
 
@@ -19,7 +16,7 @@ class FieldLoadTerm(
         override val type: KexType,
         val field: Term,
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Term(), MemoryAccess<FieldLoadTerm> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Term(), MemoryAccess<FieldLoadTerm> {
     override val name = "*($field)"
     override val subterms by lazy { listOf(this.field) }
 
@@ -38,11 +35,11 @@ class FieldLoadTerm(
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val tfield = t.transform(field)) {
                 field -> this
-                else -> FieldLoadTerm(type, tfield, memoryVersion, additionalInfo)
+                else -> FieldLoadTerm(type, tfield, memoryVersion, scopeInfo)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldLoadTerm(type, field, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = FieldLoadTerm(type, field, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = FieldLoadTerm(type, field, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = FieldLoadTerm(type, field, memoryVersion, scopeInfo)
 
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)

@@ -4,13 +4,10 @@ import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
-import org.jetbrains.research.kex.state.memory.MemoryDescriptor
-import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
-import org.jetbrains.research.kex.state.transformer.memspace
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.TypeFactory
 
@@ -60,8 +57,8 @@ class Z3ContextWithRecursion(
         if (allCallProperties.any { it != propertyPrototype }) {
             TODO("Recursion with different memory properties")
         }
-        return propertyPrototype.map { (field, loadTerm) ->
-            val descriptor = MemoryDescriptor(MemoryType.PROPERTY, "${field.`class`.fullname}.${field.name}", loadTerm.field.memspace, "")
+        return propertyPrototype.map { (_, loadTerm) ->
+            val descriptor = loadTerm.descriptor()
             val property = Declaration.Memory(descriptor, MemoryVersion.initial())
             propertyTypes[property] = loadTerm.type
             property

@@ -20,7 +20,7 @@ class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersi
     override fun hashCode(): Int = defaultHashCode(type, version, subversion)
 
     val machineName: String
-        get() = "${type}__${version}__${subversion}"
+        get() = "${type}!${version}!${subversion}"
     val humanReadableName: String
         get() = "[$type][$version.$subversion]"
 
@@ -37,7 +37,7 @@ class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersi
             return MemoryVersion(uniqueMemories.hashCode(), 0, MemoryVersionType.MERGE, uniqueMemories)
         }
 
-        val machineNameRegex = Regex("(\\w+)__(\\d+)__(\\d+)")
+        val machineNameRegex = Regex("(\\w+)!(\\d+)!(\\d+)")
         fun fromMachineName(machineName: String): MemoryVersion {
             val (type, version, subversion) = machineNameRegex.matchEntire(machineName)?.destructured
                     ?: error("Bad formatted machine name")

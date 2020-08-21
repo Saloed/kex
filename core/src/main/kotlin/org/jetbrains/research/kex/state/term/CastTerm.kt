@@ -5,10 +5,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryAccessType
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.transformer.Transformer
 
 @InheritorOf("Term")
@@ -17,7 +14,7 @@ class CastTerm(
         override val type: KexType,
         val operand: Term,
         override val memoryVersion: MemoryVersion = MemoryVersion.default(),
-        override val additionalInfo: String = "") : Term(), MemoryAccess<CastTerm> {
+        override val scopeInfo: MemoryAccessScope = MemoryAccessScope.RootScope) : Term(), MemoryAccess<CastTerm> {
     override val name = "($operand as $type)"
     override val subterms by lazy { listOf(operand) }
 
@@ -30,11 +27,11 @@ class CastTerm(
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term =
             when (val toperand = t.transform(operand)) {
                 operand -> this
-                else -> CastTerm(type, toperand, memoryVersion, additionalInfo)
+                else -> CastTerm(type, toperand, memoryVersion, scopeInfo)
             }
 
-    override fun withMemoryVersion(memoryVersion: MemoryVersion) = CastTerm(type, operand, memoryVersion, additionalInfo)
-    override fun withAdditionalInfo(additionalInfo: String) = CastTerm(type, operand, memoryVersion, additionalInfo)
+    override fun withMemoryVersion(memoryVersion: MemoryVersion) = CastTerm(type, operand, memoryVersion, scopeInfo)
+    override fun withScopeInfo(scopeInfo: MemoryAccessScope) = CastTerm(type, operand, memoryVersion, scopeInfo)
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())

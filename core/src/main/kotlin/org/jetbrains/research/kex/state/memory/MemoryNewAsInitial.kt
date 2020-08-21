@@ -2,8 +2,10 @@ package org.jetbrains.research.kex.state.memory
 
 import org.jetbrains.research.kex.state.PredicateState
 
+typealias MemoryMappingType = Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryDescriptor, MemoryVersion>>
+
 internal class MemoryNewAsInitial {
-    fun newAsSeparateInitialVersions(state: PredicateState): Pair<PredicateState, Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryDescriptor, MemoryVersion>>> {
+    fun newAsSeparateInitialVersions(state: PredicateState): Pair<PredicateState, MemoryMappingType> {
         val calls = MemoryUtils.collectCallMemory(state)
         check(calls.isEmpty()) { "Translating new to separate initials is not supported for calls" }
         val memoryAccess = MemoryUtils.collectMemoryAccesses(state).groupBy { it.descriptor() }
@@ -17,7 +19,7 @@ internal class MemoryNewAsInitial {
         return result to mapper.resultMapping
     }
 
-    private fun newAsSeparateInitialVersions(descriptor: MemoryDescriptor, majorVersion: Int, access: List<MemoryAccess<*>>): Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<String, MemoryVersion>> {
+    private fun newAsSeparateInitialVersions(descriptor: MemoryDescriptor, majorVersion: Int, access: List<MemoryAccess<*>>): Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryAccessScope, MemoryVersion>> {
         val memories = access.associateBy { it.memoryVersion }
         val root = memories.keys.first { it.type == MemoryVersionType.INITIAL || it.type == MemoryVersionType.NEW }
         val dependencyTree = hashMapOf<MemoryVersion, MutableSet<MemoryVersion>>()
@@ -28,19 +30,19 @@ internal class MemoryNewAsInitial {
         check((dependencyTree.keys - memories.keys).isEmpty()) { "Dependency tre is not closed" }
 
         if (dependencyTree.isEmpty()) {
-            val additionalInfo = root.machineName
-            return mapOf(descriptor to root to (additionalInfo to MemoryVersion.initial()))
+            val newScope = descriptor.scopeInfo.withScope(root.machineName)
+            return mapOf(descriptor to root to (newScope to MemoryVersion.initial()))
         }
         TODO()
     }
 
     @Suppress("UNCHECKED_CAST")
-    private class DescriptorMapper(val mapping: Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<String, MemoryVersion>>) : MemoryVersionTransformer {
+    private class DescriptorMapper(val mapping: Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryAccessScope, MemoryVersion>>) : MemoryVersionTransformer {
         val resultMapping = hashMapOf<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryDescriptor, MemoryVersion>>()
         override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
             val elementKey = element.descriptor() to element.memoryVersion
-            val (newAdditionalInfo, newVersion) = mapping[elementKey] ?: return super.transformMemoryVersion(element)
-            var result = element.withAdditionalInfo("${element.additionalInfo}__$newAdditionalInfo")
+            val (newScope, newVersion) = mapping[elementKey] ?: return super.transformMemoryVersion(element)
+            var result = element.withScopeInfo(newScope)
             result as MemoryAccess<T>
             result = result.withMemoryVersion(newVersion)
             result as MemoryAccess<T>

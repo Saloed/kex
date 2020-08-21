@@ -86,18 +86,19 @@ class Z3Context : Z3SMTContext {
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
-        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, "")
+        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, MemoryAccessScope.RootScope)
         return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), type) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
-        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, "")
+        val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, MemoryAccessScope.RootScope)
         return activeMemories.getOrElse(descriptor) { getInitialMemory(memoryType, memoryName, memorySpace, type) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, type)
+
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, type))
 
@@ -166,11 +167,13 @@ class Z3Context : Z3SMTContext {
 
     private fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
         check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
+        val activeMemory = activeMemories[descriptor]
+        if (activeMemory != null && activeMemory.version == version) return activeMemory
         val versionedDescriptor = VersionedMemoryDescriptor(descriptor, version)
-        val memory = activeMemories.getOrElse(descriptor) { archiveMemories[versionedDescriptor] }
+        val archiveMemory = archiveMemories[versionedDescriptor]
                 ?: error("Memory is not initialized for $descriptor")
-        check(memory.version == version) { "Try to get memories with different versions" }
-        return memory
+        check(archiveMemory.version == version) { "Try to get memories with different versions" }
+        return archiveMemory
     }
 
     private fun setMemory(descriptor: MemoryDescriptor, version: MemoryVersion, memory: VersionedMemory) {

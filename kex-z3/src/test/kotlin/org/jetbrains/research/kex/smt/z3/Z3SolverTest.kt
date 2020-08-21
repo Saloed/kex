@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.smt.z3
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Status
 import org.jetbrains.research.kex.KexTest
+import org.jetbrains.research.kex.state.memory.MemoryAccessScope
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.memory.MemoryVersion
@@ -69,15 +70,15 @@ class Z3SolverTest : KexTest() {
         val condA = cond eq a
         val condB = cond eq b
 
-        memA.writeMemory(ptr, a, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
-        memB.writeMemory(ptr, b, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
+        memA.writeMemory(ptr, a, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, MemoryAccessScope.RootScope), MemoryVersion.initial(), Int_::class)
+        memB.writeMemory(ptr, b, MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, MemoryAccessScope.RootScope), MemoryVersion.initial(), Int_::class)
 
         default.mergeMemory("merged", mapOf(
                 condA to memA,
                 condB to memB
         ))
 
-        val c = default.readMemory<Int_>(ptr,  MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, ""), MemoryVersion.initial(), Int_::class)
+        val c = default.readMemory<Int_>(ptr,  MemoryDescriptor(MemoryType.SPECIAL, "memory", 0, MemoryAccessScope.RootScope), MemoryVersion.initial(), Int_::class)
 
         val checkExprIn = { e: Bool_, `in`: Dynamic_ ->
             val solver = ef.ctx.mkSolver()

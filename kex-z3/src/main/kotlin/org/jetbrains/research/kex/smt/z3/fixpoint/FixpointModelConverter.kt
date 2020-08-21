@@ -9,10 +9,7 @@ import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryType
-import org.jetbrains.research.kex.state.memory.MemoryUtils
-import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -334,7 +331,7 @@ class FixpointModelConverter(
                 val (owner, cls, propertyName) = preprocessClassProperty(memoryDecl, location)
                 val field = cls.findField(propertyName) ?: error("No field found")
                 val axiom = basic {
-                    state { owner.term.field(field.type.kexType, field.name).store(value.term).withMemoryVersion(memoryDecl.version) }
+                    state { owner.term.field(field.type.kexType, field.name).store(value.term).withMemoryVersion(memoryDecl.version).withScopeInfo(memoryDecl.descriptor.scopeInfo) }
                 }
                 val term = TermWithAxiom(term { const(true) }, axiom).mergeAxioms(memory, location, value)
                 return term to memoryDecl
@@ -369,7 +366,7 @@ class FixpointModelConverter(
     private fun convertMemoryLoad(decl: Declaration.Memory, location: Expr): TermWithAxiom = when (decl.descriptor.memoryType) {
         MemoryType.PROPERTY -> {
             val (owner, cls, propertyName) = preprocessClassProperty(decl, convertTerm(location))
-            getFieldLoad(owner, cls, propertyName, decl.version)
+            getFieldLoad(owner, cls, propertyName, decl.version, decl.descriptor.scopeInfo)
         }
         MemoryType.ARRAY -> {
             if (!(location.isAdd && location.args.size == 2)) {
@@ -381,7 +378,7 @@ class FixpointModelConverter(
                 rhs.term.type is KexArray -> rhs to lhs
                 else -> throw IllegalStateException("Array load has no base and index")
             }
-            base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i).load().withMemoryVersion(decl.version) }
+            base.binaryOperation(index) { b, i -> tf.getArrayIndex(b, i).load().withMemoryVersion(decl.version).withScopeInfo(decl.descriptor.scopeInfo) }
         }
         MemoryType.SPECIAL -> when (decl.descriptor.memoryName) {
             InstanceOfTerm.TYPE_MEMORY_NAME -> convertTerm(location).transformTerm { InstanceOfTerm(UnknownType, it, decl.version) }
@@ -407,10 +404,10 @@ class FixpointModelConverter(
         return Triple(owner, tf.cm[className], propertyName)
     }
 
-    private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String, version: MemoryVersion): TermWithAxiom {
+    private fun getFieldLoad(owner: TermWithAxiom, cls: Class, fieldName: String, version: MemoryVersion, scope: MemoryAccessScope): TermWithAxiom {
         val field = cls.findField(fieldName)
         if (field != null) {
-            return owner.transformTerm { it.field(field.type.kexType, field.name).load().withMemoryVersion(version) }
+            return owner.transformTerm { it.field(field.type.kexType, field.name).load().withMemoryVersion(version).withScopeInfo(scope) }
         }
         val fields = tf.cm.concreteClasses
                 .filter { it.isInheritorOf(cls) }
@@ -423,10 +420,10 @@ class FixpointModelConverter(
         val axioms = fields.map {
             basic {
                 path {
-                    owner.term.instanceOf(it.`class`, version) equality const(true)
+                    owner.term.instanceOf(it.`class`, version, scope) equality const(true)
                 }
                 state {
-                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load().withMemoryVersion(version)
+                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load().withMemoryVersion(version).withScopeInfo(scope)
                 }
             }
         }
@@ -434,9 +431,9 @@ class FixpointModelConverter(
         return owner.binaryOperation(result) { _, fieldLoad -> fieldLoad }
     }
 
-    private fun Term.instanceOf(cls: Class, version: MemoryVersion): Term = cls.allInheritors()
+    private fun Term.instanceOf(cls: Class, version: MemoryVersion, scope: MemoryAccessScope): Term = cls.allInheritors()
             .map { it.kexType }
-            .map { term { tf.getInstanceOf(it, this@instanceOf).withMemoryVersion(version) } }
+            .map { term { tf.getInstanceOf(it, this@instanceOf).withMemoryVersion(version).withScopeInfo(scope) } }
             .reduce { t1: Term, t2: Term -> term { t1 or t2 } }
 
     private fun Class.allInheritors() = cm.concreteClasses.filter { it.isInheritorOf(this) }.toSet()

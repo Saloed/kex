@@ -3,80 +3,91 @@ package org.jetbrains.research.kex.state.memory
 import com.abdullin.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.state.PredicateState
 
-internal class MemoryVersionReplacer(
-        val sourceState: PredicateState,
-        val replaceFrom: MemoryVersion,
-        val replacementState: PredicateState
-) {
-    init {
-        check(replaceFrom.type == MemoryVersionType.NEW) { "Only new supported for replacement" }
+internal object MemoryVersionReplacer {
+
+    fun replace(state: PredicateState, fromVersion: MemoryVersion, toVersion: MemoryVersion): PredicateState {
+        val access = MemoryUtils.collectMemoryAccesses(state)
+        val tree = MemoryUtils.memoryVersionDescendantTree(access)
+        val mapping = tree.mapValues { (_, versionTree) -> replace(versionTree, fromVersion, toVersion) }
+        return OptionalMemoryVersionMapper(mapping).apply(state)
     }
 
-    fun replace(): Pair<PredicateState, PredicateState> {
-        val replacementVersioner = MemoryVersioner()
-        val (replaceState, replaceToInitial, replaceToFinal) = replacementVersioner.setupVersions(replacementState)
-        val memoryAccessors = MemoryUtils.collectMemoryAccesses(sourceState)
-        val memoryDependency = MemoryUtils.memoryVersionDescendantTree(memoryAccessors).toMutableMap()
-        memoryDependency[replacementVersioner.callDescriptor] = MemoryUtils.collectCallMemory(sourceState)
-        val descriptorsToInsert = memoryDependency.keys intersect replaceToInitial.keys intersect replaceToFinal.keys
-        val sourceMap = hashMapOf<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>()
-        val replacementMap = hashMapOf<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>()
-        for (descriptor in descriptorsToInsert) {
-            val initial = replaceToInitial.getValue(descriptor)
-            val final = replaceToFinal.getValue(descriptor)
-            val dependencyTree = MemoryUtils.memoryVersionDescendantTree(final)
-            val newRoot = replaceFrom.predecessors.first()
-            val replacementStartIndex = MemoryUtils.allVersionsUpToRoot(newRoot).filter { it.type != MemoryVersionType.MERGE }.map { it.version }.maxOrNull() ?: 1
-            val replacementMapping = createMappingStartingFromRoot(initial, replacementStartIndex, hashMapOf(initial to newRoot)) {
-                dependencyTree[it]?.toList() ?: emptyList()
-            }
-            replacementMap[descriptor] = replacementMapping
-            val mappedFinal = replacementMapping[final] ?: error("No final version in mapping")
-            val sourceStartIndex = MemoryUtils.allVersionsUpToRoot(mappedFinal).filter { it.type != MemoryVersionType.MERGE }.map { it.version }.maxOrNull() ?: 1
-            sourceMap[descriptor] = createMappingStartingFromRoot(replaceFrom, sourceStartIndex, hashMapOf(replaceFrom to mappedFinal)) {
-                memoryDependency.getValue(descriptor)[it]?.toList() ?: emptyList()
-            }
+    fun replace(state: PredicateState, replacement: Map<MemoryDescriptor, Pair<MemoryVersion, MemoryVersion>>): PredicateState {
+        val access = MemoryUtils.collectMemoryAccesses(state)
+        val tree = MemoryUtils.memoryVersionDescendantTree(access)
+        val mapping = tree.filterKeys { it in replacement }.mapValues { (descriptor, versionTree) ->
+            val (from, to) = replacement[descriptor] ?: error("checked in filter")
+            replace(versionTree, from, to)
         }
-        val resultSource = OptionalMemoryVersionMapper(sourceMap, replacementVersioner.callDescriptor).apply(sourceState)
-        val resultReplacement = OptionalMemoryVersionMapper(replacementMap, replacementVersioner.callDescriptor).apply(replaceState)
-        return resultSource to resultReplacement
+        return OptionalMemoryVersionMapper(mapping).apply(state)
     }
 
-    private fun createMappingStartingFromRoot(
-            root: MemoryVersion,
-            startIndex: Int,
-            mapping: MutableMap<MemoryVersion, MemoryVersion>,
-            children: (MemoryVersion) -> List<MemoryVersion>
-    ): Map<MemoryVersion, MemoryVersion> {
-        var memoryVersionIdx = startIndex
-        val queue = dequeOf(root)
-        loop@ while (queue.isNotEmpty()) {
-            val node = queue.removeFirst()
-            queue += children(node)
-            if (node in mapping) continue
-            when (node.type) {
-                MemoryVersionType.INITIAL -> error("Initial memory is not supported here")
+    private fun replace(tree: Map<MemoryVersion, Set<MemoryVersion>>, fromVersion: MemoryVersion, toVersion: MemoryVersion): Map<MemoryVersion, MemoryVersion> {
+        val mapping = hashMapOf(fromVersion to toVersion)
+        val queue = dequeOf(tree[fromVersion] ?: emptySet())
+        while (queue.isNotEmpty()) {
+            val version = queue.removeFirst()
+            if (version in mapping) continue
+            val newVersion = when (version.type) {
+                MemoryVersionType.INITIAL -> MemoryVersion.initial()
                 MemoryVersionType.NEW -> {
-                    val parentVersion = mapping[node.predecessors.first()] ?: error("Parent version is not computed")
-                    mapping.getOrPut(node) { parentVersion.resetToVersion(memoryVersionIdx++) }
+                    check(version.predecessors.size == 1) { "New must have a single predecessor" }
+                    val parent = version.predecessors.first()
+                    val newParent = mapping[parent]
+                    when {
+                        newParent != null -> newParent.resetToVersion(version.version)
+                        parent.dependsOn(fromVersion) -> {
+                            queue.addLast(parent)
+                            queue.addLast(version)
+                            continue
+                        }
+                        else -> parent.resetToVersion(version.version)
+                    }
                 }
                 MemoryVersionType.NORMAL -> {
-                    val parentVersion = mapping[node.predecessors.first()] ?: error("Parent version is not computed")
-                    mapping.getOrPut(node) { parentVersion.increaseSubversion() }
+                    check(version.predecessors.size == 1) { "New must have a single predecessor" }
+                    val parent = version.predecessors.first()
+                    val newParent = mapping[parent]
+                    when {
+                        newParent != null -> newParent.increaseSubversion()
+                        parent.dependsOn(fromVersion) -> {
+                            queue.addLast(parent)
+                            queue.addLast(version)
+                            continue
+                        }
+                        else -> parent.increaseSubversion()
+                    }
                 }
                 MemoryVersionType.MERGE -> {
-                    val parentVersionsRaw = node.predecessors.map { mapping[it] }
-                    val parentVersions = parentVersionsRaw.filterNotNull()
-                    if (parentVersions != parentVersionsRaw) {
-                        queue.addLast(node)
-                        continue@loop
+                    val waitQueue = dequeOf<MemoryVersion>()
+                    val newPredecessors = version.predecessors.associateWith { mapping[it] }.mapValues { (original, new) ->
+                        when {
+                            new != null -> new
+                            original.dependsOn(fromVersion) -> {
+                                waitQueue.addLast(original)
+                                original
+                            }
+                            else -> original
+                        }
                     }
-                    mapping.getOrPut(node) { MemoryVersion.merge(parentVersions) }
+                    if (waitQueue.isNotEmpty()) {
+                        queue += waitQueue
+                        queue.addLast(version)
+                        continue
+                    }
+                    MemoryVersion.merge(newPredecessors.values.toSet())
                 }
-                MemoryVersionType.DEFAULT -> error("Default memory")
+                MemoryVersionType.DEFAULT -> MemoryVersion.default()
             }
+            mapping[version] = newVersion
+            queue += tree[version] ?: emptySet()
         }
         return mapping
+    }
+
+    private fun MemoryVersion.dependsOn(other: MemoryVersion): Boolean = when (other) {
+        this -> true
+        else -> predecessors.any { dependsOn(other) }
     }
 
 }

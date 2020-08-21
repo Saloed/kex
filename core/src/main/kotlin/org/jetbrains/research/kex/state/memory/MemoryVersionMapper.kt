@@ -21,7 +21,7 @@ internal class StrictMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<
     }
 }
 
-internal class OptionalMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>, val callDescriptor: MemoryDescriptor) : MemoryVersionTransformer {
+internal class OptionalMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>, val callDescriptor: MemoryDescriptor? = null) : MemoryVersionTransformer {
 
     override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
         val descriptor = element.descriptor()
@@ -31,6 +31,7 @@ internal class OptionalMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Ma
     }
 
     override fun transformCallTerm(term: CallTerm): Term {
+        if (callDescriptor == null) return term
         val callMapping = mapping[callDescriptor] ?: return term
         val newVersion = callMapping[term.memoryVersion] ?: return term
         return term.withMemoryVersion(newVersion)
