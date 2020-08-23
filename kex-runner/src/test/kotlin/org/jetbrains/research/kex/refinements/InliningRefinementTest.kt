@@ -4,7 +4,6 @@ import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
-import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
@@ -34,7 +33,7 @@ class InliningRefinementTest : RefinementTest("Inlining") {
                 path {
                     firstArg gt const(6) equality true
                 }
-            })
+            }).withMemoryVersions()
         }
     }
 

@@ -41,6 +41,7 @@ class InstanceOfTerm(
     override val memorySpace: Int = 0
     override val memoryName: String = TYPE_MEMORY_NAME
     override val memoryValueType: KexType = KexInt()
+    override fun toString(): String = "$name #${memoryPrint()}"
 
     companion object {
         const val TYPE_MEMORY_NAME = "__TYPE__"

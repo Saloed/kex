@@ -19,7 +19,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                 path {
                     arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() add const(2) equality arg(KexInt(), 1)
                 }
-            }
+            }.withMemoryVersions()
         }
     }
 
@@ -30,7 +30,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                 path {
                     arg(KexClass(xcls), 0).field(KexInt(), "clsFieldB").load() add const(2) equality arg(KexInt(), 1)
                 }
-            }
+            }.withMemoryVersions()
         }
     }
 
@@ -41,7 +41,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                 path {
                     arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() add const(2) equality arg(KexInt(), 1)
                 }
-            }
+            }.withMemoryVersions()
         }
     }
 
@@ -57,7 +57,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                 path {
                     arg(KexClass(xcls), 0).field(KexInt(), "clsFieldB").load() gt const(0) equality const(true)
                 }
-            }
+            }.withMemoryVersions()
         }
     }
 
@@ -69,7 +69,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                 path {
                     arg(KexInt(), 2) lt const(0) equality const(true)
                 }
-            }
+            }.withMemoryVersions()
         }
 
         refinement(IllegalStateException()) {
@@ -102,7 +102,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
                             (arg0.fieldB() add arg1.fieldB()) gt (const(2) mul arg0.fieldA()) equality const(true)
                         }
                     })
-            )
+            ).withMemoryVersions()
         }
     }
 }

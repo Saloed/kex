@@ -39,4 +39,5 @@ class CallTerm(
     override fun withMemoryVersion(memoryVersion: MemoryVersion) = CallTerm(type, owner, method, instruction, arguments, memoryVersion)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryVersion)
     override fun equals(other: Any?) = super.equals(other) &&  memoryVersion == (other as? CallTerm)?.memoryVersion
+    override fun toString(): String = "$name #${memoryVersion.humanReadableName}"
 }

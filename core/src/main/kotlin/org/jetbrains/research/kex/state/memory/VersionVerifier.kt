@@ -16,6 +16,5 @@ internal object VersionVerifier : MemoryVersionTransformer {
 
     private fun checkMemoryVersion(version: MemoryVersion, element: Any) {
         check(version.type != MemoryVersionType.DEFAULT) { "Default memory: $element" }
-        check(version.version in 0..999 || version.type == MemoryVersionType.MERGE) { "Memory version may be incorrect: $version | $element" }
     }
 }

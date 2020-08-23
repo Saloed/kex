@@ -14,12 +14,14 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.wrap
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager, private val baseScope: MemoryAccessScope = MemoryAccessScope.RootScope) {
     private var currentMemoryAccessScope: MemoryAccessScope? = null
@@ -69,10 +71,48 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     private fun tryResolveMultipleCalls(model: RecoveredModel) {
-        val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
-        val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
-        val callToResolve = depsToResolve.first().call
-        resolveSingleCall(model.state, callToResolve, depsToResolve)
+        val singleDepsPredicates = collectPredicatesWithSingleDependentTerm(model.state, model.dependencies)
+        when {
+            singleDepsPredicates.isNotEmpty() -> singleDepsPredicates.forEach { (predicate, callIdx) ->
+                val depsToResolve = model.dependencies.filter { it.callIdx == callIdx }
+                val callToResolve = depsToResolve.first().call
+                resolveSingleCall(predicate.wrap(), callToResolve, depsToResolve)
+            }
+            else -> {
+                val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
+                val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
+                val callToResolve = depsToResolve.first().call
+                resolveSingleCall(model.state, callToResolve, depsToResolve)
+            }
+        }
+
+    }
+
+    private fun collectPredicatesWithSingleDependentTerm(state: PredicateState, dependencies: Set<TermDependency>): List<Pair<Predicate, Int>> {
+        val memoryDependency = dependencies.filterIsInstance<TermDependency.MemoryDependency>().associateBy { it.memoryAccess }
+        val callResultDependency = dependencies.filterIsInstance<TermDependency.CallResultDependency>().associateBy { it.term }
+        val result = mutableListOf<Pair<Predicate, Int>>()
+        PredicateCollector.collectIsInstance<Predicate>(state).forEach { predicate ->
+            val dependentTerms = TermCollector.getFullTermSet(predicate).mapNotNull {
+                when (it) {
+                    is MemoryAccess<*> -> memoryDependency[it]?.callIdx
+                    else -> callResultDependency[it]?.callIdx
+                }
+            }.distinct()
+            when {
+                predicate is MemoryAccess<*> && dependentTerms.isEmpty() -> {
+                    val dependency = memoryDependency[predicate]
+                    if (dependency != null) {
+                        result += predicate to dependency.callIdx
+                    }
+                }
+                predicate !is MemoryAccess<*> && dependentTerms.size == 1 -> {
+                    val dependency = dependentTerms.first()
+                    result += predicate to dependency
+                }
+            }
+        }
+        return result
     }
 
     private fun resolveSingleCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
@@ -230,3 +270,4 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
 }
+

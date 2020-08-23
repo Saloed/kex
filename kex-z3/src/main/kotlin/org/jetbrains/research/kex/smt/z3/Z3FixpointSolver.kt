@@ -6,7 +6,6 @@ import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.BasicState
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
@@ -21,13 +20,14 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private class CallCtx(
             val tf: TypeFactory,
+            vararg states: PredicateState,
             converterFactory: (TypeFactory) -> Z3Converter = { Z3Converter(it) }
     ) : AutoCloseable {
         val declarationTracker = DeclarationTracker()
         val ef = FixpointExprFactory.withDeclarationsTracking(declarationTracker)
 
         val context = ef.ctx
-        val z3Context = Z3Context.create(ef)
+        val z3Context = Z3Context.createInitialized(ef, *states)
         val converter = converterFactory(tf)
 
         val options = Z3OptionBuilder()
@@ -69,15 +69,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val knownDeclarations: List<Declaration>
             get() = declarationTracker.declarations.toList()
 
-        fun initializeMemory(vararg ps: PredicateState){
-            val memoryAccess = ps.flatMap { MemoryUtils.collectMemoryAccesses(it) }
-            z3Context.initialize(memoryAccess, converter)
-        }
-
-        fun convert(ps: PredicateState): Bool_ {
-            z3Context.resetActiveMemory()
-            return converter.convert(ps, ef, z3Context)
-        }
+        fun convert(ps: PredicateState): Bool_ = converter.convertWithMemoryReset(ps, ef, z3Context)
 
         fun build(builder: CallCtx.() -> BoolExpr) = builder()
 
@@ -151,8 +143,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         val recursionPredicate = Predicate(0)
         val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys, replaceWithArray = false) + state + recursionPath + positive + query
         if (unknownCallsProcessor.hasUnknownCalls()) throw IllegalArgumentException("Recursive with unknowns")
-        return CallCtx(tf) { tf -> Z3ContextWithRecursion(recursiveCalls, rootCall, recursionPredicate.name, tf) }.use { ctx ->
-            ctx.initializeMemory(state, positive, query, recursionPath)
+        return CallCtx(tf, state, positive, query, recursionPath) { tf -> Z3ContextWithRecursion(recursiveCalls, rootCall, recursionPredicate.name, tf) }.use { ctx ->
             val recursionConverter = ctx.converter as Z3ContextWithRecursion
             val rootPredicate = recursionConverter.buildPredicate(rootCall, ctx.ef, ctx.z3Context).expr as BoolExpr
 
@@ -191,8 +182,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>): FixpointResult {
-        return CallCtx(tf) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
-            ctx.initializeMemory(positive, negative)
+        return CallCtx(tf, positive, negative) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
             val z3query = ctx.convert(negative).asAxiom() as BoolExpr
@@ -225,8 +215,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>): FixpointResult {
-        return CallCtx(tf) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
-            ctx.initializeMemory(state, query, *positivePaths.toTypedArray())
+        return CallCtx(tf, state, query, *positivePaths.toTypedArray()) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
             val z3State = ctx.build {
                 convert(state).asAxiom() as BoolExpr
@@ -270,8 +259,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult =
-            CallCtx(tf).use { ctx ->
-                ctx.initializeMemory(state, query, *positivePaths.toTypedArray())
+            CallCtx(tf, state, query, *positivePaths.toTypedArray()).use { ctx ->
                 val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
                 val state = unknownCallsProcessor.apply(state)
                 val positivePaths = unknownCallsProcessor.apply(positivePaths)

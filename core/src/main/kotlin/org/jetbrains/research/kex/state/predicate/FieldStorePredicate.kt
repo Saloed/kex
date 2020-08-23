@@ -34,7 +34,7 @@ class FieldStorePredicate(
     override val memoryValueType: KexType
         get() = (this.field.type as KexReference).reference
 
-    override fun print() = "*($field) = $value"
+    override fun print() = "*($field) = $value #${memoryPrint()}"
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate {
         val tfield = t.transform(field)

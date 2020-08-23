@@ -49,7 +49,7 @@ class NewArrayPredicate(
         sb.append("$lhv = new $elementType")
         dimentions.forEach { sb.append("[$it]") }
         sb.append("^${instruction.hashCode()}")
-        return sb.toString()
+        return sb.toString() + " #${memoryPrint()}"
     }
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate {

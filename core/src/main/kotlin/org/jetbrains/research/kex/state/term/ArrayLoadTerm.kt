@@ -36,6 +36,7 @@ class ArrayLoadTerm(
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
+    override fun toString(): String = "$name #${memoryPrint()}"
 
     companion object {
         const val ARRAY_MEMORY_NAME = "Array"

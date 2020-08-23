@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex.state.memory
 
-import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -12,12 +11,18 @@ enum class MemoryVersionType {
 class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersionType, val predecessors: Set<MemoryVersion>) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-        other as MemoryVersion
+        if (other !is MemoryVersion) return false
         return type == other.type && version == other.version && subversion == other.subversion
     }
 
-    override fun hashCode(): Int = defaultHashCode(type, version, subversion)
+    override fun hashCode(): Int = versionIdentifier()
+
+    private fun versionIdentifier(): Int {
+        var result = version + 1
+        result = 31 * result + subversion + 1
+        result = 31 * result + type.ordinal + 1
+        return result
+    }
 
     val machineName: String
         get() = "${type}!${version}!${subversion}"
@@ -34,7 +39,9 @@ class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersi
         fun initial() = MemoryVersion(0, 0, MemoryVersionType.INITIAL, emptySet())
         fun merge(memories: Collection<MemoryVersion>): MemoryVersion {
             val uniqueMemories = memories.toSet()
-            return MemoryVersion(uniqueMemories.hashCode(), 0, MemoryVersionType.MERGE, uniqueMemories)
+            val memoryIdentifiers = uniqueMemories.map { it.versionIdentifier() }.sorted()
+            val mergedVersion = memoryIdentifiers.reduceOrNull { acc, id -> 31 * acc + id } ?: 0
+            return MemoryVersion(mergedVersion, 0, MemoryVersionType.MERGE, uniqueMemories)
         }
 
         val machineNameRegex = Regex("(\\w+)!(\\d+)!(\\d+)")

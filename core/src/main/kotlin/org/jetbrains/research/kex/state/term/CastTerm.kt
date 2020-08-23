@@ -35,4 +35,5 @@ class CastTerm(
 
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
+    override fun toString(): String = "$name #${memoryPrint()}"
 }

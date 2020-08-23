@@ -11,9 +11,12 @@ import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.smt.*
 import org.jetbrains.research.kex.smt.Solver
-import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.term.*
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.term.ArrayLengthTerm
+import org.jetbrains.research.kex.state.term.ArrayLoadTerm
+import org.jetbrains.research.kex.state.term.FieldTerm
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.TermCollector
 import org.jetbrains.research.kex.state.transformer.collectPointers
 import org.jetbrains.research.kex.state.transformer.collectVariables
@@ -44,10 +47,10 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
             }
         }
 
-        val ctx = Z3Context.create(ef)
+        val ctx = Z3Context.createInitialized(ef, state, query)
         val converter = Z3Converter(tf)
-        val z3State = converter.convert(state, ef, ctx)
-        val z3query = converter.convert(query, ef, ctx)
+        val z3State = converter.convertWithMemoryReset(state, ef, ctx)
+        val z3query = converter.convertWithMemoryReset(query, ef, ctx)
 
         log.debug("Check started")
         val result = check(z3State, z3query)
@@ -60,10 +63,10 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
     }
 
     fun isAlwaysEqual(first: PredicateState, second: PredicateState): Result {
-        val ctx = Z3Context.create(ef)
+        val ctx = Z3Context.createInitialized(ef, first, second)
         val converter = Z3Converter(tf)
-        val z3First = converter.convert(first, ef, ctx)
-        val z3Second = converter.convert(second, ef, ctx)
+        val z3First = converter.convertWithMemoryReset(first, ef, ctx)
+        val z3Second = converter.convertWithMemoryReset(second, ef, ctx)
         val result = check(z3First neq z3Second, ctx.factory.makeTrue())
         return when (result.first) {
             Status.UNSATISFIABLE -> Result.UnsatResult
@@ -172,11 +175,11 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
                     val name = "${ptr.klass}.${ptr.fieldNameString}"
-                    val startProp = ctx.getInitialMemory(MemoryType.PROPERTY, name, memspace, converter.Z3Type((ptr.type as KexReference).reference))
-                    val endProp = ctx.getMemory(MemoryType.PROPERTY, name, memspace,  converter.Z3Type((ptr.type as KexReference).reference))
+                    val startProp = ctx.getInitialMemory(MemoryType.PROPERTY, name, memspace, (ptr.type as KexReference).reference)
+                    val endProp = ctx.getMemory(MemoryType.PROPERTY, name, memspace, (ptr.type as KexReference).reference)
 
-                    val startV = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
-                    val endV = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type((ptr.type as KexReference).reference))
+                    val startV = startProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType((ptr.type as KexReference).reference))
+                    val endV = endProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType((ptr.type as KexReference).reference))
 
                     val modelPtr = Z3Unlogic.undo(model.evaluate(ptrExpr.expr, true))
                     val modelStartV = Z3Unlogic.undo(model.evaluate(startV.expr, true))
@@ -193,11 +196,11 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                     val ptrExpr = converter.convert(ptr, ef, ctx) as? Ptr_
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
-                    val startMem = ctx.getInitialMemory(MemoryType.ARRAY, ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, converter.Z3Type(ptr.type))
-                    val endMem = ctx.getMemory(MemoryType.ARRAY,  ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, converter.Z3Type(ptr.type))
+                    val startMem = ctx.getInitialMemory(MemoryType.ARRAY, ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, ptr.type)
+                    val endMem = ctx.getMemory(MemoryType.ARRAY,  ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, ptr.type)
 
-                    val startV = startMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
-                    val endV = endMem.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(ptr.type))
+                    val startV = startMem.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(ptr.type))
+                    val endV = endMem.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(ptr.type))
 
                     val modelPtr = Z3Unlogic.undo(model.evaluate(ptrExpr.expr, true))
                     val modelStartV = Z3Unlogic.undo(model.evaluate(startV.expr, true))
@@ -208,11 +211,11 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                     memories.getValue(memspace).second[modelPtr] = modelEndV
 
                     if (ptr.type is KexArray) {
-                        val startProp = ctx.getInitialMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, converter.Z3Type(KexInt()))
-                        val endProp = ctx.getMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, converter.Z3Type(KexInt()))
+                        val startProp = ctx.getInitialMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
+                        val endProp = ctx.getMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
 
-                        val startLength = startProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))
-                        val endLength = endProp.load<Z3ValueExpr>(ptrExpr, converter.Z3Type(KexInt()))
+                        val startLength = startProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(KexInt()))
+                        val endLength = endProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(KexInt()))
 
                         val startLengthV = Z3Unlogic.undo(model.evaluate(startLength.expr, true))
                         val endLengthV = Z3Unlogic.undo(model.evaluate(endLength.expr, true))

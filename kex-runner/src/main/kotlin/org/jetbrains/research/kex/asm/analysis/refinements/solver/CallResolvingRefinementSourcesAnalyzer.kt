@@ -39,7 +39,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
             log.debug(arg)
             val result = FixpointSolver(methodAnalyzer.cm).query(
                     {
-//                        it.dumpSolverArguments(arg, debug = true)
+                        it.dumpSolverArguments(arg, debug = true)
                         MemoryUtils.verifyVersions(arg.state)
                         mkFixpointQueryV2(arg.state, arg.sources, arg.normals, arg.ignoredCalls)
                     },

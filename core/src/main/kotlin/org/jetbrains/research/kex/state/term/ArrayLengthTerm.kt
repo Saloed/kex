@@ -38,6 +38,8 @@ class ArrayLengthTerm(
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
 
+    override fun toString(): String = "$name #${memoryPrint()}"
+
     companion object {
         const val ARRAY_LENGTH_MEMORY_NAME = "__ARRAY_LENGTH__"
     }

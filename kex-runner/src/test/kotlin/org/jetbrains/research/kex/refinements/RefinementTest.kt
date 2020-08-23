@@ -15,6 +15,7 @@ import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.z3.Z3Solver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
 import org.jetbrains.research.kfg.ir.Class
@@ -23,6 +24,7 @@ import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.NullType
 import org.jetbrains.research.kfg.visitor.executePipeline
 import org.junit.jupiter.api.TestInstance
+import java.io.File
 import java.net.URLClassLoader
 import kotlin.test.assertEquals
 
@@ -70,6 +72,8 @@ abstract class RefinementTest(
         }
     }
 
+    fun PredicateState.withMemoryVersions() = MemoryVersioner().apply(this)
+
     private fun assertPredicateStateEquals(expected: PredicateState, actual: PredicateState) {
         if (expected == actual) return
         val solver = Z3Solver(cm.type)
@@ -115,6 +119,8 @@ abstract class RefinementTest(
             val resource = RefinementTest::class.java.getResource(resourceName)
             val resourceContent = resource.readText()
             val ps = KexSerializer(cm).fromJson<PredicateState>(resourceContent)
+            val serialized = KexSerializer(cm).toJson(ps.withMemoryVersions())
+            File(resource.file).writeText(serialized)
             values.add(Refinement.create(criteria, ps))
         }
 

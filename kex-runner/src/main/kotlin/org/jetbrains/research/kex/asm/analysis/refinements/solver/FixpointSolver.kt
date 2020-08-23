@@ -57,9 +57,9 @@ class FixpointSolver(val cm: ClassManager) {
         val errorDump = Files.createTempFile(failDirPath, "ps-", ".json").toFile()
         errorDump.writeText(serialized)
         val message = "Arguments saved to file ${errorDump.path}"
+        Paths.get(failDir, "last-fail.json").toFile().writeText(serialized)
         if (!debug) {
             log.error(message)
-            Paths.get(failDir, "last-fail.json").toFile().writeText(serialized)
         } else {
             log.debug(message)
         }

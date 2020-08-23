@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3
 
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.NewObjectIdentifier
 import java.util.concurrent.atomic.AtomicInteger
@@ -36,6 +37,10 @@ class Z3Context : Z3SMTContext {
         fun memoryName(descriptor: MemoryDescriptor, version: MemoryVersion) = "${version.machineName}__${descriptor.machineName}"
 
         fun create(factory: ExprFactory) = Z3Context(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
+        fun createInitialized(factory: ExprFactory, vararg states: PredicateState): Z3Context {
+            val memoryAccess = states.flatMap { MemoryUtils.collectMemoryAccesses(it) }
+            return create(factory).apply { initialize(memoryAccess) }
+        }
     }
 
     val factory: ExprFactory
@@ -85,33 +90,34 @@ class Z3Context : Z3SMTContext {
     )
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
+    fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KexType): VersionedMemory {
         val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, MemoryAccessScope.RootScope)
-        return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), type) }
+        return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), Z3ExprFactory.getType(type)) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun getMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KClass<out ValueExpr>): VersionedMemory {
+    fun getMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KexType): VersionedMemory {
         val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, MemoryAccessScope.RootScope)
         return activeMemories.getOrElse(descriptor) { getInitialMemory(memoryType, memoryName, memorySpace, type) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, type)
+    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, Z3ExprFactory.getType(type))
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KClass<out ValueExpr>) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, type))
+    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, Z3ExprFactory.getType(type)))
 
-    fun initialize(memoryAccess: List<MemoryAccess<*>>, converter: Z3Converter) = memoryAccess
+    fun initialize(memoryAccess: List<MemoryAccess<*>>) = memoryAccess
             .groupBy { it.descriptor() }
             .mapValues { (_, v) -> v.first() }
             .forEach { (_, memoryAccess) ->
-                val memoryType = converter.Z3Type(memoryAccess.memoryValueType)
+                val memoryType = Z3ExprFactory.getType(memoryAccess.memoryValueType)
                 initialMemories[memoryAccess.descriptor()] = emptyMemory(memoryAccess.descriptor(), MemoryVersion.initial(), memoryType)
             }
 
-    fun resetActiveMemory() {
+    fun resetMemory() {
         activeMemories = initialMemories.toMutableMap()
+        archiveMemories.clear()
     }
 
     fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemory(memoryAccess).load<T>(ptr, type)
@@ -170,8 +176,7 @@ class Z3Context : Z3SMTContext {
         val activeMemory = activeMemories[descriptor]
         if (activeMemory != null && activeMemory.version == version) return activeMemory
         val versionedDescriptor = VersionedMemoryDescriptor(descriptor, version)
-        val archiveMemory = archiveMemories[versionedDescriptor]
-                ?: error("Memory is not initialized for $descriptor")
+        val archiveMemory = archiveMemories[versionedDescriptor] ?: error("Memory is not initialized for $descriptor")
         check(archiveMemory.version == version) { "Try to get memories with different versions" }
         return archiveMemory
     }

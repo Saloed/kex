@@ -43,4 +43,5 @@ class FieldLoadTerm(
 
     override fun hashCode() = defaultHashCode(super.hashCode(), memoryHash())
     override fun equals(other: Any?) = super.equals(other) && memoryEquals(other)
+    override fun toString(): String = "$name #${memoryPrint()}"
 }
