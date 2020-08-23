@@ -1,3 +1,4 @@
+#parse("header.vm")
 #parse("definitions.vm")
 import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTContext
 

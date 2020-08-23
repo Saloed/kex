@@ -7,10 +7,7 @@ import org.jetbrains.research.kex.state.predicate.NewObjectIdentifier
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
-typealias ExprFactory = Z3ExprFactory
-typealias ValueExpr = Z3ValueExpr
-
-data class VersionedMemory(val memory: Memory_, val version: MemoryVersion, val type: KClass<out ValueExpr>) {
+data class VersionedMemory(val memory: Memory_<Ptr_, Dynamic_>, val version: MemoryVersion, val type: KClass<out Dynamic_>) {
     @Suppress("UNUSED_PARAMETER")
     fun merge(name: String, cases: List<Pair<Bool_, VersionedMemory>>): VersionedMemory {
         check(cases.all { it.second.type == type }) { "Try to merge memories with different element types" }
@@ -19,10 +16,10 @@ data class VersionedMemory(val memory: Memory_, val version: MemoryVersion, val 
         return VersionedMemory(Memory_.merge(memory, memories), mergedVersion, type)
     }
 
-    fun <T : ValueExpr> load(ptr: Ptr_, type: KClass<out ValueExpr>) = memory.load<T>(ptr, type)
-    fun <T : Dynamic_> store(index: Ptr_, element: T, type: KClass<out ValueExpr>) = VersionedMemory(memory.store(index, element), version.increaseSubversion(), type)
+    fun <T : Dynamic_> load(ptr: Ptr_, type: KClass<out Dynamic_>) = memory.load<T>(ptr, type)
+    fun <T : Dynamic_> store(index: Ptr_, element: T, type: KClass<out Dynamic_>) = VersionedMemory(memory.store(index, element), version.increaseSubversion(), type)
     operator fun get(index: Ptr_) = memory[index]
-    operator fun <T : Dynamic_> set(index: Ptr_, element: T, type: KClass<out ValueExpr>) = store(index, element, type)
+    operator fun <T : Dynamic_> set(index: Ptr_, element: T, type: KClass<out Dynamic_>) = store(index, element, type)
 }
 
 internal data class VersionedMemoryDescriptor(val descriptor: MemoryDescriptor, val version: MemoryVersion)
@@ -36,14 +33,14 @@ class Z3Context : Z3SMTContext {
 
         fun memoryName(descriptor: MemoryDescriptor, version: MemoryVersion) = "${version.machineName}__${descriptor.machineName}"
 
-        fun create(factory: ExprFactory) = Z3Context(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
-        fun createInitialized(factory: ExprFactory, vararg states: PredicateState): Z3Context {
+        fun create(factory: ExprFactory_) = Context_(factory, BASE_LOCAL_PTR, BASE_STATIC_PTR)
+        fun createInitialized(factory: ExprFactory_, vararg states: PredicateState): Context_ {
             val memoryAccess = states.flatMap { MemoryUtils.collectMemoryAccesses(it) }
             return create(factory).apply { initialize(memoryAccess) }
         }
     }
 
-    val factory: ExprFactory
+    val factory: ExprFactory_
     private val localPointer: AtomicInteger
     private val localObjPointers: MutableMap<NewObjectIdentifier, Int>
     private val localTypes: MutableMap<Int, KexType>
@@ -56,7 +53,7 @@ class Z3Context : Z3SMTContext {
     private var activeMemories: MutableMap<MemoryDescriptor, VersionedMemory>
     private var archiveMemories: MutableMap<VersionedMemoryDescriptor, VersionedMemory>
 
-    private constructor(factory: ExprFactory,
+    private constructor(factory: ExprFactory_,
                         activeMemories: MutableMap<MemoryDescriptor, VersionedMemory>,
                         initialMemories: MutableMap<MemoryDescriptor, VersionedMemory>,
                         archiveMemories: MutableMap<VersionedMemoryDescriptor, VersionedMemory>,
@@ -81,7 +78,7 @@ class Z3Context : Z3SMTContext {
         this.typeMap = typeMap
     }
 
-    constructor(factory: ExprFactory, localPointer: Int, staticPointer: Int)
+    constructor(factory: ExprFactory_, localPointer: Int, staticPointer: Int)
             : this(factory,
             hashMapOf(), hashMapOf(), hashMapOf(),
             AtomicInteger(localPointer), AtomicInteger(staticPointer),
@@ -92,7 +89,7 @@ class Z3Context : Z3SMTContext {
     @Deprecated("Access memory without memory access descriptor is deprecated")
     fun getInitialMemory(memoryType: MemoryType, memoryName: String, memorySpace: Int, type: KexType): VersionedMemory {
         val descriptor = MemoryDescriptor(memoryType, memoryName, memorySpace, MemoryAccessScope.RootScope)
-        return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), Z3ExprFactory.getType(type)) }
+        return initialMemories.getOrElse(descriptor) { emptyMemory(descriptor, MemoryVersion.initial(), ExprFactory_.getType(type)) }
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
@@ -102,16 +99,16 @@ class Z3Context : Z3SMTContext {
     }
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, Z3ExprFactory.getType(type))
+    fun <T : Dynamic_> readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = getMemory(memoryDescriptor, memoryVersion).load<T>(ptr, ExprFactory_.getType(type))
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, Z3ExprFactory.getType(type)))
+    fun <T : Dynamic_> writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, ExprFactory_.getType(type)))
 
     fun initialize(memoryAccess: List<MemoryAccess<*>>) = memoryAccess
             .groupBy { it.descriptor() }
             .mapValues { (_, v) -> v.first() }
             .forEach { (_, memoryAccess) ->
-                val memoryType = Z3ExprFactory.getType(memoryAccess.memoryValueType)
+                val memoryType = ExprFactory_.getType(memoryAccess.memoryValueType)
                 initialMemories[memoryAccess.descriptor()] = emptyMemory(memoryAccess.descriptor(), MemoryVersion.initial(), memoryType)
             }
 
@@ -120,8 +117,8 @@ class Z3Context : Z3SMTContext {
         archiveMemories.clear()
     }
 
-    fun <T : ValueExpr> readMemory(ptr: Ptr_, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = getMemory(memoryAccess).load<T>(ptr, type)
-    fun <T : ValueExpr> writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess<*>, type: KClass<out ValueExpr>) = setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
+    fun <T : Dynamic_> readMemory(ptr: Ptr_, memoryAccess: MemoryAccess<*>, type: KClass<out Dynamic_>) = getMemory(memoryAccess).load<T>(ptr, type)
+    fun <T : Dynamic_> writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess<*>, type: KClass<out Dynamic_>) = setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
 
     fun getLocalPtr(identifier: NewObjectIdentifier, size: Int): Ptr_ {
         val ptr = localObjPointers.getOrPut(identifier) { localPointer.getAndAdd(size) }
@@ -144,7 +141,7 @@ class Z3Context : Z3SMTContext {
     fun getLocals() = localObjPointers.toMap()
     fun getStatics() = staticObjPointers.toMap()
 
-    fun splitMemory() = Z3Context(factory,
+    fun splitMemory() = Context_(factory,
             activeMemories.toMutableMap(), initialMemories, archiveMemories,
             localPointer, staticPointer, localObjPointers, staticObjPointers,
             localTypes, staticTypes, typeIndex, typeMap)
@@ -153,7 +150,7 @@ class Z3Context : Z3SMTContext {
             .mapValues { (descriptor, memory) -> emptyMemory(descriptor, version, memory.type) }
             .forEach { (descriptor, newMemory) -> setMemory(descriptor, version, newMemory) }
 
-    fun mergeMemory(name: String, contexts: Map<Bool_, Z3Context>) {
+    fun mergeMemory(name: String, contexts: Map<Bool_, Context_>) {
         check(contexts.values.all { it.activeMemories.keys == activeMemories.keys }) { "Inconsistent memory keys in merge" }
         activeMemories = activeMemories.mapValues { (descriptor, defaultMemory) ->
             val alternatives = contexts.map { (condition, ctx) -> condition to ctx.activeMemories.getValue(descriptor) }
@@ -162,7 +159,7 @@ class Z3Context : Z3SMTContext {
         }.toMutableMap()
     }
 
-    private fun emptyMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out ValueExpr>): VersionedMemory {
+    private fun emptyMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out Dynamic_>): VersionedMemory {
         val memoryName = memoryName(descriptor, version)
         val memory = factory.makeEmptyMemory(memoryName, type)
         return VersionedMemory(memory, version, type)

@@ -1,35 +1,39 @@
+#parse("header.vm")
 #parse("definitions.vm")
-import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTMemory
 import kotlin.math.min
 import kotlin.reflect.KClass
 
-private val engine = ${solver}Engine
-
-#set($self = "${Memory}")
-class $self< in Index : $Bitvector, Element : ${valexpr} >(val ctx: ContextWithIntSortSizeInfo, val type: KClass< out Element >, val inner: ${Array}< Element, Index >) : Z3SMTMemory() {
-    fun < T : ${valexpr}> load(index: Index, type: KClass< out Element >) = ${valexpr}.forceCast(inner.load(index), type) as T
-    fun store(index: Index, element: Element): $self< Index, Element> = $self(ctx, type, inner.store(index, element))
+class ${Memory}< in Index : PtrBase_, Element : Dynamic_ >(val ctx: ContextWithIntSortSizeInfo, val type: KClass< out Element >, val inner: Array_< Element, Index >) : ${SMTMemory}() {
+    fun < T : Dynamic_> load(index: Index, type: KClass< out Element >) = Dynamic_.forceCast(inner.load(index), type) as T
+    fun store(index: Index, element: Element): Memory_< Index, Element> = Memory_(ctx, type, inner.store(index, element))
     operator fun set(index: Index, value: Element) = store(index, value)
-    operator fun get(index: Index): Element = ${valexpr}.forceCast(inner[index], type) as Element
+    operator fun get(index: Index): Element = Dynamic_.forceCast(inner[index], type) as Element
+
+    override fun hashCode(): Int = defaultHashCode(type, inner)
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Memory_< *, * >) return false
+        return type == other.type && inner == other.inner
+    }
 
     companion object {
-        inline fun < reified Index : $Bitvector, Element : ${valexpr}> makeDefault(ctx: ContextWithIntSortSizeInfo, name: String, default: Element, type: KClass< out Element >): $self< Index, Element > {
-            val array = ${Array}.makeDefault< Element, Index>(ctx, name, default)
-            return $self(ctx, type, array)
+        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeDefault(ctx: ContextWithIntSortSizeInfo, name: String, default: Element, type: KClass< out Element >): Memory_< Index, Element > {
+            val array = Array_.makeDefault< Element, Index>(ctx, name, default)
+            return Memory_(ctx, type, array)
         }
 
-        inline fun < reified Index : $Bitvector, Element : ${valexpr}> makeFree(ctx: ContextWithIntSortSizeInfo, name: String, type: KClass< out Element >): $self< Index, Element> {
-            val elSort = ${valexpr}.getStaticSort(ctx, type)
-            val idxSort = ${valexpr}.getStaticSort< Index>(ctx)
-            val array = ${Array}.makeFree< Element, Index>(ctx, name, elSort, idxSort)
-            return $self(ctx, type, array)
+        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeFree(ctx: ContextWithIntSortSizeInfo, name: String, type: KClass< out Element >): Memory_< Index, Element> {
+            val elSort = Dynamic_.getStaticSort(ctx, type)
+            val idxSort = Dynamic_.getStaticSort< Index>(ctx)
+            val array = Array_.makeFree< Element, Index>(ctx, name, elSort, idxSort)
+            return Memory_(ctx, type, array)
         }
 
-        fun < Index : $Bitvector, Element : ${valexpr}> merge(default: $self< Index, Element>, cases: List< Pair< $Bool, $self< Index, Element>>>): $self< Index, Element> {
+        fun < Index : PtrBase_, Element : Dynamic_> merge(default: Memory_< Index, Element>, cases: List< Pair< Bool_, Memory_< Index, Element>>>): Memory_< Index, Element> {
             check(cases.all { it.second.type == default.type }) { "Try to merge memories with different element types" }
             val inners = cases.map { it.first to it.second.inner }
-            val newArray = ${Array}.merge(default.inner, inners)
-            return $self(default.ctx, default.type, newArray)
+            val newArray = Array_.merge(default.inner, inners)
+            return Memory_(default.ctx, default.type, newArray)
         }
     }
 }

@@ -1,0 +1,32 @@
+#parse("header.vm")
+#parse("definitions.vm")
+import ${importPackage}.*
+
+typealias SolverContext_ = $context
+typealias SolverExpr_ = $expr
+typealias SolverSort_ = $sort
+
+typealias Dynamic_ = ${valexpr}
+
+typealias Bool_ = ${Bool}
+typealias Integral_ = ${Bitvector}
+typealias Int_ = ${Bitvector32}
+typealias Long_ = ${Bitvector64}
+typealias Float_ = ${Float}
+typealias Double_ = ${Double}
+
+typealias Short_ = Int_
+typealias Char_ = Int_
+
+typealias PtrBase_ = Integral_
+typealias Ptr_ = Int_
+typealias Word_ = Int_
+typealias DWord_ = Long_
+
+typealias Array_< Element, Index > = ${Array}< Element, Index >
+typealias Memory_< I, E > = ${Memory}< I, E >
+
+typealias ExprFactory_ = ${Factory}
+typealias Converter_ = ${Converter}
+typealias Context_ = ${Context}
+typealias Engine_ = ${Engine}

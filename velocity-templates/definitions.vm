@@ -1,13 +1,3 @@
-package ${packageName}
-
-import ${importPackage}.*
-import org.jetbrains.research.kex.ktype.*
-import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}Engine
-import org.jetbrains.research.kex.smt.SMTEngine
-import com.abdullin.kthelper.defaultHashCode
-import com.abdullin.kthelper.logging.*
-import com.abdullin.kthelper.assert.*
-
 #set($valexpr = "${solver}ValueExpr")
 #set($Bool = "${solver}Bool")
 #set($Bitvector = "${solver}BV")
@@ -17,8 +7,12 @@ import com.abdullin.kthelper.assert.*
 #set($Double = "${solver}Double")
 #set($Array = "${solver}Array")
 #set($Memory = "${solver}Memory")
-
-#set($exprClasses = [$Bool, $Bitvector32, $Bitvector64, $Bitvector, $Float, $Double])
-#set($numClasses = [$Bitvector32, $Bitvector64, $Bitvector, $Float, $Double])
-
-#set($factory = "${solver}ExprFactory")
+#set($Factory = "${solver}ExprFactory")
+#set($Converter = "${solver}Converter")
+#set($Context = "${solver}Context")
+#set($Engine = "${solver}Engine")
+#set($SMTMemory = "${solver}SMTMemory")
+#set($SMTFactory = "${solver}SMTExprFactory")
+#set($SMTConverter = "${solver}SMTConverter")
+#set($SMTContext = "${solver}SMTContext")
+#set($SMTvalexpr = "${solver}SMTExpr")

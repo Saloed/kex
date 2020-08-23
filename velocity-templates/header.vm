@@ -1,0 +1,6 @@
+package ${packageName}
+
+import org.jetbrains.research.kex.ktype.*
+import com.abdullin.kthelper.defaultHashCode
+import com.abdullin.kthelper.logging.*
+import com.abdullin.kthelper.assert.*

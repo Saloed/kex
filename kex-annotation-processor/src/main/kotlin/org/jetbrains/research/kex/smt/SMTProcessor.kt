@@ -15,6 +15,7 @@ import kotlin.reflect.KClass
 
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 @SupportedAnnotationTypes(
+        "org.jetbrains.research.kex.smt.SMTDefinitions",
         "org.jetbrains.research.kex.smt.SMTExpr",
         "org.jetbrains.research.kex.smt.SMTMemory",
         "org.jetbrains.research.kex.smt.SMTExprFactory",
@@ -37,6 +38,9 @@ class SMTProcessor : KexProcessor() {
 
     override fun process(annotations: MutableSet<out TypeElement>?, roundEnv: RoundEnvironment?): Boolean {
         roundEnv?.apply {
+            getElementsAnnotatedWith(SMTDefinitions::class.java)?.forEach {
+                processAnnotation(it, SMTDefinitions::class, "Definitions")
+            }
             getElementsAnnotatedWith(SMTExpr::class.java)?.forEach {
                 processAnnotation(it, SMTExpr::class, "Expr")
             }

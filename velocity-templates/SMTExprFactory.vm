@@ -1,38 +1,37 @@
+#parse("header.vm")
 #parse("definitions.vm")
-import org.jetbrains.research.kex.smt.${solver.toLowerCase()}.${solver}SMTExprFactory
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.type.ClassType
 import org.jetbrains.research.kfg.type.TypeFactory
 import kotlin.reflect.KClass
 
-typealias Bool_ = $Bool
-typealias Ptr_ = $Bitvector32
-typealias Short_ = $Bitvector32
-typealias Char_ = $Bitvector32
-typealias Int_ = $Bitvector32
-typealias Long_ = $Bitvector64
-typealias Float_ = $Float
-typealias Double_ = $Double
-typealias Word_ = $Bitvector32
-typealias DWord_ = $Bitvector64
-typealias Dynamic_ = $valexpr
-typealias Memory_ = $Memory< Ptr_, Dynamic_ >
-
 enum class TypeSize (val int: Int) {
     WORD(1), DWORD(2);
 }
 
-open class $factory : ${solver}SMTExprFactory() {
+open class ${Factory} : ${SMTFactory}() {
     companion object {
 
         fun getTypeSize(type: KexType) = when (type.bitsize) {
             KexType.WORD -> TypeSize.WORD
             KexType.DWORD -> TypeSize.DWORD
-            else -> unreachable { log.error("Unknown type bitsize ${type.bitsize}") }
+            else -> unreachable { log.error("Unknown type bitsize ${ type.bitsize }") }
         }
+
+        fun getType(type: KexType) = when (type) {
+            is KexLong -> Long_::class
+            is KexBool -> Bool_::class
+            is KexIntegral -> Int_::class
+            is KexFloat -> Float_::class
+            is KexDouble -> Double_::class
+            is KexClass -> Ptr_::class
+            is KexArray -> Ptr_::class
+            else -> unreachable { log.error("Unable to get ${solver} type for ${ type }") }
+        }
+
     }
 
-    open val ctx = $context()
+    open val ctx = SolverContext_()
 
 #macro(generateMakes $type $basetype)
     #set($underlined = "${type}_")
@@ -61,9 +60,9 @@ open class $factory : ${solver}SMTExprFactory() {
 
 #generateMakes("Double", "Double")
 
-    inline fun < reified  Element: $valexpr > makeEmptyMemory(id: String, type: KClass< out Element >) = Memory_.makeFree< Ptr_, Element >(ctx, id, type)
+    inline fun < reified  Element: Dynamic_ > makeEmptyMemory(id: String, type: KClass< out Element >) = Memory_.makeFree< Ptr_, Element >(ctx, id, type)
     //            makeDefaultMemory(id, 0xFF)
-    inline fun < reified  Element: $valexpr > makeDefaultMemory(id: String, default: Int, type: KClass< out Element >) =
+    inline fun < reified  Element: Dynamic_ > makeDefaultMemory(id: String, default: Int, type: KClass< out Element >) =
         Memory_.makeDefault< Ptr_, Element >(ctx, id, makeIntConst(default) as Element, type)
 
 #set($types = ["Bool", "Short", "Char", "Int", "Long", "Float", "Double"])
