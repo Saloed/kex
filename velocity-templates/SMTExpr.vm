@@ -99,7 +99,7 @@ open class ${valexpr} : ${SMTvalexpr} {
 #* @vtlvariable name="opcode" type="java.lang.String" *#
     infix fun ${opcode.toLowerCase()}(other: Dynamic_): Dynamic_ = when {
 #foreach($class in $numClasses)
-            this is $class && other is $class -> ${opcode.toLowerCase()}(other)
+        this is $class && other is $class -> ${opcode.toLowerCase()}(other)
 #end
         else -> unreachable { log.error("Invalid operands of `${opcode.toLowerCase()}`: ${ this } and ${ other }") }
     }
@@ -116,7 +116,7 @@ open class ${valexpr} : ${SMTvalexpr} {
 #foreach($opcode in $opcodes)
     infix fun ${opcode.toLowerCase()}(other: Dynamic_): Bool_ = when {
     #foreach($class in $exprClasses)
-    this is $class && other is $class -> ${opcode.toLowerCase()}(other)
+        this is $class && other is $class -> ${opcode.toLowerCase()}(other)
     #end
         else -> unreachable { log.error("Invalid operands of `${opcode.toLowerCase()}`: ${ this } and ${ other }") }
     }
@@ -124,12 +124,12 @@ open class ${valexpr} : ${SMTvalexpr} {
 
 #set($opcodes = ["GT", "GE", "LT", "LE"])
 #foreach($opcode in $opcodes)
-infix fun ${opcode.toLowerCase()}(other: Dynamic_): Bool_ = when {
+    infix fun ${opcode.toLowerCase()}(other: Dynamic_): Bool_ = when {
     #foreach($class in $numClasses)
-    this is $class && other is $class -> ${opcode.toLowerCase()}(other)
+        this is $class && other is $class -> ${opcode.toLowerCase()}(other)
     #end
-else -> unreachable { log.error("Invalid operands of `${opcode.toLowerCase()}`: ${ this } and ${ other }") }
-}
+        else -> unreachable { log.error("Invalid operands of `${opcode.toLowerCase()}`: ${ this } and ${ other }") }
+    }
 #end
 
 #set($opcodes = ["AND", "OR", "XOR"])
@@ -420,24 +420,24 @@ fun Dynamic_.toBV(): Integral_ {
     return Integral_(ctx, newExpr, axiom)
 }
 
-fun Dynamic_.toFloat(): $Float {
+fun Dynamic_.toFloat(): Float_ {
     val newExpr = when {
         Engine_.isBV(ctx, expr) -> Engine_.bv2float(ctx, expr, Engine_.getFloatSort(ctx))
         Engine_.isFloat(ctx, expr) -> this.expr
         Engine_.isDouble(ctx, expr) -> Engine_.float2float(ctx, expr, Engine_.getFloatSort(ctx))
         else -> unreachable { log.debug("Unexpected SMT expr type in cast") }
     }
-    return $Float(ctx, newExpr, axiom)
+    return Float_(ctx, newExpr, axiom)
 }
 
-fun Dynamic_.toDouble(): $Double {
+fun Dynamic_.toDouble(): Double_ {
     val newExpr = when {
         Engine_.isBV(ctx, expr) -> Engine_.bv2float(ctx, expr, Engine_.getDoubleSort(ctx))
         Engine_.isFloat(ctx, expr) -> Engine_.float2float(ctx, expr, Engine_.getDoubleSort(ctx))
         Engine_.isDouble(ctx, expr) -> this.expr
         else -> unreachable { log.debug("Unexpected SMT expr type in cast") }
     }
-    return $Double(ctx, newExpr, axiom)
+    return Double_(ctx, newExpr, axiom)
 }
 
 class Ifer {
