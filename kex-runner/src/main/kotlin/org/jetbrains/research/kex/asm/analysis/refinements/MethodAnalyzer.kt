@@ -14,7 +14,7 @@ import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import ru.spbstu.ktuples.zip
 
-abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, val refinementsManager: MethodRefinements, val method: Method) {
+abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnalysis, val refinementsManager: MethodRefinements, val method: Method): RefinementProvider {
 
     val CallPredicate.calledMethod: Method
         get() = (call as CallTerm).method
@@ -24,7 +24,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     abstract fun analyze(): Refinements
 
-    open fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
+    override fun findRefinement(method: Method): Refinements = refinementsManager.getOrComputeRefinement(method)
 
     open fun inlineRefinements(ignoredCalls: List<CallInst> = emptyList()): Pair<PredicateState, RefinementSources> {
         val calls = MethodCallCollector.calls(cm, method).filterNot { it in ignoredCalls }
