@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryUtils
@@ -40,8 +41,10 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         declarations.replaceAll { declaration ->
             when (declaration) {
                 is Declaration.Memory -> {
-                    val original = memoryAccess[declaration.descriptor to declaration.version]
-                            ?: error("No such memory access in states")
+                    val original = memoryAccess.getOrElse(declaration.descriptor to declaration.version) {
+                        log.warn("No such memory access in states $declaration")
+                        declaration.descriptor to declaration.version
+                    }
                     Declaration.Memory(original.first, original.second, declaration.info)
                 }
                 else -> declaration
