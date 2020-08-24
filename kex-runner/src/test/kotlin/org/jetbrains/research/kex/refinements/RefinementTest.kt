@@ -118,8 +118,6 @@ abstract class RefinementTest(
             val resource = RefinementTest::class.java.getResource(resourceName)
             val resourceContent = resource.readText()
             val ps = KexSerializer(cm).fromJson<PredicateState>(resourceContent)
-//            val serialized = KexSerializer(cm).toJson(ps.withMemoryVersions())
-//            File(resource.file).writeText(serialized)
             values.add(Refinement.create(criteria, ps))
         }
 
