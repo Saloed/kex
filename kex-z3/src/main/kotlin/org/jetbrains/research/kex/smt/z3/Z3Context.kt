@@ -142,7 +142,7 @@ class Z3Context : Z3SMTContext {
     fun getStatics() = staticObjPointers.toMap()
 
     fun splitMemory() = Context_(factory,
-            activeMemories.toMutableMap(), initialMemories, archiveMemories,
+            activeMemories.toMutableMap(), initialMemories, archiveMemories.toMutableMap(),
             localPointer, staticPointer, localObjPointers, staticObjPointers,
             localTypes, staticTypes, typeIndex, typeMap)
 
@@ -153,10 +153,15 @@ class Z3Context : Z3SMTContext {
     fun mergeMemory(name: String, contexts: Map<Bool_, Context_>) {
         check(contexts.values.all { it.activeMemories.keys == activeMemories.keys }) { "Inconsistent memory keys in merge" }
         activeMemories = activeMemories.mapValues { (descriptor, defaultMemory) ->
-            val alternatives = contexts.map { (condition, ctx) -> condition to ctx.activeMemories.getValue(descriptor) }
-            (alternatives.map { it.second } + defaultMemory).forEach { updateArchive(descriptor, it) }
+            val alternatives = contexts.map { (condition, ctx) ->
+                val memory = ctx.activeMemories.getValue(descriptor)
+                ctx.updateArchive(descriptor, memory)
+                condition to memory
+            }
+            updateArchive(descriptor, defaultMemory)
             defaultMemory.merge(name, alternatives)
         }.toMutableMap()
+        mergeArchiveMemories(contexts)
     }
 
     private fun emptyMemory(descriptor: MemoryDescriptor, version: MemoryVersion, type: KClass<out Dynamic_>): VersionedMemory {
@@ -192,4 +197,28 @@ class Z3Context : Z3SMTContext {
         check(oldArchiveRecord == memory) { "Incorrect archive memory write" }
     }
 
+    private fun mergeArchiveMemories(contexts: Map<Bool_, Context_>) {
+        val enumeratedContexts = contexts.entries.toList()
+        val otherArchives = enumeratedContexts.mapIndexed { index, entry -> entry.value.archiveMemories to index }
+        archiveMemories = (otherArchives + (archiveMemories to -1))
+                .flatMap { (archive, ctxId) -> archive.entries.map { it to ctxId } }
+                .groupBy({ it.first.key }, { it.first.value to it.second })
+                .mapValues { (descriptor, records) -> mergeArchiveRecords(descriptor, records, enumeratedContexts) }
+                .toMutableMap()
+    }
+
+    private fun mergeArchiveRecords(descriptor: VersionedMemoryDescriptor, records: List<Pair<VersionedMemory, Int>>, enumeratedContexts: List<Map.Entry<Bool_, Context_>>): VersionedMemory {
+        val memoryPrototype = records.first().first
+        if (records.all { it.first == memoryPrototype }) return memoryPrototype
+        val conditionedRecords = records.filterNot { it.second == -1 }.map { enumeratedContexts[it.second].key to it.first }
+        val defaultRecord = records.find { it.second == -1 }?.first ?: archiveMergeError(descriptor, memoryPrototype)
+        return defaultRecord.merge("archive_merge", conditionedRecords)
+    }
+
+    private fun archiveMergeError(descriptor: VersionedMemoryDescriptor, memoryPrototype: VersionedMemory): VersionedMemory {
+        val memoryName = memoryName(descriptor.descriptor, descriptor.version)
+        val errorMemoryName = "archive_merge_error_\$_$memoryName"
+        val memory = factory.makeEmptyMemory(errorMemoryName, memoryPrototype.type)
+        return VersionedMemory(memory, descriptor.version, memoryPrototype.type)
+    }
 }
