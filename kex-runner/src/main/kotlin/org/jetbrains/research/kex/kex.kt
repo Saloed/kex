@@ -24,6 +24,7 @@ import org.jetbrains.research.kex.smt.Checker
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.state.transformer.executeModel
 import org.jetbrains.research.kex.trace.`object`.ObjectTraceManager
+import org.jetbrains.research.kex.util.getRuntime
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Jar
 import org.jetbrains.research.kfg.KfgConfig
@@ -67,7 +68,7 @@ class Kex(args: Array<String>) {
     }
 
     private sealed class AnalysisLevel {
-        class PACKAGE : AnalysisLevel()
+        object PACKAGE : AnalysisLevel()
         data class CLASS(val klass: String) : AnalysisLevel()
         data class METHOD(val klass: String, val method: String) : AnalysisLevel()
     }
@@ -85,11 +86,11 @@ class Kex(args: Array<String>) {
         val analysisLevel = when {
             targetName == null -> {
                 `package` = Package.defaultPackage
-                AnalysisLevel.PACKAGE()
+                AnalysisLevel.PACKAGE
             }
             targetName.matches(Regex("\\w+(\\.\\w+)*\\.\\*")) -> {
                 `package` = Package.parse(targetName)
-                AnalysisLevel.PACKAGE()
+                AnalysisLevel.PACKAGE
             }
             targetName.matches(Regex("\\w+(\\.\\w+)*\\.[a-zA-Z0-9\$_]+::[a-zA-Z0-9\$_]+")) -> {
                 val (klassName, methodName) = targetName.split("::")
@@ -109,12 +110,7 @@ class Kex(args: Array<String>) {
         jar = Jar(jarPath, Package.defaultPackage)
         classManager = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false))
         origManager = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = false))
-        val analysisJars = listOfNotNull(
-                jar,
-                kexConfig.getStringValue("kex", "rtPath")?.let {
-                    Jar(Paths.get(it), Package.defaultPackage)
-                }
-        )
+        val analysisJars = listOfNotNull(jar, getRuntime())
         classManager.initialize(*analysisJars.toTypedArray())
         origManager.initialize(*analysisJars.toTypedArray())
 
@@ -221,6 +217,7 @@ class Kex(args: Array<String>) {
             +MethodChecker(analysisContext, traceManager, psa)
             +cm
         }
+//        RandomDescriptorGenerator(analysisContext, `package`, psa).run()
         clearClassPath()
         val coverage = cm.totalCoverage
         log.info("Overall summary for ${cm.methodInfos.size} methods:\n" +
@@ -243,10 +240,10 @@ class Kex(args: Array<String>) {
                 "full coverage: ${String.format("%.2f", coverage.fullCoverage)}%")
     }
 
-    protected fun runPipeline(context: ExecutionContext, target: Package, init: Pipeline.() -> Unit) =
+    private fun runPipeline(context: ExecutionContext, target: Package, init: Pipeline.() -> Unit) =
             executePipeline(context.cm, target, init)
 
-    protected fun runPipeline(context: ExecutionContext, init: Pipeline.() -> Unit) = when {
+    private fun runPipeline(context: ExecutionContext, init: Pipeline.() -> Unit) = when {
         methods != null -> executePipeline(context.cm, methods!!, init)
         klass != null -> executePipeline(context.cm, klass!!, init)
         else -> executePipeline(context.cm, `package`, init)
