@@ -20,8 +20,8 @@ class BoolTypeAdapter(val types: TypeFactory) : Transformer<BoolTypeAdapter> {
         val type = predicate.type
         val loc = predicate.location
         return when {
-            lhv.type is KexBool && rhv.type is KexInt -> predicate(type, loc) { lhv equality (rhv `as` KexBool()) }
-            lhv.type is KexInt && rhv.type is KexBool -> predicate(type, loc) { lhv equality (rhv `as` KexInt()) }
+            lhv.type is KexBool && rhv.type is KexInt -> predicate(type, loc) { lhv equality (rhv primitiveAs KexBool()) }
+            lhv.type is KexInt && rhv.type is KexBool -> predicate(type, loc) { lhv equality (rhv primitiveAs KexInt()) }
             else -> predicate
         }
     }
@@ -37,15 +37,15 @@ class BoolTypeAdapter(val types: TypeFactory) : Transformer<BoolTypeAdapter> {
             term.lhv.type == term.rhv.type -> term
             isBooleanOpcode -> {
                 val lhv = when {
-                    term.lhv.type is KexBool -> term { term.lhv `as` KexInt() }
+                    term.lhv.type is KexBool -> term { term.lhv primitiveAs KexInt() }
                     term.lhv.type is KexInt -> term.lhv
-                    term.lhv.type is KexIntegral -> term { term.lhv `as` KexInt() }
+                    term.lhv.type is KexIntegral -> term { term.lhv primitiveAs KexInt() }
                     else -> unreachable { log.error("Non-boolean term in boolean binary: $term") }
                 }
                 val rhv = when {
-                    term.rhv.type is KexBool -> term { term.rhv `as` KexInt() }
+                    term.rhv.type is KexBool -> term { term.rhv primitiveAs KexInt() }
                     term.rhv.type is KexInt -> term.rhv
-                    term.rhv.type is KexIntegral -> term { term.rhv `as` KexInt() }
+                    term.rhv.type is KexIntegral -> term { term.rhv primitiveAs KexInt() }
                     else -> unreachable { log.error("Non-boolean term in boolean binary: $term") }
                 }
                 val newType = mergeTypes(types, lhv.type, rhv.type)
@@ -60,15 +60,15 @@ class BoolTypeAdapter(val types: TypeFactory) : Transformer<BoolTypeAdapter> {
         term.lhv.type is KexPointer || term.rhv.type is KexPointer -> term
         term.lhv.type is KexIntegral || term.rhv.type is KexIntegral -> {
             val lhv = when {
-                term.lhv.type is KexBool -> term { term.lhv `as` KexInt() }
+                term.lhv.type is KexBool -> term { term.lhv primitiveAs KexInt() }
                 term.lhv.type is KexInt -> term.lhv
-                term.lhv.type is KexIntegral -> term { term.lhv `as` KexInt() }
+                term.lhv.type is KexIntegral -> term { term.lhv primitiveAs KexInt() }
                 else -> unreachable { log.error("Non-boolean term in boolean binary: $term") }
             }
             val rhv = when {
-                term.rhv.type is KexBool -> term { term.rhv `as` KexInt() }
+                term.rhv.type is KexBool -> term { term.rhv primitiveAs KexInt() }
                 term.rhv.type is KexInt -> term.rhv
-                term.rhv.type is KexIntegral -> term { term.rhv `as` KexInt() }
+                term.rhv.type is KexIntegral -> term { term.rhv primitiveAs KexInt() }
                 else -> unreachable { log.error("Non-boolean term in boolean binary: $term") }
             }
             term { lhv.apply(term.opcode, rhv) }

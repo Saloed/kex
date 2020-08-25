@@ -17,7 +17,6 @@ fun Term.withMemspace(memspace: Int): Term {
             is ArrayLoadTerm -> tf.getArrayLoad(memspaced, arrayRef)
             is BinaryTerm -> tf.getBinary(memspaced, opcode, lhv, rhv)
             is CallTerm -> tf.getCall(memspaced, owner, method, instruction, arguments)
-            is CastTerm -> tf.getCast(memspaced, operand)
             is CmpTerm -> tf.getCmp(memspaced, opcode, lhv, rhv)
             is ConstStringTerm -> tf.getString(memspaced, value)
             is ConstClassTerm -> tf.getClass(memspaced, `class`)

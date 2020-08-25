@@ -249,7 +249,7 @@ class FixpointModelConverter(
         }
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
-        expr.isRealToInt -> expr.convertArgs().first().transformTerm { it `as` KexInt() }
+        expr.isRealToInt -> expr.convertArgs().first().transformTerm { it primitiveAs KexInt() }
         else -> TODO()
     }
 
@@ -272,7 +272,7 @@ class FixpointModelConverter(
         expr is RatNum -> TermWithAxiom.wrap { const(expr.numerator.int64.toDouble() / expr.denominator.int64.toDouble()) }
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
-        expr.isIntToReal -> expr.convertArgs().first().transformTerm { it `as` KexDouble() }
+        expr.isIntToReal -> expr.convertArgs().first().transformTerm { it primitiveAs KexDouble() }
         expr.isApp && (expr.funcDecl.name as? StringSymbol)?.string == "fp.to_real" -> expr.convertArgs().first()
         else -> TODO("Real: $expr")
     }
@@ -418,12 +418,17 @@ class FixpointModelConverter(
                 ?: throw IllegalStateException("No types")
         val resultFiledLoad = term { value(fieldType, "load_${cls.name}.$fieldName") }
         val axioms = fields.map {
+            val type = it.`class`.kexType
+            val tmpVar = term { value(type, "${resultFiledLoad.name}_as_${type.name}") }
             basic {
                 path {
                     owner.term.instanceOf(it.`class`, version, scope) equality const(true)
                 }
                 state {
-                    resultFiledLoad equality tf.getCast(it.`class`.kexType, owner.term).field(it.type.kexType, it.name).load().withMemoryVersion(version).withScopeInfo(scope)
+                    tmpVar.cast(owner.term, type).withMemoryVersion(version).withScopeInfo(scope)
+                }
+                state {
+                    resultFiledLoad equality tmpVar.field(it.type.kexType, it.name).load().withMemoryVersion(version).withScopeInfo(scope)
                 }
             }
         }

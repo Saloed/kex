@@ -101,27 +101,34 @@ class TypeInfoCollector(val model: SMTModel, val tf: TypeFactory) : Transformer<
                 val existingCond = typeInfo.getOrDefault(checkedType, emptyState())
                 typeInfo[checkedType] = existingCond or fullPath
             }
-            is CastTerm -> {
-                if (rhv.type !is KexClass) return super.transformEquality(predicate)
-                val newType = CastTypeInfo(rhv.type)
-                val operand = rhv.operand
-                val stub = when {
-                    condition.isEmpty() -> setOf(path { const(true) equality true })
-                    else -> condition
-                }
-
-                // we can't do anything with primary type casts
-                if (newType.type is KexIntegral || newType.type is KexReal) return predicate
-
-                val typeInfo = typeInfos.getOrPut(operand, ::mutableMapOf)
-                val existingCond = typeInfo.getOrDefault(newType, emptyState())
-                typeInfo[newType] = existingCond or stub
+            is PrimitiveCastTerm -> {
+                // never class type
             }
             is FieldLoadTerm -> copyInfos(rhv.field, predicate.lhv, condition)
             is ArrayLoadTerm -> copyInfos(rhv.arrayRef, predicate.lhv, condition)
             else -> copyInfos(rhv, predicate.lhv, condition)
         }
         return super.transformEquality(predicate)
+    }
+
+    override fun transformCast(predicate: CastPredicate): Predicate {
+        val condition = cfgt.getDominatingPaths(predicate)
+        if (predicate.operandType !is KexClass) return super.transformCast(predicate)
+        val newType = CastTypeInfo(predicate.operandType)
+        val operand = predicate.operand
+        val stub = when {
+            condition.isEmpty() -> setOf(path { const(true) equality true })
+            else -> condition
+        }
+
+        // we can't do anything with primary type casts
+        if (newType.type is KexIntegral || newType.type is KexReal) return predicate
+
+        val typeInfo = typeInfos.getOrPut(operand, ::mutableMapOf)
+        val existingCond = typeInfo.getOrDefault(newType, emptyState())
+        typeInfo[newType] = existingCond or stub
+
+        return super.transformCast(predicate)
     }
 
     override fun transformInequality(predicate: InequalityPredicate): Predicate {
@@ -165,7 +172,7 @@ class PlainTypeInfoCollector(val tf: TypeFactory) : Transformer<TypeInfoCollecto
                 val typeInfo = typeInfos.getOrPut(operand, ::mutableSetOf)
                 typeInfo += checkedType
             }
-            is CastTerm -> {
+            is PrimitiveCastTerm -> {
                 val newType = CastTypeInfo(rhv.type)
                 val operand = rhv.operand
 
@@ -177,6 +184,18 @@ class PlainTypeInfoCollector(val tf: TypeFactory) : Transformer<TypeInfoCollecto
             }
         }
         return super.transformEquality(predicate)
+    }
+
+    override fun transformCast(predicate: CastPredicate): Predicate {
+        val newType = CastTypeInfo(predicate.operandType)
+        val operand = predicate.operand
+
+        // we can't do anything with primary type casts
+        if (newType.type is KexIntegral || newType.type is KexReal) return predicate
+
+        val typeInfo = typeInfos.getOrPut(operand, ::mutableSetOf)
+        typeInfo += newType
+        return super.transformCast(predicate)
     }
 
     override fun transformInequality(predicate: InequalityPredicate): Predicate {

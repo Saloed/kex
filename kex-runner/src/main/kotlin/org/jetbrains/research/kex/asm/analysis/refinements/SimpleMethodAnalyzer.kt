@@ -9,6 +9,7 @@ import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
+import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
@@ -102,12 +103,17 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         }
     }
 
-    private fun castMethodOwnerType(method: Method, state: PredicateState, type: KexType): PredicateState {
+    private fun castMethodOwnerType(method: Method, methodState: PredicateState, type: KexType): PredicateState {
+        val newType = method.`class`.kexType
         val currentThis = term { tf.getThis(type) }
-        val castedThis = term { tf.getCast(method.`class`.kexType, currentThis) }
-        return transform(state) {
+        val castedThis = term { value(newType, "this_as_${newType.name}") }
+        val castState = state {
+            castedThis.cast(currentThis, newType)
+        }
+        val mapped =  transform(methodState) {
             +TermRemapper(mapOf(currentThis to castedThis))
         }
+        return ChainState(castState.wrap(), mapped)
     }
 
     private fun collectImplementations(cls: KexClass, method: Method): Set<Method> =

@@ -82,7 +82,7 @@ open class ${Converter}(val tf: TypeFactory) : ${SMTConverter}() {
     fun convert(negation: NegationState, ef: ExprFactory_, ctx: Context_, extractPath: Boolean = false): Bool_ =
         convert(negation.predicateState, ef, ctx).not()
 
-#set($predicates = ["ArrayStore", "Call", "Catch", "DefaultSwitch", "Inequality", "Equality", "FieldStore", "NewArray", "New", "Throw", "Constant"])
+#set($predicates = ["ArrayStore", "Call", "Catch", "DefaultSwitch", "Inequality", "Equality", "FieldStore", "NewArray", "New", "Throw", "Constant", "Cast"])
     fun convert(predicate: Predicate, ef: ExprFactory_, ctx: Context_): Bool_ = when (predicate) {
 #foreach($predicate in $predicates)
         is ${predicate}Predicate -> convert(predicate, ef, ctx)
@@ -153,7 +153,15 @@ open class ${Converter}(val tf: TypeFactory) : ${SMTConverter}() {
         return lhv eq ctx.getLocalPtr(new.identifier, size)
     }
 
-#set($terms = ["Argument", "ArrayIndex", "ArrayLength", "ArrayLoad", "Binary", "Call", "Cast", "Cmp",
+    fun convert(castPredicate: CastPredicate, ef: ExprFactory_, ctx: Context_): Bool_ {
+        val lhv = convert(castPredicate.lhv, ef, ctx) as? Ptr_ ?: unreachable { log.error("Non-ptr term as cast operand") }
+        val operand = convert(castPredicate.operand, ef, ctx)
+        val typeIndex = ctx.getTypeIdx(castPredicate.operandType)
+        ctx.writeMemory(lhv, ef.makeIntConst(typeIndex), castPredicate, Int_::class)
+        return lhv eq cast(castPredicate.operandType, operand)
+    }
+
+#set($terms = ["Argument", "ArrayIndex", "ArrayLength", "ArrayLoad", "Binary", "Call", "PrimitiveCast", "Cmp",
     "ConstBool", "ConstByte", "ConstChar", "ConstClass", "ConstDouble", "ConstFloat", "ConstInt", "ConstLong",
     "ConstShort", "ConstString", "FieldLoad", "Field", "InstanceOf", "Neg", "Null", "ReturnValue", "Value", "Undef", "LocalObject", "If"])
     fun convert(term: Term, ef: ExprFactory_, ctx: Context_): Dynamic_ = when (term) {
@@ -212,7 +220,7 @@ open class ${Converter}(val tf: TypeFactory) : ${SMTConverter}() {
     fun convert(call: CallTerm, ef: ExprFactory_, ctx: Context_): Dynamic_ =
         ef.getVarByTypeAndName(call.type, call.name)
 
-    fun convert(cast: CastTerm, ef: ExprFactory_, ctx: Context_): Dynamic_ {
+    fun convert(cast: PrimitiveCastTerm, ef: ExprFactory_, ctx: Context_): Dynamic_ {
         val op = convert(cast.operand, ef, ctx)
         return cast(cast.type, op)
     }

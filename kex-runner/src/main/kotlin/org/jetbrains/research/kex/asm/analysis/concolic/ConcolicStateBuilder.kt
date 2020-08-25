@@ -185,9 +185,8 @@ class ConcolicStateBuilder(val cm: ClassManager) {
     fun buildCastInst(inst: CastInst): List<Predicate> = listOf {
         state(inst.location) {
             val lhv = mkNewValue(inst)
-            val rhv = mkValue(inst.operand) `as` inst.type.kexType
-
-            lhv equality rhv
+            val rhv = mkValue(inst.operand)
+            lhv.cast(rhv, inst.type.kexType)
         }
     }
 

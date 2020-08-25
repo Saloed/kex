@@ -104,7 +104,7 @@ class StensgaardAA : Transformer<StensgaardAA>, AliasAnalysis, Viewable {
         return term
     }
 
-    override fun transformCastTerm(term: CastTerm): Term {
+    override fun transformPrimitiveCastTerm(term: PrimitiveCastTerm): Term {
         val ts = get(term)
         val operand = get(term.operand)
         val res = join(pointsTo(ts), pointsTo(operand))
@@ -124,6 +124,17 @@ class StensgaardAA : Transformer<StensgaardAA>, AliasAnalysis, Viewable {
         val res = join(spaces(term.type), pointsTo(ts))
         pointsTo[ts] = res
         return term
+    }
+
+    override fun transformCastPredicate(predicate: CastPredicate): Predicate {
+        if (predicate.type is PredicateType.State) nonFreeTerms.add(predicate.lhv)
+        val ls = get(predicate.lhv)
+        val rs = get(predicate.operand)
+
+        val res = join(pointsTo(ls), pointsTo(rs))
+        pointsTo[ls] = res
+        pointsTo[rs] = res
+        return predicate
     }
 
     override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {

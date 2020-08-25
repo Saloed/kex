@@ -81,9 +81,8 @@ class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
     override fun visitCastInst(inst: CastInst) {
         predicateMap[inst] = state(inst.location) {
             val lhv = value(inst)
-            val rhv = value(inst.operand) `as` inst.type.kexType
-
-            lhv equality rhv
+            val rhv = value(inst.operand)
+            lhv.cast(rhv, inst.type.kexType)
         }
     }
 

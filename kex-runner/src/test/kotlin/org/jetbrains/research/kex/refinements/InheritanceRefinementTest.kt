@@ -143,25 +143,37 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                     listOf(myList, myListB, myListB2).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
             }) + choice({
+                val argAsListA = value(myListA, "argAsListA")
                 path {
                     (argument `is` myListA) equality const(true)
                 }
+                state {
+                    argAsListA.cast(argument, myListA)
+                }
                 path {
-                    (argument `as` myListA).field(KexInt(), "size").load() equality const(0)
+                    argAsListA.field(KexInt(), "size").load() equality const(0)
                 }
             }, {
+                val argAsListB1 = value(myListB1, "argAsListB1")
                 path {
                     argument `is` myListB1 equality const(true)
                 }
+                state {
+                    argAsListB1.cast(argument, myListB1)
+                }
                 path {
-                    (argument `as` myListB1).field(KexInt(), "amount").load() equality const(0)
+                    argAsListB1.field(KexInt(), "amount").load() equality const(0)
                 }
             }, {
+                val argAsListB2 = value(myListB2, "argAsListB2")
                 path {
                     argument `is` myListB2 equality const(true)
                 }
+                state {
+                    argAsListB2.cast(argument, myListB2)
+                }
                 path {
-                    (argument `as` myListB2).field(KexInt(), "size").load() equality const(0)
+                    argAsListB2.field(KexInt(), "size").load() equality const(0)
                 }
             })
         }
@@ -172,25 +184,37 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
         refinement(IllegalArgumentException()) {
             val argument = arg(myList, 0)
             choice({
+                val argAsListA = value(myListA, "argAsListA")
                 path {
-                    argument `is` myListA equality const(true)
+                    (argument `is` myListA) equality const(true)
+                }
+                state {
+                    argAsListA.cast(argument, myListA)
                 }
                 path {
-                    (argument `as` myListA).field(KexInt(), "size").load() equality const(0)
+                    argAsListA.field(KexInt(), "size").load() equality const(0)
                 }
             }, {
+                val argAsListB1 = value(myListB1, "argAsListB1")
                 path {
                     argument `is` myListB1 equality const(true)
                 }
+                state {
+                    argAsListB1.cast(argument, myListB1)
+                }
                 path {
-                    (argument `as` myListB1).field(KexInt(), "amount").load() equality const(0)
+                    argAsListB1.field(KexInt(), "amount").load() equality const(0)
                 }
             }, {
+                val argAsListB2 = value(myListB2, "argAsListB2")
                 path {
                     argument `is` myListB2 equality const(true)
                 }
+                state {
+                    argAsListB2.cast(argument, myListB2)
+                }
                 path {
-                    (argument `as` myListB2).field(KexInt(), "size").load() equality const(0)
+                    argAsListB2.field(KexInt(), "size").load() equality const(0)
                 }
             })
         }

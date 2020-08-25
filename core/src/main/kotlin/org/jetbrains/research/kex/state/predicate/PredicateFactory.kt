@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.state.predicate
 import com.abdullin.kthelper.assert.unreachable
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.KexArray
+import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.term.ArrayIndexTerm
 import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
@@ -11,6 +12,9 @@ import org.jetbrains.research.kfg.ir.Location
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 
 object PredicateFactory {
+    fun getCast(lhv: Term, rhv: Term, rhvType: KexType, type: PredicateType = PredicateType.State(), location: Location = Location()) =
+            CastPredicate(lhv, rhv, rhvType, type, location)
+
     fun getBoundStore(ptr: Term, bound: Term, type: PredicateType = PredicateType.State(), location: Location = Location()) =
             BoundStorePredicate(ptr, bound, type, location)
 
@@ -67,6 +71,7 @@ abstract class PredicateBuilder : TermBuilder() {
 
     val pf = PredicateFactory
 
+    fun Term.cast(other: Term, type: KexType) = pf.getCast(this, other, type, this@PredicateBuilder.type, location)
 
     fun FieldTerm.store(other: Term) = pf.getFieldStore(this, other, this@PredicateBuilder.type, location)
     fun ArrayIndexTerm.store(other: Term) = pf.getArrayStore(this, other, this@PredicateBuilder.type, location)

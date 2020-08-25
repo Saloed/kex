@@ -12,7 +12,10 @@ import org.jetbrains.research.kfg.ir.value.instruction.*
 import org.jetbrains.research.kfg.type.mergeTypes
 import org.jetbrains.research.kfg.visitor.MethodVisitor
 import org.junit.jupiter.api.Assertions.assertArrayEquals
-import kotlin.test.*
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PredicateBuilderTest : KexTest() {
     val tf = TermFactory
@@ -112,10 +115,11 @@ class PredicateBuilderTest : KexTest() {
                 assertTrue(builder.predicateMap.contains(inst))
 
                 val predicate = builder.predicateMap.getValue(inst)
-                assertTrue(predicate is EqualityPredicate)
+                assertTrue(predicate is CastPredicate)
 
                 assertEquals(predicate.lhv, tf.getValue(inst))
-                assertEquals(predicate.rhv, tf.getCast(inst.type.kexType, tf.getValue(inst.operand)))
+                assertEquals(predicate.operand, tf.getValue(inst.operand))
+                assertEquals(predicate.operandType, inst.type.kexType)
             }
 
             override fun visitCmpInst(inst: CmpInst) {

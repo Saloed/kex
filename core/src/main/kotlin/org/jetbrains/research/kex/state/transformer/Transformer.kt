@@ -57,6 +57,7 @@ interface Transformer<T : Transformer<T>> {
             is FieldStorePredicate -> transformFieldStore(argument) as T
             is DefaultSwitchPredicate -> transformDefaultSwitch(argument) as T
             is BoundStorePredicate -> transformBoundStore(argument) as T
+            is CastPredicate -> transformCast(argument) as T
             else -> unreachable { log.error("No Predicate transformer for $argument") }
         }
 
@@ -84,13 +85,13 @@ interface Transformer<T : Transformer<T>> {
             is ConstBoolTerm -> transformConstBool(argument) as T
             is UndefTerm -> transformUndef(argument) as T
             is BoundTerm -> transformBound(argument) as T
-            is CastTerm -> transformCast(argument) as T
             is CallTerm -> transformCall(argument) as T
             is BinaryTerm -> transformBinary(argument) as T
             is ConstLongTerm -> transformConstLong(argument) as T
             is InstanceOfTerm -> transformInstanceOf(argument) as T
             is LocalObjectTerm -> transformLocalObject(argument) as T
             is IfTerm -> transformIf(argument) as T
+            is PrimitiveCastTerm -> transformPrimitiveCast(argument) as T
             else -> unreachable { log.error("No Term transformer for $argument") }
         }
 
@@ -123,6 +124,7 @@ interface Transformer<T : Transformer<T>> {
             is FieldStorePredicate -> transformFieldStorePredicate(argument) as T
             is DefaultSwitchPredicate -> transformDefaultSwitchPredicate(argument) as T
             is BoundStorePredicate -> transformBoundStorePredicate(argument) as T
+            is CastPredicate -> transformCastPredicate(argument) as T
             else -> unreachable { log.error("No Predicate transformer for $argument") }
         }
 
@@ -150,13 +152,13 @@ interface Transformer<T : Transformer<T>> {
             is ConstBoolTerm -> transformConstBoolTerm(argument) as T
             is UndefTerm -> transformUndefTerm(argument) as T
             is BoundTerm -> transformBoundTerm(argument) as T
-            is CastTerm -> transformCastTerm(argument) as T
             is CallTerm -> transformCallTerm(argument) as T
             is BinaryTerm -> transformBinaryTerm(argument) as T
             is ConstLongTerm -> transformConstLongTerm(argument) as T
             is InstanceOfTerm -> transformInstanceOfTerm(argument) as T
             is LocalObjectTerm -> transformLocalObjectTerm(argument) as T
             is IfTerm -> transformIfTerm(argument) as T
+            is PrimitiveCastTerm -> transformPrimitiveCastTerm(argument) as T
             else -> unreachable { log.error("No Term transformer for $argument") }
         }
 
@@ -212,6 +214,7 @@ interface Transformer<T : Transformer<T>> {
     fun transformNew(predicate: NewPredicate): Predicate = predicate.accept(this)
     fun transformThrow(predicate: ThrowPredicate): Predicate = predicate.accept(this)
     fun transformConstant(predicate: ConstantPredicate): Predicate = predicate.accept(this)
+    fun transformCast(predicate: CastPredicate): Predicate = predicate.accept(this)
 
     fun transformArrayStorePredicate(predicate: ArrayStorePredicate): Predicate = predicate
     fun transformBoundStorePredicate(predicate: BoundStorePredicate): Predicate = predicate
@@ -225,6 +228,7 @@ interface Transformer<T : Transformer<T>> {
     fun transformNewPredicate(predicate: NewPredicate): Predicate = predicate
     fun transformThrowPredicate(predicate: ThrowPredicate): Predicate = predicate
     fun transformConstantPredicate(predicate: ConstantPredicate): Predicate = predicate.accept(this)
+    fun transformCastPredicate(predicate: CastPredicate): Predicate = predicate
 
     ////////////////////////////////////////////////////////////////////
     // Term
@@ -245,7 +249,6 @@ interface Transformer<T : Transformer<T>> {
     fun transformBinary(term: BinaryTerm): Term = term.accept(this)
     fun transformBound(term: BoundTerm): Term = term.accept(this)
     fun transformCall(term: CallTerm): Term = term.accept(this)
-    fun transformCast(term: CastTerm): Term = term.accept(this)
     fun transformCmp(term: CmpTerm): Term = term.accept(this)
     fun transformConstBool(term: ConstBoolTerm): Term = term.accept(this)
     fun transformConstByte(term: ConstByteTerm): Term = term.accept(this)
@@ -267,6 +270,7 @@ interface Transformer<T : Transformer<T>> {
     fun transformUndef(term: UndefTerm): Term = term.accept(this)
     fun transformLocalObject(term: LocalObjectTerm): Term = term.accept(this)
     fun transformIf(term: IfTerm): Term = term.accept(this)
+    fun transformPrimitiveCast(term: PrimitiveCastTerm): Term = term.accept(this)
 
     fun transformArgumentTerm(term: ArgumentTerm): Term = term
     fun transformArrayIndexTerm(term: ArrayIndexTerm): Term = term
@@ -275,7 +279,6 @@ interface Transformer<T : Transformer<T>> {
     fun transformBinaryTerm(term: BinaryTerm): Term = term
     fun transformBoundTerm(term: BoundTerm): Term = term
     fun transformCallTerm(term: CallTerm): Term = term
-    fun transformCastTerm(term: CastTerm): Term = term
     fun transformCmpTerm(term: CmpTerm): Term = term
     fun transformConstBoolTerm(term: ConstBoolTerm): Term = term
     fun transformConstByteTerm(term: ConstByteTerm): Term = term
@@ -297,6 +300,7 @@ interface Transformer<T : Transformer<T>> {
     fun transformUndefTerm(term: UndefTerm): Term = term
     fun transformLocalObjectTerm(term: LocalObjectTerm): Term = term
     fun transformIfTerm(term: IfTerm): Term = term
+    fun transformPrimitiveCastTerm(term: PrimitiveCastTerm): Term = term
 }
 
 interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {

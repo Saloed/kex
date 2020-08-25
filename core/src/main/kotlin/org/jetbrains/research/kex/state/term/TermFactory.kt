@@ -120,7 +120,7 @@ object TermFactory {
     fun getCall(type: KexType, objectRef: Term, method: Method, instruction: Instruction, arguments: List<Term>) =
             CallTerm(type, objectRef, method, instruction, arguments)
 
-    fun getCast(type: KexType, operand: Term) = CastTerm(type, operand)
+    fun getPrimitiveCast(type: KexType, operand: Term) = PrimitiveCastTerm(type, operand)
     fun getCmp(opcode: CmpOpcode, lhv: Term, rhv: Term): Term {
         val resType = when (opcode) {
             is CmpOpcode.Cmpg -> KexInt()
@@ -266,7 +266,7 @@ abstract class TermBuilder {
     fun Term.field(type: KexType, name: Term) = tf.getField(KexReference(type), this, name)
     fun Term.field(type: KexType, name: String) = tf.getField(KexReference(type), this, const(name))
 
-    infix fun Term.`as`(type: KexType) = tf.getCast(type, this)
+    infix fun Term.primitiveAs(type: KexType) = tf.getPrimitiveCast(type, this)
     infix fun Term.`is`(type: KexType) = tf.getInstanceOf(type, this)
 
     fun `return`(method: Method) = tf.getReturn(method)
