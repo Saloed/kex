@@ -2,11 +2,41 @@ package org.jetbrains.research.kex.asm.analysis.refinements
 
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.Type
 
+
+data class PathConditions(val pc: Map<RefinementCriteria, List<Term>>) {
+    fun noErrorCondition(): PredicateState = pc.values.flatten()
+            .map { it.noErrorPredicate() }
+            .let { BasicState(it) }
+
+    fun fmap(transformer: (RefinementCriteria, List<Term>) -> List<Term>) = PathConditions(pc.mapValues { (criteria, terms) -> transformer(criteria, terms) })
+
+    fun merge(others: List<PathConditions>): PathConditions {
+        val entries = others.flatMap { it.pc.entries } + pc.entries
+        val merged = entries.groupBy({ it.key }, { it.value }).mapValues { (_, terms) -> terms.flatten() }
+        return PathConditions(merged)
+    }
+
+    fun expandedErrorConditions() = pc.mapValues { (criteria, _) -> expandedErrorCondition(criteria) }
+
+    fun expandedErrorCondition(criteria: RefinementCriteria): PredicateState {
+        val conditionVariables = pc[criteria] ?: error("No criteria $criteria")
+        val otherVariables = pc.filter { it.key != criteria }.values.flatten()
+        val errorCondition = conditionVariables.map { it.errorPredicate() }.map { it.wrap() }.let { ChoiceState(it) }
+        val noOtherErrors = BasicState(otherVariables.map { it.noErrorPredicate() })
+        return ChainState(errorCondition, noOtherErrors)
+    }
+
+    private fun Term.noErrorPredicate() = EqualityPredicate(this, term { const(false) }, PredicateType.Path())
+    private fun Term.errorPredicate() = EqualityPredicate(this, term { const(true) }, PredicateType.Path())
+}
 
 data class RefinementCriteria(val type: Type)
 
@@ -96,7 +126,7 @@ interface RefinementDataList {
 private data class RefinementDataImpl(override val criteria: RefinementCriteria, override val state: PredicateState) : RefinementData {
     override fun expand(others: List<PredicateState>): RefinementData {
         val negateOtherPaths = ChoiceState(others).negateWRTStatePredicates()
-        val expandedState = ChainState(state, negateOtherPaths).optimize()
+        val expandedState = ChainState(state, negateOtherPaths)
         return RefinementDataImpl(criteria, expandedState)
     }
 
@@ -104,7 +134,7 @@ private data class RefinementDataImpl(override val criteria: RefinementCriteria,
 
     override fun merge(other: RefinementData): RefinementData {
         if (criteria != other.criteria) throw IllegalArgumentException("Try to merge different refinement conditions")
-        val mergedCondition = ChoiceState(listOf(state, other.state)).optimize()
+        val mergedCondition = ChoiceState(listOf(state, other.state))
         return RefinementDataImpl(criteria, mergedCondition)
     }
 }
