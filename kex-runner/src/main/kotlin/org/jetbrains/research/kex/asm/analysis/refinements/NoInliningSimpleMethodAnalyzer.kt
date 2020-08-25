@@ -16,7 +16,6 @@ import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
 import org.jetbrains.research.kex.state.transformer.optimize
-import org.jetbrains.research.kex.state.transformer.transform
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
 
@@ -26,9 +25,9 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
         val inliner = CallInliner(psa, this)
         val statePrepared = inliner.apply(methodPaths.methodRawFullState())
-        val state = transform(statePrepared) {
-            +MemoryVersioner()
-        }.optimize()
+        val versioner = MemoryVersioner()
+        val state = versioner.apply(statePrepared).optimize()
+        val memoryVersionInfo = versioner.memoryInfo()
         val (nestedNormal, nestedSources) = buildRefinementSources(inliner.callPathConditions)
         val allSources = methodPaths.refinementSources.merge(nestedSources).fmap { it.optimize() }
         val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal).optimize()
@@ -36,7 +35,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         log.info("Analyze: $method")
         log.debug("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
-        return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources)
+        return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
     }
 
     override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {

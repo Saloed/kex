@@ -6,6 +6,7 @@ import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.*
 import org.jetbrains.research.kex.state.BasicState
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
@@ -181,8 +182,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>): FixpointResult {
-        return CallCtx(tf, positive, negative) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
+    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>, memoryVersionInfo: MemoryVersionInfo): FixpointResult {
+        return CallCtx(tf, positive, negative) { tf -> Z3ContextWithCallMemory(tf, memoryVersionInfo) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
             val z3query = ctx.convert(negative).asAxiom() as BoolExpr
@@ -194,7 +195,11 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             }.toMap()
             val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct()
             val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).distinct()
-            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, positive, negative, BasicState(additionalArgs.map { EqualityPredicate(it, it) }))
+            val declarationMapping = ModelDeclarationMapping.create(
+                    argumentDeclarations, memoryVersionInfo,
+                    positive, negative,
+                    BasicState(additionalArgs.map { EqualityPredicate(it, it) })
+            )
             additionalArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
 
             val predicate = Predicate(0)
@@ -214,8 +219,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>): FixpointResult {
-        return CallCtx(tf, state, query, *positivePaths.toTypedArray()) { tf -> Z3ContextWithCallMemory(tf) }.use { ctx ->
+    fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>, memoryVersionInfo: MemoryVersionInfo): FixpointResult {
+        return CallCtx(tf, state, query, *positivePaths.toTypedArray()) { tf -> Z3ContextWithCallMemory(tf, memoryVersionInfo) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
             val z3State = ctx.build {
                 convert(state).asAxiom() as BoolExpr
@@ -234,7 +239,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                     .filter { it.isValuable() }
                     .filterNot { it is Declaration.CallResult && it.index in ignoredCallIds }
                     .filterNot { it is Declaration.Memory && it.version in ignoredCallsMemoryVersions }
-            val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+            val declarationMapping = ModelDeclarationMapping.create(
+                    argumentDeclarations, memoryVersionInfo,
+                    state, query, *positivePaths.toTypedArray()
+            )
             declarationMapping.initializeCalls(calls)
 
             log.debug("$argumentDeclarations")
@@ -258,7 +266,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState): FixpointResult =
+    fun mkFixpointQuery(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, memoryVersionInfo: MemoryVersionInfo): FixpointResult =
             CallCtx(tf, state, query, *positivePaths.toTypedArray()).use { ctx ->
                 val unknownCallsProcessor = UnknownCallsProcessor() + state + positivePaths + query
                 val state = unknownCallsProcessor.apply(state)
@@ -275,7 +283,10 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
                 val declarationExprs = ctx.knownDeclarations.map { it.expr }
                 val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
-                val declarationMapping = ModelDeclarationMapping.create(argumentDeclarations, state, query, *positivePaths.toTypedArray())
+                val declarationMapping = ModelDeclarationMapping.create(
+                        argumentDeclarations, memoryVersionInfo,
+                        state, query, *positivePaths.toTypedArray()
+                )
                 unknownCallsProcessor.addToDeclarationMapping(declarationMapping)
 
                 val predicates = z3positive.indices.map { idx -> Predicate(idx) }

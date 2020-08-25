@@ -122,7 +122,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     private fun resolveCalls(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): PredicateState {
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val (stateWithDependencyInlined, memoryMapping) = inlineCallDependencies(state, call, dependencies)
+        val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(state, call, dependencies)
         val positiveState = preprocessState(stateWithDependencyInlined, forwardMapping)
         val negativeState = positiveState.negateWRTStatePredicates().optimize()
         MemoryUtils.verifyVersions(positiveState)
@@ -130,7 +130,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
 //        MemoryUtils.view(positiveState)
 
-        val argument = SolverArgument(positiveState, negativeState, arguments, emptySet())
+        val argument = SolverArgument(positiveState, negativeState, arguments, emptySet(), memoryVersionInfo)
         check(currentMemoryAccessScope != null) { "Incorrect scope state" }
         val resolver = CallResolver(methodAnalyzer, approximationManager, currentMemoryAccessScope!!)
         val result = resolver.callResolutionLoop(argument) { solverArg ->
@@ -140,7 +140,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
                         it.dumpSolverArguments(solverArg, debug = true)
                         MemoryUtils.verifyVersions(solverArg.positive)
                         MemoryUtils.verifyVersions(solverArg.negative)
-                        refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments)
+                        refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments, solverArg.memoryVersionInfo)
                     },
                     { ex ->
                         dumpSolverArguments(solverArg)
@@ -180,7 +180,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
             state: PredicateState,
             callPredicate: CallPredicate,
             dependencies: List<TermDependency>
-    ): Pair<PredicateState, MemoryMappingType> {
+    ): Triple<PredicateState, MemoryMappingType, MemoryVersionInfo> {
         val call = callPredicate.call as CallTerm
         val inlineStatus = MethodManager.InlineManager.isInlinable(call.method)
         if (inlineStatus == MethodManager.InlineManager.InlineStatus.NO_INLINE) error("Method is not inlineable")
@@ -200,7 +200,9 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
         val (preparedState, mapping) = MemoryUtils.newAsSeparateInitialVersions(state).let { it.first to it.second.toMutableMap() }
         check(call.memoryVersion.type == MemoryVersionType.NEW) { "Call memory must be NEW" }
-        val (versionedMethodState, _, finalVersions) = MemoryVersioner().setupVersions(methodStateForInlining)
+        val memoryVersioner = MemoryVersioner()
+        val versionedMethodState = memoryVersioner.apply(methodStateForInlining)
+        val finalVersions = memoryVersioner.memoryInfo().final
 
         currentMemoryAccessScope = baseScope.withScope(call.memoryVersion.machineName)
 
@@ -214,7 +216,19 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         }
         val replacement = mappedFinals.mapValues { (_, final) -> MemoryVersion.initial() to final }
         val newState = MemoryUtils.replaceMemoryVersion(preparedState, replacement)
-        return ChainState(versionedMethodStateV2, newState) to mapping
+        val resultState = ChainState(versionedMethodStateV2, newState)
+        val resultMemoryVersionInfo = createMemoryVersionInfo(mappedFinals, newState)
+        return Triple( resultState, mapping, resultMemoryVersionInfo)
+    }
+
+    private fun createMemoryVersionInfo(mappedFinals: Map<MemoryDescriptor, MemoryVersion>, state: PredicateState): MemoryVersionInfo {
+        val memoryAccess = MemoryUtils.collectMemoryAccesses(state)
+        val memoryTree = MemoryUtils.memoryVersionDescendantTree(memoryAccess)
+        val anotherMemoryTree = mappedFinals.mapValues { (_, version) -> MemoryUtils.memoryVersionDescendantTree(version) }
+        val mergedTree = MemoryUtils.mergeMemoryVersionTrees(anotherMemoryTree, memoryTree)
+        val finals = MemoryUtils.collectFinalVersions(mergedTree)
+        val initials = MemoryUtils.collectInitialVersions(mergedTree)
+        return MemoryVersionInfo(initials, finals)
     }
 
     private fun collectArguments(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
@@ -232,9 +246,15 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     @Serializable
-    data class SolverArgument(val positive: PredicateState, val negative: PredicateState, val arguments: List<Term>, val ignoredCalls: Set<CallPredicate>) : Argument<SolverArgument> {
-        override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative), arguments, ignoredCalls)
-        override fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): SolverArgument = SolverArgument(positive, negative, arguments, transformer(ignoredCalls))
+    data class SolverArgument(
+            val positive: PredicateState,
+            val negative: PredicateState,
+            val arguments: List<Term>,
+            val ignoredCalls: Set<CallPredicate>,
+            val memoryVersionInfo: MemoryVersionInfo
+    ) : Argument<SolverArgument> {
+        override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative), arguments, ignoredCalls, memoryVersionInfo)
+        override fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): SolverArgument = SolverArgument(positive, negative, arguments, transformer(ignoredCalls), memoryVersionInfo)
         override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
     }
 

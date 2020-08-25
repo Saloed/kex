@@ -1,10 +1,9 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
-import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.memory.MemoryVersion
+import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.term.ArgumentTerm
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
@@ -34,21 +33,14 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         initializeCallDependentMemory(calls)
     }
 
-    fun initializeMemoryVersions(states: List<PredicateState>) {
-        val memoryAccess = states.flatMap { MemoryUtils.collectMemoryAccesses(it) }
-                .flatMap { memory -> MemoryUtils.allVersionsUpToRoot(memory.memoryVersion).map { memory.descriptor() to it } }
-                .associateBy { it }
-        declarations.replaceAll { declaration ->
-            when (declaration) {
-                is Declaration.Memory -> {
-                    val original = memoryAccess.getOrElse(declaration.descriptor to declaration.version) {
-                        log.warn("No such memory access in states $declaration")
-                        declaration.descriptor to declaration.version
-                    }
-                    Declaration.Memory(original.first, original.second, declaration.info)
-                }
-                else -> declaration
+    fun initializeMemoryVersions(memoryVersionInfo: MemoryVersionInfo) = declarations.replaceAll { declaration ->
+        when (declaration) {
+            is Declaration.Memory -> {
+                val originalVersion = memoryVersionInfo.findMemoryVersion(declaration.descriptor, declaration.version)
+                        ?: error("No such memory info $declaration")
+                Declaration.Memory(declaration.descriptor, originalVersion, declaration.info)
             }
+            else -> declaration
         }
     }
 
@@ -89,10 +81,10 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
     override fun toString(): String = "ModelDeclarationMappings($declarations)"
 
     companion object {
-        fun create(declarations: List<Declaration>, vararg ps: PredicateState): ModelDeclarationMapping {
+        fun create(declarations: List<Declaration>, memoryVersionInfo: MemoryVersionInfo, vararg ps: PredicateState): ModelDeclarationMapping {
             val mapping = ModelDeclarationMapping(declarations.toMutableList())
             mapping.initializeTerms(*ps)
-            mapping.initializeMemoryVersions(ps.toList())
+            mapping.initializeMemoryVersions(memoryVersionInfo)
             return mapping
         }
     }

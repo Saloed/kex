@@ -145,9 +145,17 @@ class ${Context} : ${SMTContext} {
             localPointer, staticPointer, localObjPointers, staticObjPointers,
             localTypes, staticTypes, typeIndex, typeMap)
 
-    fun resetMemoryToVersion(version: MemoryVersion) = activeMemories
-            .mapValues { (descriptor, memory) -> emptyMemory(descriptor, version, memory.type) }
-            .forEach { (descriptor, newMemory) -> setMemory(descriptor, version, newMemory) }
+    fun resetMemoryToVersion(version: MemoryVersion, memoryVersionInfo: MemoryVersionInfo) {
+        val originalVersions = activeMemories.mapValues { (descriptor, _) ->
+            memoryVersionInfo.findMemoryVersion(descriptor, version)
+                    ?: error("Unable to reset memory to version ${ version }")
+        }
+        activeMemories.mapValues { (descriptor, memory) ->
+            emptyMemory(descriptor, originalVersions.getValue(descriptor), memory.type)
+        }.forEach { (descriptor, newMemory) ->
+            setMemory(descriptor, originalVersions.getValue(descriptor), newMemory)
+        }
+    }
 
     fun mergeMemory(name: String, contexts: Map< Bool_, Context_ >) {
         check(contexts.values.all { it.activeMemories.keys == activeMemories.keys }) { "Inconsistent memory keys in merge" }

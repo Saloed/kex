@@ -12,6 +12,7 @@ enum class MemoryType {
     PROPERTY, ARRAY, SPECIAL
 }
 
+@Serializable
 data class MemoryDescriptor(val memoryType: MemoryType, val memoryName: String, val memorySpace: Int, val scopeInfo: MemoryAccessScope) {
     val machineName: String
         get() = "${memorySpace}__${memoryType}__${scopeInfo.machineName()}__${memoryName}"

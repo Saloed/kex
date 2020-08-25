@@ -11,6 +11,7 @@ abstract class AbstractSerializer(val context: SerializersModule) {
         ignoreUnknownKeys = false
         prettyPrint = true
         useArrayPolymorphism = false
+        allowStructuredMapKeys = true
         classDiscriminator = "className"
         serializersModule = context
     }

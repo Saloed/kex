@@ -5,6 +5,7 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.CallApproximationState
+import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
@@ -13,7 +14,7 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
+class Z3ContextWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVersionInfo) : Z3Converter(tf) {
     private var callCounter = 1
 
     data class CallInfo(
@@ -36,7 +37,7 @@ class Z3ContextWithCallMemory(tf: TypeFactory) : Z3Converter(tf) {
         val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
         val preconditions = callApproximation.preconditions.map { convert(it, ef, ctx, extractPath) }
         val callState = convert(callApproximation.callState, ef, ctx, extractPath)
-        ctx.resetMemoryToVersion(callInfo.predicate.memoryVersion)
+        ctx.resetMemoryToVersion(callInfo.predicate.memoryVersion, memoryVersionInfo)
         val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
         val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
         val cases = preconditions.zip(postconditions).toMap()

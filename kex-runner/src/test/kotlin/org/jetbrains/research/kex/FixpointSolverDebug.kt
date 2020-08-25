@@ -20,7 +20,7 @@ class FixpointSolverDebug : KexTest() {
     @Test
     fun debugCallResolver() = run("last-fail.json") { args: CallResolver.SolverArgument ->
         log.debug(args)
-        val res = Z3FixpointSolver(cm.type).refineWithFixpointSolver(args.positive, args.negative, args.arguments)
+        val res = Z3FixpointSolver(cm.type).refineWithFixpointSolver(args.positive, args.negative, args.arguments, args.memoryVersionInfo)
         assert(res is FixpointResult.Sat) { res }
         println((res as FixpointResult.Sat).result)
     }
@@ -28,7 +28,7 @@ class FixpointSolverDebug : KexTest() {
     @Test
     fun debugAnalyzer() = run("last-fail.json") { args: CallResolvingRefinementSourcesAnalyzer.SolverQueryArgument ->
         log.debug(args)
-        val res = Z3FixpointSolver(cm.type).mkFixpointQueryV2(args.state, args.sources, args.normals, args.ignoredCalls)
+        val res = Z3FixpointSolver(cm.type).mkFixpointQueryV2(args.state, args.sources, args.normals, args.ignoredCalls, args.memoryVersionInfo)
         assert(res is FixpointResult.Sat) { res }
         println((res as FixpointResult.Sat).result)
     }

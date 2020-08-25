@@ -8,6 +8,7 @@ import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.ClassManager
@@ -35,7 +36,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
 
         log.info("Analyze: $method")
         log.debug("State:\n$spacedState\nExceptions:\n$spacesSources\nNormal:\n$spacedNormal")
-        return RefinementSourcesAnalyzer(this).analyze(spacedState, spacedNormal, spacesSources)
+        return RefinementSourcesAnalyzer(this).analyze(spacedState, spacedNormal, spacesSources, MemoryVersionInfo(emptyMap(), emptyMap()))
     }
 
     override fun findRefinement(method: Method): Refinements {

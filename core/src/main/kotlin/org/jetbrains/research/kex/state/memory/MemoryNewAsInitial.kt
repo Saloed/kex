@@ -12,14 +12,14 @@ internal class MemoryNewAsInitial {
         val mapping = memoryAccess.flatMap { (descriptor, access) ->
             check(access.map { it.memoryVersion.type }.all { it in listOf(MemoryVersionType.INITIAL, MemoryVersionType.NEW, MemoryVersionType.NORMAL) }) { "Unsupported memory type" }
             val groupedByMajor = access.groupBy { it.memoryVersion.version }
-            groupedByMajor.flatMap { newAsSeparateInitialVersions(descriptor, it.key, it.value).entries }
+            groupedByMajor.flatMap { newAsSeparateInitialVersions(descriptor, it.value).entries }
         }.associateBy({ it.key }, { it.value })
         val mapper = DescriptorMapper(mapping)
         val result = mapper.apply(state)
         return result to mapper.resultMapping
     }
 
-    private fun newAsSeparateInitialVersions(descriptor: MemoryDescriptor, majorVersion: Int, access: List<MemoryAccess<*>>): Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryAccessScope, MemoryVersion>> {
+    private fun newAsSeparateInitialVersions(descriptor: MemoryDescriptor, access: List<MemoryAccess<*>>): Map<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryAccessScope, MemoryVersion>> {
         val memories = access.associateBy { it.memoryVersion }
         val root = memories.keys.first { it.type == MemoryVersionType.INITIAL || it.type == MemoryVersionType.NEW }
         val dependencyTree = hashMapOf<MemoryVersion, MutableSet<MemoryVersion>>()

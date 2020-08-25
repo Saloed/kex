@@ -1,14 +1,27 @@
 package org.jetbrains.research.kex.state.memory
 
 import com.abdullin.kthelper.collection.dequeOf
+import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
 
+@Serializable
+data class MemoryVersionInfo(val initial: Map<MemoryDescriptor, MemoryVersion>, val final: Map<MemoryDescriptor, MemoryVersion>) {
+    val memoryTree by lazy { final.mapValues { MemoryUtils.memoryVersionDescendantTree(it.value) } }
+    val allMemoryVersions by lazy { memoryTree.mapValues { (descriptor, _) -> allMemoryVersionForDescriptor(descriptor) } }
+    fun findMemoryVersion(descriptor: MemoryDescriptor, version: MemoryVersion) = allMemoryVersions[descriptor]?.get(version)
+    private fun allMemoryVersionForDescriptor(descriptor: MemoryDescriptor): Map<MemoryVersion, MemoryVersion> {
+        val memories = memoryTree.getValue(descriptor).entries.flatMap { it.value + it.key } + final.getValue(descriptor)
+        return memories.associateBy { it }
+    }
+}
+
 class MemoryVersioner : MemoryVersionTransformer {
     private lateinit var memory: MutableMap<MemoryDescriptor, MemoryVersionSource>
+    private lateinit var unsafeMemoryInfo: MemoryVersionInfo
     internal val callDescriptor = MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17, MemoryAccessScope.RootScope)
 
     override fun transformChoice(ps: ChoiceState): PredicateState {
@@ -63,18 +76,8 @@ class MemoryVersioner : MemoryVersionTransformer {
         return element.withMemoryVersion(currentMemory.version)
     }
 
-    fun setupVersions(ps: PredicateState): Triple<PredicateState, Map<MemoryDescriptor, MemoryVersion>, Map<MemoryDescriptor, MemoryVersion>> {
-        val accesses = MemoryAccessCollector.collect(ps)
-        if (accesses.isEmpty()) return Triple(ps, emptyMap(), emptyMap())
-        val descriptors = accesses.map { it.descriptor() }.toSet() + callDescriptor
-        val initialMemory = descriptors.map { it to MemoryVersionInitial(it) }.toMap()
-        memory = initialMemory.toMutableMap()
-        val state = super.apply(ps)
-        val finalMemory = memory.toMap()
-        val versionMappings = memoryVersionNormalizer(initialMemory)
-        val result = StrictMemoryVersionMapper(versionMappings, callDescriptor).apply(state)
-        VersionVerifier.apply(result)
-        return Triple(result, normalizeMemory(initialMemory, versionMappings).filterKeys { it != callDescriptor }, normalizeMemory(finalMemory, versionMappings).filterKeys { it != callDescriptor })
+    fun memoryInfo(): MemoryVersionInfo {
+        return unsafeMemoryInfo
     }
 
     private fun normalizeMemory(memory: Map<MemoryDescriptor, MemoryVersionSource>, versionMappings: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>) = memory
@@ -84,7 +87,22 @@ class MemoryVersioner : MemoryVersionTransformer {
             }
 
     override fun apply(ps: PredicateState): PredicateState {
-        val (result, _, _) = setupVersions(ps)
+        val accesses = MemoryAccessCollector.collect(ps)
+        if (accesses.isEmpty()) {
+            unsafeMemoryInfo = MemoryVersionInfo(emptyMap(), emptyMap())
+            return ps
+        }
+        val descriptors = accesses.map { it.descriptor() }.toSet() + callDescriptor
+        val initialMemory = descriptors.map { it to MemoryVersionInitial(it) }.toMap()
+        memory = initialMemory.toMutableMap()
+        val state = super.apply(ps)
+        val finalMemory = memory.toMap()
+        val versionMappings = memoryVersionNormalizer(initialMemory)
+        val result = StrictMemoryVersionMapper(versionMappings, callDescriptor).apply(state)
+        VersionVerifier.apply(result)
+        val initialMemoryInfo = normalizeMemory(initialMemory, versionMappings).filterKeys { it != callDescriptor }
+        val finalMemoryInfo = normalizeMemory(finalMemory, versionMappings).filterKeys { it != callDescriptor }
+        unsafeMemoryInfo = MemoryVersionInfo(initialMemoryInfo, finalMemoryInfo)
         return result
     }
 
