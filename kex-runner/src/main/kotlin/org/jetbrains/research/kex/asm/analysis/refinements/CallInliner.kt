@@ -35,8 +35,6 @@ class CallInliner(
 
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
         val varGenerator = methodVariableGenerator.generatorFor(predicate)
-        val pathConditions = callPathConditions[predicate] ?: error("Path conditions are not computed")
-        currentBuilder += pathConditions.noErrorCondition()
         val method = predicate.method()
         val inlineStatus = MethodManager.InlineManager.isInlinable(method)
         if (inlineStatus != MethodManager.InlineManager.InlineStatus.INLINE) return predicate
