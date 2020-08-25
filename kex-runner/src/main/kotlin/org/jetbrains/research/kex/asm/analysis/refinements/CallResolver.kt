@@ -5,7 +5,6 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.manager.MethodManager
-import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
@@ -123,8 +122,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     private fun resolveCalls(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): PredicateState {
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val suffixGen = TermSuffixGenerator()
-        val (stateWithDependencyInlined, memoryMapping) = inlineCallDependencies(state, methodAnalyzer.psa, suffixGen, call, dependencies)
+        val (stateWithDependencyInlined, memoryMapping) = inlineCallDependencies(state, call, dependencies)
         val positiveState = preprocessState(stateWithDependencyInlined, forwardMapping)
         val negativeState = positiveState.negateWRTStatePredicates().optimize()
         MemoryUtils.verifyVersions(positiveState)
@@ -180,8 +178,6 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
     private fun inlineCallDependencies(
             state: PredicateState,
-            psa: PredicateStateAnalysis,
-            suffixGen: TermSuffixGenerator,
             callPredicate: CallPredicate,
             dependencies: List<TermDependency>
     ): Pair<PredicateState, MemoryMappingType> {
@@ -190,35 +186,18 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         if (inlineStatus == MethodManager.InlineManager.InlineStatus.NO_INLINE) error("Method is not inlineable")
         if (inlineStatus == MethodManager.InlineManager.InlineStatus.MAY_INLINE) TODO("Inheritance")
 
-        val mappings = hashMapOf<Term, Term>()
-        if (!call.isStatic) {
-            val `this` = term { `this`(call.owner.type) }
-            mappings[`this`] = call.owner
-        }
-        for ((index, argType) in call.method.argTypes.withIndex()) {
-            val argTerm = term { arg(argType.kexType, index) }
-            val calledArg = call.arguments[index]
-            mappings[argTerm] = calledArg
-        }
-        val retval = term { `return`(call.method) }
-        val retvalPlaceholder = term { value(retval.type, "retval_${call.hashCode()}") }
-        mappings[retval] = retvalPlaceholder
-
-        check(call.method.isNotEmpty()) { "Try to inline empty method" }
-
-        val methodState = psa.builder(call.method).methodState ?: error("No state for method ${call.method}")
-        val endState = transform(methodState) {
-            +ConstructorDeepInliner(psa)
-//                +SimpleMethodInliner(psa)
-            +IntrinsicAdapter
-        }
-        val preparedMethodState = renameTermsAfterInlining(call, endState, mappings, suffixGen)
+        val retvalPlaceholder = term { value(call.method.returnType.kexType, "retval_${call.hashCode()}") }
+        val predicateToInline = CallPredicate(retvalPlaceholder, call)
+        val inliner = CallInliner(methodAnalyzer.psa, methodAnalyzer, forceDeepInline = true)
+        val methodState = inliner.apply(predicateToInline.wrap())
+        check(predicateToInline !in PredicateCollector.collectIsInstance<CallPredicate>(methodState)) { "Call was not inlined" }
         val retvalBindings = basic {
             dependencies.filterIsInstance<TermDependency.CallResultDependency>().forEach { dependency ->
                 predicate(PredicateType.State()) { dependency.term equality retvalPlaceholder }
             }
         }
-        val methodStateForInlining = ChainState(preparedMethodState, retvalBindings)
+        val methodStateForInlining = ChainState(methodState, retvalBindings)
+
         val (preparedState, mapping) = MemoryUtils.newAsSeparateInitialVersions(state).let { it.first to it.second.toMutableMap() }
         check(call.memoryVersion.type == MemoryVersionType.NEW) { "Call memory must be NEW" }
         val (versionedMethodState, _, finalVersions) = MemoryVersioner().setupVersions(methodStateForInlining)
@@ -236,10 +215,6 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val replacement = mappedFinals.mapValues { (_, final) -> MemoryVersion.initial() to final }
         val newState = MemoryUtils.replaceMemoryVersion(preparedState, replacement)
         return ChainState(versionedMethodStateV2, newState) to mapping
-    }
-
-    private fun renameTermsAfterInlining(call: CallTerm, state: PredicateState, mappings: Map<Term, Term>, suffixGen: TermSuffixGenerator): PredicateState {
-        return MethodInliner.TermRenamer(suffixGen.getSuffix(call), mappings).apply(state)
     }
 
     private fun collectArguments(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
@@ -261,12 +236,6 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative), arguments, ignoredCalls)
         override fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): SolverArgument = SolverArgument(positive, negative, arguments, transformer(ignoredCalls))
         override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
-    }
-
-    private class TermSuffixGenerator {
-        private var inlineIndex = 0
-        private val suffixCache = hashMapOf<CallTerm, String>()
-        fun getSuffix(call: CallTerm) = suffixCache.getOrPut(call) { "inlined${inlineIndex++}" }
     }
 
 }

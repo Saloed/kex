@@ -24,7 +24,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
 
     override fun analyze(): Refinements {
         val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
-        val inliner = CallInliner(method, psa, this)
+        val inliner = CallInliner(psa, this)
         val statePrepared = inliner.apply(methodPaths.methodRawFullState())
         val state = transform(statePrepared) {
             +MemoryVersioner()

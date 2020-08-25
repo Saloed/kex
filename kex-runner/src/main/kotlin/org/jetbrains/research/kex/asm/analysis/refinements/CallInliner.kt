@@ -6,21 +6,19 @@ import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.state.transformer.PredicateCollector
-import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.state.transformer.Transformer
-import org.jetbrains.research.kex.state.transformer.transform
+import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 
 class CallInliner(
-        val rootMethod: Method,
         val psa: PredicateStateAnalysis,
-        val refinementProvider: RefinementProvider
+        val refinementProvider: RefinementProvider,
+        val forceDeepInline: Boolean = false,
 ) : RecollectingTransformer<CallInliner> {
     override val builders = dequeOf(StateBuilder())
     private val refinementVariableGenerator = VariableGenerator("refinement")
@@ -52,11 +50,9 @@ class CallInliner(
     private fun inlineSimple(predicate: CallPredicate, method: Method, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
         if (method.isEmpty()) return predicate
         val methodState = psa.builder(method).methodState ?: return predicate
-        val state = TermMapper(varGenerator.createNestedGenerator("inlined"), argumentMapping).apply(methodState)
-        val nestedCalls = PredicateCollector.collectIsInstance<CallPredicate>(state)
-        if (nestedCalls.isNotEmpty()) return predicate
-        currentBuilder += state
-        return nothing()
+        val nestedCalls = PredicateCollector.collectIsInstance<CallPredicate>(methodState)
+        if (nestedCalls.isNotEmpty() && !forceDeepInline) return predicate
+        return inlineNestedCalls(methodState, "method", predicate, varGenerator, argumentMapping)
     }
 
     private fun inlineConstructor(predicate: CallPredicate, method: Method, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
@@ -65,9 +61,13 @@ class CallInliner(
             else -> predicate
         }
         val constructorState = psa.builder(method).methodState ?: return predicate
-        val inliner = CallInliner(method, psa, refinementProvider)
-        val constructorStateResolved = inliner.apply(constructorState)
-        val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("constructor_pc")
+        return inlineNestedCalls(constructorState, "constructor", predicate, varGenerator, argumentMapping)
+    }
+
+    private fun inlineNestedCalls(methodState: PredicateState, prefix: String, predicate: CallPredicate, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
+        val inliner = CallInliner(psa, refinementProvider, forceDeepInline = false)
+        val stateResolved = inliner.apply(methodState)
+        val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()
         val pathConditionExtension = inliner.callPathConditions.values.map { pathConditions ->
             pathConditions.fmap { _, terms ->
@@ -80,7 +80,7 @@ class CallInliner(
         }
         callPathConditions[predicate] = callPathConditions[predicate]?.merge(pathConditionExtension)
                 ?: error("No path conditions for predicate $predicate")
-        val state = TermMapper(varGenerator.createNestedGenerator("constructor"), argumentMapping + pcVarMapping).apply(constructorStateResolved)
+        val state = TermMapper(varGenerator.createNestedGenerator(prefix), argumentMapping + pcVarMapping).apply(stateResolved)
         currentBuilder += state
         return nothing()
     }
@@ -117,25 +117,30 @@ class CallInliner(
         }
     }
 
-    private fun isObjectConstructor(method: Method): Boolean {
-        if (!method.isConstructor) return false
-        return isJavaInlineable(method.`class`) || isKotlinInlineable(method.`class`)
-    }
-
-    private fun isKotlinInlineable(cls: Class): Boolean {
-        if (cls.`package` != KOTLIN_PACKAGE) return false
-        if (cls.name == "Any") return true
-        return false
-    }
-
-    private fun isJavaInlineable(cls: Class): Boolean {
-        if (cls.`package` != JAVA_PACKAGE) return false
-        if (cls.name == "Object") return true
-        if (cls.name.endsWith("Exception")) return true
-        return false
+    override fun apply(ps: PredicateState): PredicateState {
+        val intrinsicsResolved = IntrinsicAdapter.apply(ps)
+        return super.apply(intrinsicsResolved)
     }
 
     companion object {
+        private fun isObjectConstructor(method: Method): Boolean {
+            if (!method.isConstructor) return false
+            return isJavaInlineable(method.`class`) || isKotlinInlineable(method.`class`)
+        }
+
+        private fun isKotlinInlineable(cls: Class): Boolean {
+            if (cls.`package` != KOTLIN_PACKAGE) return false
+            if (cls.name == "Any") return true
+            return false
+        }
+
+        private fun isJavaInlineable(cls: Class): Boolean {
+            if (cls.`package` != JAVA_PACKAGE) return false
+            if (cls.name == "Object") return true
+            if (cls.name.endsWith("Exception")) return true
+            return false
+        }
+
         private val JAVA_PACKAGE = Package.parse("java/lang")
         private val KOTLIN_PACKAGE = Package.parse("kotlin")
     }
