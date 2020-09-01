@@ -5,12 +5,12 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexBool
-import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.util.VariableGenerator
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Class
@@ -177,18 +177,3 @@ class PathPredicateToPathVariableTransformer(val variableGenerator: VariableGene
 
 }
 
-class VariableGenerator(private val prefix: String, private val unique: Boolean = false) {
-    private var generatorIndex: Int = 0
-    private val indexMapping = hashMapOf<Any, Int>()
-    fun generatorFor(obj: Any): VariableGenerator {
-        val idx = when {
-            unique -> generatorIndex++
-            else -> indexMapping.getOrPut(obj) { generatorIndex++ }
-        }
-        return VariableGenerator("${prefix}_${idx}", unique)
-    }
-
-    fun unique() = VariableGenerator(prefix, true)
-    fun createVar(type: KexType) = term { value(type, prefix) }
-    fun createNestedGenerator(prefix: String) = VariableGenerator("${this.prefix}_${prefix}", unique)
-}

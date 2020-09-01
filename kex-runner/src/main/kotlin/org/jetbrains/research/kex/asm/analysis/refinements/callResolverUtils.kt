@@ -12,7 +12,7 @@ import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.state.transformer.Transformer
+import org.jetbrains.research.kex.util.VariableGenerator
 
 
 private class MyNewPathPredicateToPathVariableTransformer(private val variableGenerator: VariableGenerator) : RecollectingTransformer<MyNewPathPredicateToPathVariableTransformer> {
