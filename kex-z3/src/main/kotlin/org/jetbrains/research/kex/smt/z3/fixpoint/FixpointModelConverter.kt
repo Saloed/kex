@@ -1,63 +1,34 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import com.microsoft.z3.enumerations.Z3_lbool
-import org.jetbrains.research.kex.ktype.*
+import org.jetbrains.research.kex.ktype.KexArray
+import org.jetbrains.research.kex.ktype.KexDouble
+import org.jetbrains.research.kex.ktype.KexInt
+import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.memory.*
-import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.EqualityPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.predicate.predicate
+import org.jetbrains.research.kex.state.memory.MemoryAccessScope
+import org.jetbrains.research.kex.state.memory.MemoryType
+import org.jetbrains.research.kex.state.memory.MemoryUtils
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.Optimizer
-import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.state.transformer.TermCollector
-import org.jetbrains.research.kex.state.transformer.Transformer
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.ConcreteClass
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.OuterClass
-import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
-import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
 import org.jetbrains.research.kfg.type.ClassType
-import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.type.TypeFactory
-import java.util.*
-
-sealed class TermDependency {
-    abstract val callIdx: Int
-    abstract val call: CallPredicate
-
-    data class CallResultDependency(val term: Term, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
-    data class MemoryDependency(val memoryAccess: MemoryAccess<*>, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
-}
-
-data class RecoveredModel(val state: PredicateState, val dependencies: Set<TermDependency>) {
-    val isFinal: Boolean
-        get() = dependencies.isEmpty()
-
-    fun finalStateOrException(): PredicateState = when {
-        isFinal -> state
-        else -> throw IllegalStateException("State is not final")
-    }
-
-    companion object {
-        fun error() = RecoveredModel(falseState(), emptySet())
-    }
-}
 
 class FixpointModelConverter(
         private val mapping: ModelDeclarationMapping,
         private val tf: TypeFactory,
         private val z3Context: Z3Context
 ) {
-
     private var callDependencies = hashSetOf<TermDependency>()
 
     fun apply(expr: Expr): RecoveredModel {
@@ -78,124 +49,20 @@ class FixpointModelConverter(
                     .mapNotNull { memAccess -> mapping.callDependentDeclarations[memAccess.descriptor() to memAccess.memoryVersion]?.let { TermDependency.MemoryDependency(memAccess, it.index, it.predicate) } }
     )
 
-    private object UnknownType : KexType() {
-        override val name: String = "Unknown"
-        override val bitsize: Int = 0
-        override fun getKfgType(types: TypeFactory): Type = throw IllegalStateException("type is unknown")
-    }
-
-    private class ComparisonNormalizer : Transformer<ComparisonNormalizer> {
-        override fun transformCmpTerm(term: CmpTerm): Term = normalize(term) ?: term
-        private fun normalize(term: CmpTerm): Term? {
-            val rhv = term.rhv as? ConstIntTerm ?: return null
-            val lhv = term.lhv as? BinaryTerm ?: return null
-            val lhvRhv = lhv.rhv as? BinaryTerm ?: return null
-            val lhvRhvLhv = lhvRhv.lhv as? ConstIntTerm ?: return null
-            if (lhv.opcode !is BinaryOpcode.Add) return null
-            if (lhvRhv.opcode !is BinaryOpcode.Mul) return null
-            if (lhvRhvLhv.value != -1) return null
-            return when (rhv.value) {
-                0 -> CmpTerm(term.type, term.opcode, lhv.lhv, lhvRhv.rhv)
-                else -> CmpTerm(term.type, term.opcode, lhv.lhv, term { lhvRhv.rhv add rhv })
-            }
-        }
-    }
-
-    private class NumeralEqualityChecksNormalizer : RecollectingTransformer<NumeralEqualityChecksNormalizer> {
-        override val builders: Deque<StateBuilder> = dequeOf(StateBuilder())
-        override fun transformBasic(ps: BasicState): PredicateState {
-            for (predicate in ps.predicates) {
-                val equalityPredicate = predicate as? EqualityPredicate
-                val pair = equalityPredicate?.let { findPair(it, ps.predicates) }
-                if (pair == null) {
-                    currentBuilder += predicate
-                    continue
-                }
-                val (current, paired, equalityRhv) = pair
-                val cmpTerm = CmpTerm(current.type, CmpOpcode.Eq(), current.lhv, current.rhv)
-                currentBuilder += EqualityPredicate(cmpTerm, equalityRhv, predicate.type, predicate.location)
-            }
-            return emptyState()
-        }
-
-        private fun findPair(predicate: EqualityPredicate, searchSpace: List<Predicate>): Triple<CmpTerm, CmpTerm, ConstBoolTerm>? =
-                searchSpace.filterIsInstance<EqualityPredicate>()
-                        .mapNotNull { checkCandidate(predicate, it) }
-                        .firstOrNull()
-
-        private fun checkCandidate(predicate: EqualityPredicate, candidate: EqualityPredicate): Triple<CmpTerm, CmpTerm, ConstBoolTerm>? {
-            val rhv = predicate.rhv as? ConstBoolTerm ?: return null
-            if (rhv != candidate.rhv) return null
-            val target = predicate.lhv as? CmpTerm ?: return null
-            val candidateTerm = candidate.lhv as? CmpTerm ?: return null
-            if (candidateTerm.lhv == target.lhv && candidateTerm.rhv == target.rhv) {
-                if (target.opcode is CmpOpcode.Le && candidateTerm.opcode is CmpOpcode.Ge) return Triple(target, candidateTerm, rhv)
-                if (target.opcode is CmpOpcode.Ge && candidateTerm.opcode is CmpOpcode.Le) return Triple(target, candidateTerm, rhv)
-            }
-            if (candidateTerm.lhv == target.rhv && candidateTerm.rhv == target.lhv) {
-                if (target.opcode is CmpOpcode.Le && candidateTerm.opcode is CmpOpcode.Le) return Triple(target, candidateTerm, rhv)
-                if (target.opcode is CmpOpcode.Ge && candidateTerm.opcode is CmpOpcode.Ge) return Triple(target, candidateTerm, rhv)
-            }
-            return null
-        }
-    }
-
-    private class InstanceOfCorrector(private val z3Context: Z3Context) : RecollectingTransformer<InstanceOfCorrector> {
-
-        override val builders = dequeOf(StateBuilder())
-
-        override fun transformEqualityPredicate(predicate: EqualityPredicate): Predicate {
-            val unknownInstanceOfTerms = TermCollector { it is InstanceOfTerm && it.checkedType is UnknownType }.apply { transform(predicate) }.terms
-            when {
-                unknownInstanceOfTerms.isEmpty() -> return super.transformEqualityPredicate(predicate)
-                unknownInstanceOfTerms.size != 1 ->
-                    throw IllegalStateException("To many unknown instance of checks")
-            }
-            val rhv = predicate.rhv as? ConstBoolTerm
-                    ?: throw IllegalStateException("Unexpected term in $predicate")
-            val lhv = predicate.lhv as? CmpTerm
-                    ?: throw IllegalStateException("Unexpected term in $predicate")
-            val instanceOfTerm = lhv.lhv as? InstanceOfTerm
-                    ?: throw IllegalStateException("Unexpected term in $predicate")
-            val typeBound = lhv.rhv as? ConstIntTerm
-                    ?: throw IllegalStateException("Unexpected term in $predicate")
-            val constraints = generateInstanceOfConstraints(instanceOfTerm.operand, lhv.opcode, typeBound.value, predicate)
-            val resultConstraint = when (rhv.value) {
-                true -> constraints
-                false -> NegationState(constraints)
-            }
-            currentBuilder += resultConstraint
-            return nothing()
-        }
-
-        private fun generateInstanceOfConstraints(term: Term, cmp: CmpOpcode, typeBound: Int, original: Predicate): PredicateState {
-            val predicate = cmp.predicate()
-            return z3Context.getTypeMapping().entries
-                    .filter { predicate(it.value, typeBound) }
-                    .map { it.key }
-                    .toSet()
-                    .map { generateInstanceOf(term, it, original) }
-                    .let { ChoiceState(it) }
-        }
-
-        private fun generateInstanceOf(term: Term, candidate: KexType, original: Predicate): PredicateState =
-                predicate(original.type, original.location) {
-                    InstanceOfTerm(candidate, term) equality const(true)
-                }.wrap()
-
-        private fun CmpOpcode.predicate(): (Int, Int) -> Boolean = when (this) {
-            is CmpOpcode.Eq -> { a, b -> a == b }
-            is CmpOpcode.Neq -> { a, b -> a != b }
-            is CmpOpcode.Lt -> { a, b -> a < b }
-            is CmpOpcode.Gt -> { a, b -> a > b }
-            is CmpOpcode.Le -> { a, b -> a <= b }
-            is CmpOpcode.Ge -> { a, b -> a >= b }
-            else -> throw IllegalStateException("Unsupported $this")
-        }
-    }
 
     private fun convert(expr: Expr): PredicateState = when (expr) {
         is BoolExpr -> convert(expr)
+        else -> convertTerm(expr).equality { const(true) }
+    }
+
+    private fun convert(expr: BoolExpr): PredicateState = when {
+        expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
+        expr.isOr -> ChoiceState(expr.args.map { convert(it) }).simplify()
+        expr.isNot && expr.numArgs == 1 -> convertTerm(expr.args.first()).equality { const(false) }
+        expr.isEq && expr.numArgs == 2 -> {
+            val (lhs, rhs) = expr.convertArgs()
+            lhs.equality(rhs)
+        }
         else -> convertTerm(expr).equality { const(true) }
     }
 
@@ -213,16 +80,6 @@ class FixpointModelConverter(
     }
 
     private fun convertVariableTerm(expr: Expr): TermWithAxiom = mapping.getTerm(expr.index, callDependencies)
-    private fun convert(expr: BoolExpr): PredicateState = when {
-        expr.isAnd -> expr.args.map { convert(it) }.combine { a, b -> ChainState(a, b) }.simplify()
-        expr.isOr -> ChoiceState(expr.args.map { convert(it) }).simplify()
-        expr.isNot && expr.numArgs == 1 -> convertTerm(expr.args.first()).equality { const(false) }
-        expr.isEq && expr.numArgs == 2 -> {
-            val (lhs, rhs) = expr.convertArgs()
-            lhs.equality(rhs)
-        }
-        else -> convertTerm(expr).equality { const(true) }
-    }
 
     private fun convertBoolTerm(expr: BoolExpr): TermWithAxiom = when {
         expr.isAnd -> expr.convertArgs().combine { a, b -> a and b }
