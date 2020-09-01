@@ -99,10 +99,10 @@ class MemoryVersioner : MemoryVersionTransformer {
         val finalMemory = memory.toMap()
         val versionMappings = memoryVersionNormalizer(initialMemory)
         val result = StrictMemoryVersionMapper(versionMappings, callDescriptor).apply(state)
-        VersionVerifier.apply(result)
         val initialMemoryInfo = normalizeMemory(initialMemory, versionMappings).filterKeys { it != callDescriptor }
         val finalMemoryInfo = normalizeMemory(finalMemory, versionMappings).filterKeys { it != callDescriptor }
         unsafeMemoryInfo = MemoryVersionInfo(initialMemoryInfo, finalMemoryInfo)
+        MemoryUtils.verify(result, unsafeMemoryInfo)
         return result
     }
 

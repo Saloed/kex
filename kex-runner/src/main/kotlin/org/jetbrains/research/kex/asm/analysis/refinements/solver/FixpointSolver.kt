@@ -2,7 +2,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements.solver
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
-import org.jetbrains.research.kex.serialization.KexSerializer
+import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
 import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
 import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
@@ -48,13 +48,13 @@ class FixpointSolver(val cm: ClassManager) {
         onError(null)
     }
 
-    inline fun <reified T : Any> dumpSolverArguments(args: T, debug: Boolean = false) {
+    fun dumpQuery(query: SolverQuery<*, *>, debug: Boolean = false) {
         val failDirPath = Paths.get(failDir)
         if (!Files.exists(failDirPath)) {
             Files.createDirectory(failDirPath)
         }
-        val serialized = KexSerializer(cm).toJson(args)
-        val errorDump = Files.createTempFile(failDirPath, "ps-", ".json").toFile()
+        val serialized = RefinementsKexSerializer(cm).toJson(query, SolverQuery::class)
+        val errorDump = Files.createTempFile(failDirPath, "query-", ".json").toFile()
         errorDump.writeText(serialized)
         val message = "Arguments saved to file ${errorDump.path}"
         Paths.get(failDir, "last-fail.json").toFile().writeText(serialized)

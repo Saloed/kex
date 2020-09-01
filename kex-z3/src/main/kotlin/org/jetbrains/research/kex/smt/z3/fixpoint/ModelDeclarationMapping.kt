@@ -12,8 +12,8 @@ import org.jetbrains.research.kex.state.transformer.collectArguments
 
 class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
     private val terms = hashMapOf<Declaration, Term>()
-    val callDependentDeclarations = hashMapOf<Pair<MemoryDescriptor, MemoryVersion>, Z3ContextWithCallMemory.CallInfo>()
-    val calls = hashMapOf<Int, Z3ContextWithCallMemory.CallInfo>()
+    val callDependentDeclarations = hashMapOf<Pair<MemoryDescriptor, MemoryVersion>, Z3ConverterWithCallMemory.CallInfo>()
+    val calls = hashMapOf<Int, Z3ConverterWithCallMemory.CallInfo>()
 
 
     fun initializeTerms(vararg ps: PredicateState) {
@@ -28,7 +28,7 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         }
     }
 
-    fun initializeCalls(calls: List<Z3ContextWithCallMemory.CallInfo>) {
+    fun initializeCalls(calls: List<Z3ConverterWithCallMemory.CallInfo>) {
         calls.associateByTo(this.calls) { it.index }
         initializeCallDependentMemory(calls)
     }
@@ -44,7 +44,7 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         }
     }
 
-    private fun initializeCallDependentMemory(calls: List<Z3ContextWithCallMemory.CallInfo>) {
+    private fun initializeCallDependentMemory(calls: List<Z3ConverterWithCallMemory.CallInfo>) {
         val callMemoryVersions = calls.associateBy { it.predicate.memoryVersion }
         declarations.filterIsInstance<Declaration.Memory>()
                 .map { it to callMemoryVersions[it.version] }

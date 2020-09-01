@@ -8,7 +8,7 @@ import kotlin.reflect.KClass
 
 data class VersionedMemory(val memory: Memory_< Ptr_, Dynamic_ >, val version: MemoryVersion, val type: KClass< out Dynamic_ >) {
     @Suppress("UNUSED_PARAMETER")
-    fun merge(name: String, cases: List< Pair< Bool_, VersionedMemory>>): VersionedMemory {
+    fun merge(name: String, cases: List< Pair< Bool_, VersionedMemory > >): VersionedMemory {
         check(cases.all { it.second.type == type }) { "Try to merge memories with different element types" }
         val mergedVersion = MemoryVersion.merge(listOf(version) + cases.map { it.second.version })
         val memories = cases.map { it.first to it.second.memory }
@@ -40,6 +40,7 @@ class ${Context} : ${SMTContext} {
     }
 
     val factory: ExprFactory_
+    private val lockedForWrite: Boolean
     private val localPointer: AtomicInteger
     private val localObjPointers: MutableMap< NewObjectIdentifier, Int >
     private val localTypes: MutableMap< Int, KexType >
@@ -52,7 +53,7 @@ class ${Context} : ${SMTContext} {
     private var activeMemories: MutableMap< MemoryDescriptor, VersionedMemory >
     private var archiveMemories: MutableMap< VersionedMemoryDescriptor, VersionedMemory >
 
-    private constructor(factory: ExprFactory_,
+    private constructor(factory: ExprFactory_, lockedForWrite: Boolean,
                         activeMemories: MutableMap< MemoryDescriptor, VersionedMemory >,
                         initialMemories: MutableMap< MemoryDescriptor, VersionedMemory >,
                         archiveMemories: MutableMap< VersionedMemoryDescriptor, VersionedMemory >,
@@ -65,6 +66,7 @@ class ${Context} : ${SMTContext} {
         this.activeMemories = activeMemories
         this.initialMemories = initialMemories
         this.archiveMemories = archiveMemories
+        this.lockedForWrite = lockedForWrite
 
         this.localPointer = localPointer
         this.localObjPointers = localObjPointers
@@ -78,7 +80,7 @@ class ${Context} : ${SMTContext} {
     }
 
     constructor(factory: ExprFactory_, localPointer: Int, staticPointer: Int)
-            : this(factory,
+            : this(factory, false,
             hashMapOf(), hashMapOf(), hashMapOf(),
             AtomicInteger(localPointer), AtomicInteger(staticPointer),
             hashMapOf(), hashMapOf(), hashMapOf(), hashMapOf(),
@@ -101,7 +103,10 @@ class ${Context} : ${SMTContext} {
     fun < T : Dynamic_ > readMemory(ptr: Ptr_, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = getMemory(memoryDescriptor, memoryVersion).load< T >(ptr, ExprFactory_.getType(type))
 
     @Deprecated("Access memory without memory access descriptor is deprecated")
-    fun < T : Dynamic_ > writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) = setMemory(memoryDescriptor, memoryVersion, getMemory(memoryDescriptor, memoryVersion).store(ptr, value, ExprFactory_.getType(type)))
+    fun < T : Dynamic_ > writeMemory(ptr: Ptr_, value: T, memoryDescriptor: MemoryDescriptor, memoryVersion: MemoryVersion, type: KexType) {
+        val newMemory = getMemory(memoryDescriptor, memoryVersion).store(ptr, value, ExprFactory_.getType(type))
+        setMemory(memoryDescriptor, newMemory.version, newMemory)
+    }
 
     fun initialize(memoryAccess: List< MemoryAccess< *>>) = memoryAccess
             .groupBy { it.descriptor() }
@@ -116,8 +121,14 @@ class ${Context} : ${SMTContext} {
         archiveMemories.clear()
     }
 
-    fun < T : Dynamic_ > readMemory(ptr: Ptr_, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >) = getMemory(memoryAccess).load< T >(ptr, type)
-    fun < T : Dynamic_ > writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >) = setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
+    fun < T : Dynamic_ > readMemory(ptr: Ptr_, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >): T {
+        log.debug("Read memory ${ memoryAccess }")
+        return getMemory(memoryAccess).load< T >(ptr, type)
+    }
+    fun < T : Dynamic_ > writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >) {
+        log.debug("Write memory ${ memoryAccess }")
+        setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
+    }
 
     fun getLocalPtr(identifier: NewObjectIdentifier, size: Int): Ptr_ {
         val ptr = localObjPointers.getOrPut(identifier) { localPointer.getAndAdd(size) }
@@ -140,7 +151,12 @@ class ${Context} : ${SMTContext} {
     fun getLocals() = localObjPointers.toMap()
     fun getStatics() = staticObjPointers.toMap()
 
-    fun splitMemory() = Context_(factory,
+    fun lockMemory() = Context_(factory, true,
+            activeMemories, initialMemories, archiveMemories,
+            localPointer, staticPointer, localObjPointers, staticObjPointers,
+            localTypes, staticTypes, typeIndex, typeMap)
+
+    fun splitMemory() = Context_(factory, lockedForWrite,
             activeMemories.toMutableMap(), initialMemories, archiveMemories.toMutableMap(),
             localPointer, staticPointer, localObjPointers, staticObjPointers,
             localTypes, staticTypes, typeIndex, typeMap)
@@ -158,6 +174,7 @@ class ${Context} : ${SMTContext} {
     }
 
     fun mergeMemory(name: String, contexts: Map< Bool_, Context_ >) {
+        check(!lockedForWrite) { "Try to merge locked memory" }
         check(contexts.values.all { it.activeMemories.keys == activeMemories.keys }) { "Inconsistent memory keys in merge" }
         activeMemories = activeMemories.mapValues { (descriptor, defaultMemory) ->
             val alternatives = contexts.map { (condition, ctx) ->
@@ -166,7 +183,9 @@ class ${Context} : ${SMTContext} {
                 condition to memory
             }
             updateArchive(descriptor, defaultMemory)
-            defaultMemory.merge(name, alternatives)
+            defaultMemory.merge(name, alternatives).also {
+                log.debug("Merge memory ${ it.version } ${ descriptor }")
+            }
         }.toMutableMap()
         mergeArchiveMemories(contexts)
     }
@@ -181,18 +200,23 @@ class ${Context} : ${SMTContext} {
     private fun setMemory(memoryAccess: MemoryAccess< * >, memory: VersionedMemory) = setMemory(memoryAccess.descriptor(), memory.version, memory)
 
     private fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
+        log.debug("Get memory: ${ version } ${ descriptor }")
         check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
         val activeMemory = activeMemories[descriptor]
         if (activeMemory != null && activeMemory.version == version) return activeMemory
         val versionedDescriptor = VersionedMemoryDescriptor(descriptor, version)
-        val archiveMemory = archiveMemories[versionedDescriptor] ?: error("Memory is not initialized for ${ descriptor }")
+        val archiveMemory = archiveMemories[versionedDescriptor]
+                ?: error("Memory is not initialized for ${ descriptor }")
         check(archiveMemory.version == version) { "Try to get memories with different versions" }
         return archiveMemory
     }
 
     private fun setMemory(descriptor: MemoryDescriptor, version: MemoryVersion, memory: VersionedMemory) {
+        log.debug("Set memory: ${ version } ${ descriptor }")
+        check(!lockedForWrite) { "Try to write at locked memory" }
         check(version == memory.version) { "Memory access and memory versions are different" }
-        val currentMemory = activeMemories[descriptor] ?: error("No active memory for ${ descriptor }")
+        val currentMemory = activeMemories[descriptor]
+                ?: error("No active memory for ${ descriptor }")
         check(currentMemory.version in version.predecessors) { "Incorrect memory write order" }
         updateArchive(descriptor, currentMemory)
         activeMemories[descriptor] = memory

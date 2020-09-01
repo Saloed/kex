@@ -22,14 +22,14 @@ import org.jetbrains.research.kfg.ir.Method
 class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: MethodRefinements, method: Method) : MethodAnalyzer(cm, psa, mr, method) {
 
     override fun analyze(): Refinements {
-        val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
-        val inliner = CallInliner(psa, this)
-        val statePrepared = inliner.apply(methodPaths.methodRawFullState())
+        val methodPaths = MethodExecutionPathsAnalyzer(cm, psa, method)
+        val inliner = CallInliner(cm, psa, this)
+        val statePrepared = inliner.apply(methodPaths.methodRawFullState()).optimize()
         val versioner = MemoryVersioner()
-        val state = versioner.apply(statePrepared).optimize()
+        val state = versioner.apply(statePrepared)
         val memoryVersionInfo = versioner.memoryInfo()
         val (nestedNormal, nestedSources) = buildRefinementSources(inliner.callPathConditions)
-        val allSources = methodPaths.refinementSources.merge(nestedSources).fmap { it.optimize() }
+        val allSources = methodPaths.exceptionalExecutionPaths.merge(nestedSources).fmap { it.optimize() }
         val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal).optimize()
 
         log.info("Analyze: $method")

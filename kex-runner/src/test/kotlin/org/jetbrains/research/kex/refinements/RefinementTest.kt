@@ -10,7 +10,7 @@ import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.random.easyrandom.EasyRandomDriver
-import org.jetbrains.research.kex.serialization.KexSerializer
+import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.z3.Z3Solver
 import org.jetbrains.research.kex.state.PredicateState
@@ -117,7 +117,9 @@ abstract class RefinementTest(
             val resourceName = "${suiteName}__${method.name}.json"
             val resource = RefinementTest::class.java.getResource(resourceName)
             val resourceContent = resource.readText()
-            val ps = KexSerializer(cm).fromJson<PredicateState>(resourceContent)
+            val ps = RefinementsKexSerializer(cm).fromJson<PredicateState>(resourceContent)
+//            val serialized = KexSerializer(cm).toJson(ps.withMemoryVersions())
+//            File(resourceName).writeText(serialized)
             values.add(Refinement.create(criteria, ps))
         }
 

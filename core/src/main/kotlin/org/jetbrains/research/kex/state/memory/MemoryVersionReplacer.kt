@@ -3,7 +3,7 @@ package org.jetbrains.research.kex.state.memory
 import com.abdullin.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.state.PredicateState
 
-internal object MemoryVersionReplacer {
+object MemoryVersionReplacer {
 
     fun replace(state: PredicateState, fromVersion: MemoryVersion, toVersion: MemoryVersion): PredicateState {
         val access = MemoryUtils.collectMemoryAccesses(state)
@@ -20,6 +20,17 @@ internal object MemoryVersionReplacer {
             replace(versionTree, from, to)
         }
         return OptionalMemoryVersionMapper(mapping).apply(state)
+    }
+
+    fun replaceMany(state: PredicateState, replacement: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>): PredicateState {
+        val versionInfo = MemoryUtils.memoryVersionInfo(state)
+        var result = state
+        for ((descriptor, replacements) in replacement) {
+            val versionTree = versionInfo.memoryTree[descriptor] ?: error("Descriptor is unknown: $descriptor")
+            val orderedReplacements = replacements.entries.sortedWith { left, right -> MemoryVersionComparator.compare(left.key, right.key) }
+            TODO()
+        }
+        return result
     }
 
     private fun replace(tree: Map<MemoryVersion, Set<MemoryVersion>>, fromVersion: MemoryVersion, toVersion: MemoryVersion): Map<MemoryVersion, MemoryVersion> {
@@ -83,11 +94,6 @@ internal object MemoryVersionReplacer {
             queue += tree[version] ?: emptySet()
         }
         return mapping
-    }
-
-    private fun MemoryVersion.dependsOn(other: MemoryVersion): Boolean = when (other) {
-        this -> true
-        else -> predecessors.any { dependsOn(other) }
     }
 
 }

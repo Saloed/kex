@@ -182,9 +182,18 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         }
     }
 
-    fun refineWithFixpointSolver(positive: PredicateState, negative: PredicateState, additionalArgs: List<Term>, memoryVersionInfo: MemoryVersionInfo): FixpointResult {
-        return CallCtx(tf, positive, negative) { tf -> Z3ContextWithCallMemory(tf, memoryVersionInfo) }.use { ctx ->
-            val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
+    fun refineWithFixpointSolver(
+            state: PredicateState,
+            positive: PredicateState,
+            negative: PredicateState,
+            additionalArgs: List<Term>,
+            memoryInfo: MemoryVersionInfo
+    ): FixpointResult {
+        return CallCtx(tf, state, positive, negative) { tf -> Z3ConverterWithCallMemory(tf, memoryInfo) }.use { ctx ->
+            val callPredicateConverter = ctx.converter as Z3ConverterWithCallMemory
+             val z3State = ctx.build {
+                convert(state).asAxiom() as BoolExpr
+            }
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
             val z3query = ctx.convert(negative).asAxiom() as BoolExpr
 
@@ -196,8 +205,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct()
             val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).distinct()
             val declarationMapping = ModelDeclarationMapping.create(
-                    argumentDeclarations, memoryVersionInfo,
-                    positive, negative,
+                    argumentDeclarations, memoryInfo,
+                    state, positive, negative,
                     BasicState(additionalArgs.map { EqualityPredicate(it, it) })
             )
             additionalArgsDeclarations.forEach { (term, decl) -> declarationMapping.setTerm(decl, term) }
@@ -205,11 +214,11 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             val predicate = Predicate(0)
             val predicateApplication = predicate.call(ctx, argumentDeclarations)
             val positiveStatement = ctx.build {
-                val statement = z3positive implies predicateApplication
+                val statement = (z3State and z3positive) implies predicateApplication
                 statement.forall(declarationExprs).typedSimplify()
             }
             val queryStatement = ctx.build {
-                val statement = (z3query and predicateApplication) implies context.mkFalse()
+                val statement = (z3State and z3query and predicateApplication) implies context.mkFalse()
                 statement.forall(declarationExprs).typedSimplify()
             }
 
@@ -220,16 +229,13 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     }
 
     fun mkFixpointQueryV2(state: PredicateState, positivePaths: List<PredicateState>, query: PredicateState, ignoredCalls: Set<CallPredicate>, memoryVersionInfo: MemoryVersionInfo): FixpointResult {
-        return CallCtx(tf, state, query, *positivePaths.toTypedArray()) { tf -> Z3ContextWithCallMemory(tf, memoryVersionInfo) }.use { ctx ->
-            val callPredicateConverter = ctx.converter as Z3ContextWithCallMemory
+        return CallCtx(tf, state, query, *positivePaths.toTypedArray()) { tf -> Z3ConverterWithCallMemory(tf, memoryVersionInfo) }.use { ctx ->
+            val callPredicateConverter = ctx.converter as Z3ConverterWithCallMemory
             val z3State = ctx.build {
                 convert(state).asAxiom() as BoolExpr
             }
             val z3positive = positivePaths.map { ctx.convert(it).asAxiom() as BoolExpr }
             val z3query = ctx.convert(query).asAxiom() as BoolExpr
-
-//            log.debug("State:\n$state\nPositive:\n$positivePaths\nQuery:\n$query")
-//            log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
             val calls = callPredicateConverter.getCallsInfo()
             val ignoredCallIds = ignoredCalls.mapNotNull { callPredicateConverter.callInfo[it] }.map { it.index }.toSet()

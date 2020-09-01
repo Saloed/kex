@@ -3,7 +3,7 @@ package org.jetbrains.research.kex.state.memory
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
 
-internal class StrictMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>, val callDescriptor: MemoryDescriptor) : MemoryVersionTransformer {
+internal class StrictMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>, val callDescriptor: MemoryDescriptor? = null) : MemoryVersionTransformer {
 
     override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
         val descriptor = element.descriptor()
@@ -14,6 +14,7 @@ internal class StrictMemoryVersionMapper(val mapping: Map<MemoryDescriptor, Map<
     }
 
     override fun transformCallTerm(term: CallTerm): Term {
+        if (callDescriptor == null) return term
         val callMapping = mapping[callDescriptor] ?: error("No memory mapping for $callDescriptor")
         val newVersion = callMapping[term.memoryVersion]
                 ?: error("No version mapping for $callDescriptor : ${term.memoryVersion}")

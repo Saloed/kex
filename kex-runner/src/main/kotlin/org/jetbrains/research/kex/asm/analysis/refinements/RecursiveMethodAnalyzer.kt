@@ -9,9 +9,6 @@ import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
-import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
-import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -38,14 +35,14 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         }
         val directRecursiveCalls = recursiveTraces.map { it.last() }
 
-        val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
+        val methodPaths = MethodExecutionPathsAnalyzer(cm, psa, method)
         val state = buildMethodState(methodPaths, skipInlining = { it == method })
         val (nestedNormal, nestedRefinementSources) = inlineRefinements(ignoredCalls = directRecursiveCalls)
 
         val rootCall = createRootCall()
         val recursionPaths = findPathsLeadsToRecursion(directRecursiveCalls, methodPaths.builder)
 
-        val allSources = methodPaths.refinementSources.merge(nestedRefinementSources)
+        val allSources = methodPaths.exceptionalExecutionPaths.merge(nestedRefinementSources)
                 .fmap { it.filterRecursiveCalls() }
                 .fmap { it.optimize() }
         val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal)

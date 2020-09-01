@@ -14,7 +14,7 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3ContextWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVersionInfo) : Z3Converter(tf) {
+class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVersionInfo) : Z3Converter(tf) {
     private var callCounter = 1
 
     data class CallInfo(
@@ -29,17 +29,20 @@ class Z3ContextWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVers
     private val callStack = dequeOf<CallPredicate>()
 
     override fun convert(callApproximation: CallApproximationState, ef: Z3ExprFactory, ctx: Z3Context, extractPath: Boolean): Bool_ {
+        if (extractPath) return ef.makeTrue()
         val call = callApproximation.call
         callStack.addLast(call)
         if (call !in callInfo) {
             callInfo[call] = processCall(call, ef, ctx)
         }
         val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
-        val preconditions = callApproximation.preconditions.map { convert(it, ef, ctx, extractPath) }
-        val callState = convert(callApproximation.callState, ef, ctx, extractPath)
+
+        val preconditions = convertChoices(callApproximation.preconditions, ef, ctx, false)
+        val callState = convert(callApproximation.callState, ef, ctx, false)
         ctx.resetMemoryToVersion(callInfo.predicate.memoryVersion, memoryVersionInfo)
-        val postconditions = callApproximation.postconditions.map { convert(it, ef, ctx, extractPath) }
-        val defaultPost = convert(callApproximation.defaultPostcondition, ef, ctx, extractPath)
+        val allPostConditions = convertChoices(callApproximation.postconditions + callApproximation.defaultPostcondition, ef, ctx, false)
+        val postconditions = allPostConditions.dropLast(1)
+        val defaultPost = allPostConditions.last()
         val cases = preconditions.zip(postconditions).toMap()
         val defaultCase = callState and defaultPost
         callStack.removeLast()

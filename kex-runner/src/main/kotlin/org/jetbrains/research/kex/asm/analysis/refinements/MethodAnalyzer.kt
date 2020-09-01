@@ -34,7 +34,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
         return normalPath to exceptionalPaths
     }
 
-    open fun buildMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean = { false }): PredicateState {
+    open fun buildMethodState(builder: MethodExecutionPathsAnalyzer, skipInlining: (Method) -> Boolean = { false }): PredicateState {
         val (preparedState, otherExecutionPaths) = prepareMethodState(builder, skipInlining)
         val transformedTopChoices = prepareMethodOtherExecutionPaths(otherExecutionPaths, skipInlining)
         val interestingTopChoices = transformedTopChoices
@@ -60,7 +60,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
                 }.apply(it)
             }
 
-    private fun prepareMethodState(builder: MethodRefinementSourceAnalyzer, skipInlining: (Method) -> Boolean): Pair<PredicateState, List<PredicateState>> {
+    private fun prepareMethodState(builder: MethodExecutionPathsAnalyzer, skipInlining: (Method) -> Boolean): Pair<PredicateState, List<PredicateState>> {
         val otherExecutionPaths = mutableListOf<PredicateState>()
         val inlinedState = transform(builder.methodRawFullState()) {
             +MethodFunctionalInliner(psa) {

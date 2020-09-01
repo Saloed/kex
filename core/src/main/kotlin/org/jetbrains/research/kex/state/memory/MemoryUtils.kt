@@ -9,6 +9,11 @@ object MemoryUtils {
         VersionVerifier.apply(ps)
     }
 
+    fun verify(ps: PredicateState, memoryVersionInfo: MemoryVersionInfo){
+        VersionVerifier.apply(ps)
+        MemoryVersionInfoVerifier.verify(ps, memoryVersionInfo)
+    }
+
     fun view(ps: PredicateState) = MemoryVersionViewer.view(ps)
     fun collectMemoryAccesses(ps: PredicateState) = MemoryAccessCollector.collect(ps)
     fun collectCallMemory(ps: PredicateState) = PredicateCollector.collectIsInstance<CallPredicate>(ps)
@@ -79,5 +84,7 @@ object MemoryUtils {
         if (initial in memory) return initial
         error("No initial version in memory")
     }
+
+    fun memoryVersionInfo(state: PredicateState) = MemoryVersionInfoCollector.collect(state)
 
 }

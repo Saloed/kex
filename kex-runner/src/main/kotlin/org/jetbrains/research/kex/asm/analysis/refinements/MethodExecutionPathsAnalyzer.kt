@@ -3,15 +3,17 @@ package org.jetbrains.research.kex.asm.analysis.refinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.predicate.PredicateType
-import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.transformer.IntrinsicAdapter
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.value.instruction.*
+import org.jetbrains.research.kfg.ir.value.instruction.CastInst
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
+import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
+import org.jetbrains.research.kfg.ir.value.instruction.ThrowInst
 import org.jetbrains.research.kfg.type.Type
 import org.jetbrains.research.kfg.visitor.MethodVisitor
 
-class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: PredicateStateAnalysis, val method: Method) : MethodVisitor {
+class MethodExecutionPathsAnalyzer(override val cm: ClassManager, val psa: PredicateStateAnalysis, val method: Method) : MethodVisitor {
     override fun cleanup() {}
     private val returnInstructions = arrayListOf<ReturnInst>()
     private val throwInstructions = arrayListOf<ThrowInst>()
@@ -40,6 +42,9 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
         else -> TODO("Unsupported refinement criteria: $inst")
     }
 
+    val isEmpty: Boolean
+        get() = returnInstructions.isEmpty() && throwInstructions.isEmpty()
+
     val normalExecutionPaths: PredicateState by lazy {
         returnInstructions
                 .mapNotNull { builder.getInstructionState(it) }
@@ -47,7 +52,7 @@ class MethodRefinementSourceAnalyzer(override val cm: ClassManager, val psa: Pre
                 .let { ChoiceState(it) }
     }
 
-    val refinementSources: RefinementSources by lazy {
+    val exceptionalExecutionPaths: RefinementSources by lazy {
         throwInstructions
                 .map { getRefinementCriteria(it) to builder.getInstructionState(it) }
                 .filter { it.second != null }

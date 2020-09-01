@@ -60,27 +60,33 @@ open class ${Converter}(val tf: TypeFactory) : ${SMTConverter}() {
         basic.predicates.fold(ef.makeTrue()) { acc, predicate -> acc and convert(predicate, ef, ctx) }
 
     fun convert(chain: ChainState, ef: ExprFactory_, ctx: Context_, extractPath: Boolean = false): Bool_ =
-        convert(chain.base, ef, ctx) and convert(chain.curr, ef, ctx)
+        convert(chain.base, ef, ctx, extractPath) and convert(chain.curr, ef, ctx, extractPath)
 
     fun convert(choice: ChoiceState, ef: ExprFactory_, ctx: Context_, extractPath: Boolean = false): Bool_ {
-        var res = ef.makeFalse()
-        val contexts = hashMapOf< Bool_, Context_ >()
-        for (branch in choice) {
-            val newCtx = ctx.splitMemory()
-            val state = convert(branch, ef, newCtx, extractPath)
+        val choices = convertChoices(choice.choices, ef, ctx, extractPath)
+        return choices.fold(ef.makeFalse()) { res, state -> res or state }
+    }
 
-            res = res or state
+    fun convertChoices(choices: List< PredicateState >, ef: ExprFactory_, ctx: Context_, extractPath: Boolean = false): List< Bool_ > {
+        val contexts = hashMapOf< Bool_, Context_ >()
+        val result = arrayListOf< Bool_ >()
+        for (branch in choices) {
+            val newCtx = if (!extractPath) ctx.splitMemory() else ctx
+            result += convert(branch, ef, newCtx, extractPath)
             if (!extractPath) {
                 val path = branch.filterByType(PredicateType.Path())
-                contexts[convert(path, ef, newCtx, true)] = newCtx
+                val pathCondition = convert(path, ef, newCtx.lockMemory(), true)
+                contexts[pathCondition] = newCtx
             }
         }
-        ctx.mergeMemory("choice", contexts)
-        return res
+        if (!extractPath) {
+            ctx.mergeMemory("choice", contexts)
+        }
+        return result
     }
 
     fun convert(negation: NegationState, ef: ExprFactory_, ctx: Context_, extractPath: Boolean = false): Bool_ =
-        convert(negation.predicateState, ef, ctx).not()
+        convert(negation.predicateState, ef, ctx, extractPath).not()
 
 #set($predicates = ["ArrayStore", "Call", "Catch", "DefaultSwitch", "Inequality", "Equality", "FieldStore", "NewArray", "New", "Throw", "Constant", "Cast"])
     fun convert(predicate: Predicate, ef: ExprFactory_, ctx: Context_): Bool_ = when (predicate) {

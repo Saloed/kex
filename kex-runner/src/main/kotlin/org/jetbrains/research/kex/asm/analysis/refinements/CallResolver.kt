@@ -1,16 +1,14 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
-import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
-import kotlinx.serialization.Serializable
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolveSolverQuery
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.SolverQuery
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
-import org.jetbrains.research.kex.state.ChainState
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -20,45 +18,38 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kex.state.wrap
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager, private val baseScope: MemoryAccessScope = MemoryAccessScope.RootScope) {
     private var currentMemoryAccessScope: MemoryAccessScope? = null
 
-    interface Argument<T : Argument<T>> {
-        fun transform(transformer: (PredicateState) -> PredicateState): T
-        fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): T
-    }
-
-    inline fun <reified T : Argument<T>> callResolutionLoopMany(argument: T, crossinline processor: (T) -> List<RecoveredModel>): List<PredicateState> {
+    inline fun <reified T : SolverQuery<T, List<RecoveredModel>>> callResolutionLoop(query: T): List<PredicateState> {
         while (true) {
-            log.debug("Enter call resolution loop for ${methodAnalyzer.method}")
-            val callArgument = argument.transform { approximationManager.extendWithUnderApproximations(it) }
-            val callArgumentWithIgnoredCalls = ignoreCalls(callArgument)
-            val processed = processor(callArgumentWithIgnoredCalls)
+            log.debug("Enter ${query.iteration} call resolution loop for ${methodAnalyzer.method}")
+            val processed = query.updateIteration { it.inc() }
+                    .transform { approximationManager.extendWithUnderApproximations(it) }
+                    .updateIgnoredCalls { ignoreCalls(query, it) }
+                    .acceptMemoryCorrector { ps, versionInfo ->
+                        approximationManager.correctMemoryAfterApproximation(ps, versionInfo)
+                    }
+                    .run(FixpointSolver(methodAnalyzer.cm))
             if (processed.all { it.isFinal }) return processed.map { it.finalStateOrException() }
             processed.forEach { resolveCalls(it) }
         }
     }
 
-    fun <T : Argument<T>> ignoreCalls(argument: T): T {
+    fun <T : SolverQuery<T, List<RecoveredModel>>> ignoreCalls(query: T, ignored: Set<CallPredicate>): Set<CallPredicate> {
         val callCollector = PredicateCollector { it is CallPredicate }
-        argument.transform { callCollector.transform(it); it }
+        query.transform { callCollector.transform(it); it }
         val allCalls = callCollector.predicates.filterIsInstance<CallPredicate>().toSet()
-        return argument.updateIgnoredCalls { ignored ->
-            val callsToCheck = allCalls - ignored
-            val callsToIgnore = callsToCheck.filter { callMayBeIgnored(it) }
-            ignored + callsToIgnore
-        }
+        val callsToCheck = allCalls - ignored
+        val callsToIgnore = callsToCheck.filter { callMayBeIgnored(it) }
+        return ignored + callsToIgnore
     }
 
     private fun callMayBeIgnored(call: CallPredicate): Boolean {
         val approximation = approximationManager.underApproximations[call] ?: return false
         return approximation.approximations.isNotEmpty()
     }
-
-    inline fun <reified T : Argument<T>> callResolutionLoop(argument: T, crossinline processor: (T) -> RecoveredModel): PredicateState =
-            callResolutionLoopMany(argument) { listOf(processor(it)) }.first()
 
     fun resolveCalls(model: RecoveredModel) {
         if (model.isFinal) return
@@ -122,39 +113,24 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     private fun resolveCalls(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): PredicateState {
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(state, call, dependencies)
-        val positiveState = preprocessState(stateWithDependencyInlined, forwardMapping)
-        val negativeState = positiveState.negateWRTStatePredicates().optimize()
-        MemoryUtils.verifyVersions(positiveState)
-        MemoryUtils.verifyVersions(negativeState)
-
-//        MemoryUtils.view(positiveState)
-
-        val argument = SolverArgument(positiveState, negativeState, arguments, emptySet(), memoryVersionInfo)
-        check(currentMemoryAccessScope != null) { "Incorrect scope state" }
-        val resolver = CallResolver(methodAnalyzer, approximationManager, currentMemoryAccessScope!!)
-        val result = resolver.callResolutionLoop(argument) { solverArg ->
-            log.debug(solverArg)
-            val result = FixpointSolver(methodAnalyzer.cm).querySingle(
-                    {
-                        it.dumpSolverArguments(solverArg, debug = true)
-                        MemoryUtils.verifyVersions(solverArg.positive)
-                        MemoryUtils.verifyVersions(solverArg.negative)
-                        refineWithFixpointSolver(solverArg.positive, solverArg.negative, solverArg.arguments, solverArg.memoryVersionInfo)
-                    },
-                    { ex ->
-                        dumpSolverArguments(solverArg)
-                        throw IllegalStateException("$ex")
-                    }
-            )
-            log.debug(result)
-            result
-        }
+        val (preparedState, pathCondition) = createPathCondition(state)
+        val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(preparedState, call, dependencies)
+        val stateToAnalyze = preprocessState(stateWithDependencyInlined, forwardMapping)
+        val positive = pathCondition
+        val negative = NegationState(pathCondition)
+        val argument = CallResolveSolverQuery(stateToAnalyze, positive, negative, arguments, emptySet(), memoryVersionInfo, 0)
+        val result = analyzeState(argument)
         val resultState = postprocessState(result, backwardMapping)
         check(currentMemoryAccessScope != null) { "Incorrect scope state" }
         val resultWithRestoredMemory = restoreStateMemory(resultState, memoryMapping, call)
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         return resultWithRestoredMemory
+    }
+
+    private fun analyzeState(argument: CallResolveSolverQuery): PredicateState {
+        check(currentMemoryAccessScope != null) { "Incorrect scope state" }
+        val resolver = CallResolver(methodAnalyzer, approximationManager, currentMemoryAccessScope!!)
+        return resolver.callResolutionLoop(argument.wrap()).first()
     }
 
     private fun preprocessState(state: PredicateState, forwardMapping: TermRemapper): PredicateState = transform(state) {
@@ -181,6 +157,37 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
             callPredicate: CallPredicate,
             dependencies: List<TermDependency>
     ): Triple<PredicateState, MemoryMappingType, MemoryVersionInfo> {
+        val (methodState, finalVersions) = prepareInliningMethod(callPredicate, dependencies)
+        val callMemoryVersion = callPredicate.memoryVersion
+        currentMemoryAccessScope = baseScope.withScope(callMemoryVersion.machineName)
+        check(callMemoryVersion.type == MemoryVersionType.NEW) { "Call memory must be NEW" }
+        return updateMemoryVersionsAfterInlining(state, finalVersions, callMemoryVersion, methodState)
+    }
+
+    private fun updateMemoryVersionsAfterInlining(
+            state: PredicateState,
+            finalVersions: Map<MemoryDescriptor, MemoryVersion>,
+            callMemoryVersion: MemoryVersion,
+            methodState: PredicateState
+    ): Triple<ChainState, MutableMap<Pair<MemoryDescriptor, MemoryVersion>, Pair<MemoryDescriptor, MemoryVersion>>, MemoryVersionInfo> {
+        val (preparedState, mapping) = MemoryUtils.newAsSeparateInitialVersions(state).let { it.first to it.second.toMutableMap() }
+        val descriptorMapping = finalVersions.keys.associateBy({ it }) {
+            mapping.getOrPut(it.withScope(baseScope) to callMemoryVersion) { it.withScope(currentMemoryAccessScope!!) to MemoryVersion.initial() }.first.scopeInfo
+        }
+        val mappedFinals = finalVersions.mapKeys { (descriptor, _) ->
+            val scope = descriptorMapping[descriptor] ?: error("No scope mapped")
+            descriptor.withScope(scope)
+        }
+        val replacement = mappedFinals.mapValues { (_, final) -> MemoryVersion.initial() to final }
+        val scopedMethodState = MemoryUtils.mapMemoryScope(methodState, descriptorMapping)
+        val newState = MemoryUtils.replaceMemoryVersion(preparedState, replacement)
+        val resultState = ChainState(scopedMethodState, newState)
+        val memoryVersionInfo = MemoryVersionInfoCollector.collect(resultState)
+        MemoryUtils.verify(resultState, memoryVersionInfo)
+        return Triple(resultState, mapping, memoryVersionInfo)
+    }
+
+    private fun prepareInliningMethod(callPredicate: CallPredicate, dependencies: List<TermDependency>): Pair<PredicateState, Map<MemoryDescriptor, MemoryVersion>> {
         val call = callPredicate.call as CallTerm
         val inlineStatus = MethodManager.InlineManager.isInlinable(call.method)
         if (inlineStatus == MethodManager.InlineManager.InlineStatus.NO_INLINE) error("Method is not inlineable")
@@ -188,7 +195,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
 
         val retvalPlaceholder = term { value(call.method.returnType.kexType, "retval_${call.hashCode()}") }
         val predicateToInline = CallPredicate(retvalPlaceholder, call)
-        val inliner = CallInliner(methodAnalyzer.psa, methodAnalyzer, forceDeepInline = true)
+        val inliner = CallInliner(methodAnalyzer.cm, methodAnalyzer.psa, methodAnalyzer, forceDeepInline = true)
         val methodState = inliner.apply(predicateToInline.wrap())
         check(predicateToInline !in PredicateCollector.collectIsInstance<CallPredicate>(methodState)) { "Call was not inlined" }
         val retvalBindings = basic {
@@ -198,37 +205,10 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         }
         val methodStateForInlining = ChainState(methodState, retvalBindings)
 
-        val (preparedState, mapping) = MemoryUtils.newAsSeparateInitialVersions(state).let { it.first to it.second.toMutableMap() }
-        check(call.memoryVersion.type == MemoryVersionType.NEW) { "Call memory must be NEW" }
         val memoryVersioner = MemoryVersioner()
         val versionedMethodState = memoryVersioner.apply(methodStateForInlining)
         val finalVersions = memoryVersioner.memoryInfo().final
-
-        currentMemoryAccessScope = baseScope.withScope(call.memoryVersion.machineName)
-
-        val descriptorMapping = finalVersions.keys.associateBy({ it }) {
-            mapping.getOrPut(it.withScope(baseScope) to call.memoryVersion) { it.withScope(currentMemoryAccessScope!!) to MemoryVersion.initial() }.first.scopeInfo
-        }
-        val versionedMethodStateV2 = MemoryUtils.mapMemoryScope(versionedMethodState, descriptorMapping)
-        val mappedFinals = finalVersions.mapKeys { (descriptor, _) ->
-            val scope = descriptorMapping[descriptor] ?: error("No scope mapped")
-            descriptor.withScope(scope)
-        }
-        val replacement = mappedFinals.mapValues { (_, final) -> MemoryVersion.initial() to final }
-        val newState = MemoryUtils.replaceMemoryVersion(preparedState, replacement)
-        val resultState = ChainState(versionedMethodStateV2, newState)
-        val resultMemoryVersionInfo = createMemoryVersionInfo(mappedFinals, newState)
-        return Triple( resultState, mapping, resultMemoryVersionInfo)
-    }
-
-    private fun createMemoryVersionInfo(mappedFinals: Map<MemoryDescriptor, MemoryVersion>, state: PredicateState): MemoryVersionInfo {
-        val memoryAccess = MemoryUtils.collectMemoryAccesses(state)
-        val memoryTree = MemoryUtils.memoryVersionDescendantTree(memoryAccess)
-        val anotherMemoryTree = mappedFinals.mapValues { (_, version) -> MemoryUtils.memoryVersionDescendantTree(version) }
-        val mergedTree = MemoryUtils.mergeMemoryVersionTrees(anotherMemoryTree, memoryTree)
-        val finals = MemoryUtils.collectFinalVersions(mergedTree)
-        val initials = MemoryUtils.collectInitialVersions(mergedTree)
-        return MemoryVersionInfo(initials, finals)
+        return versionedMethodState to finalVersions
     }
 
     private fun collectArguments(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
@@ -243,19 +223,6 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val backwardMapping = argumentsMapping.entries.associateBy({ it.value }, { it.key })
         val argumentTerms = backwardMapping.keys.toList()
         return Triple(argumentTerms, TermRemapper(argumentsMapping), TermRemapper(backwardMapping))
-    }
-
-    @Serializable
-    data class SolverArgument(
-            val positive: PredicateState,
-            val negative: PredicateState,
-            val arguments: List<Term>,
-            val ignoredCalls: Set<CallPredicate>,
-            val memoryVersionInfo: MemoryVersionInfo
-    ) : Argument<SolverArgument> {
-        override fun transform(transformer: (PredicateState) -> PredicateState): SolverArgument = SolverArgument(transformer(positive), transformer(negative), arguments, ignoredCalls, memoryVersionInfo)
-        override fun updateIgnoredCalls(transformer: (Set<CallPredicate>) -> Set<CallPredicate>): SolverArgument = SolverArgument(positive, negative, arguments, transformer(ignoredCalls), memoryVersionInfo)
-        override fun toString(): String = "Resolve call solver argument:\nPositive:\n$positive\nNegative:\n$negative"
     }
 
 }

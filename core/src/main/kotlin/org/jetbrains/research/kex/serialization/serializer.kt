@@ -16,10 +16,7 @@ abstract class AbstractSerializer(val context: SerializersModule) {
         serializersModule = context
     }
 
-
-    inline fun <reified T : Any> toJson(t: T) = json.encodeToString(serializer<T>(), t)
-
-
+    inline fun <reified T : Any> toJson(t: T) = json.encodeToString(serializer(), t)
     inline fun <reified T : Any> fromJson(str: String) = json.decodeFromString(serializer<T>(), str)
 }
 

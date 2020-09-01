@@ -11,11 +11,13 @@ import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.*
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 
 class CallInliner(
+        val cm: ClassManager,
         val psa: PredicateStateAnalysis,
         val refinementProvider: RefinementProvider,
         val forceDeepInline: Boolean = false,
@@ -47,7 +49,7 @@ class CallInliner(
 
     private fun inlineSimple(predicate: CallPredicate, method: Method, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
         if (method.isEmpty()) return predicate
-        val methodState = psa.builder(method).methodState ?: return predicate
+        val methodState = methodState(method) ?: return predicate
         val nestedCalls = PredicateCollector.collectIsInstance<CallPredicate>(methodState)
         if (nestedCalls.isNotEmpty() && !forceDeepInline) return predicate
         return inlineNestedCalls(methodState, "method", predicate, varGenerator, argumentMapping)
@@ -58,12 +60,18 @@ class CallInliner(
             isObjectConstructor(method) -> nothing()
             else -> predicate
         }
-        val constructorState = psa.builder(method).methodState ?: return predicate
+        val constructorState = methodState(method) ?: return predicate
         return inlineNestedCalls(constructorState, "constructor", predicate, varGenerator, argumentMapping)
     }
 
+    private fun methodState(method: Method): PredicateState? {
+        val methodExecutionPaths = MethodExecutionPathsAnalyzer(cm, psa, method)
+        if (methodExecutionPaths.isEmpty) return null
+        return methodExecutionPaths.methodRawFullState()
+    }
+
     private fun inlineNestedCalls(methodState: PredicateState, prefix: String, predicate: CallPredicate, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
-        val inliner = CallInliner(psa, refinementProvider, forceDeepInline = false)
+        val inliner = CallInliner(cm, psa, refinementProvider, forceDeepInline = false)
         val stateResolved = inliner.apply(methodState)
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()
@@ -152,7 +160,7 @@ private class TermMapper(val variableGenerator: VariableGenerator, val mapping: 
     }
 }
 
-private class PathPredicateToPathVariableTransformer(val variableGenerator: VariableGenerator) : Transformer<PathPredicateToPathVariableTransformer> {
+class PathPredicateToPathVariableTransformer(val variableGenerator: VariableGenerator) : Transformer<PathPredicateToPathVariableTransformer> {
     val createdPathVars = arrayListOf<Term>()
 
     override fun transformPredicate(predicate: Predicate): Predicate {
@@ -169,14 +177,18 @@ private class PathPredicateToPathVariableTransformer(val variableGenerator: Vari
 
 }
 
-private class VariableGenerator(val prefix: String) {
+class VariableGenerator(private val prefix: String, private val unique: Boolean = false) {
     private var generatorIndex: Int = 0
     private val indexMapping = hashMapOf<Any, Int>()
     fun generatorFor(obj: Any): VariableGenerator {
-        val idx = indexMapping.getOrPut(obj) { generatorIndex++ }
-        return VariableGenerator("${prefix}_${idx}")
+        val idx = when {
+            unique -> generatorIndex++
+            else -> indexMapping.getOrPut(obj) { generatorIndex++ }
+        }
+        return VariableGenerator("${prefix}_${idx}", unique)
     }
 
+    fun unique() = VariableGenerator(prefix, true)
     fun createVar(type: KexType) = term { value(type, prefix) }
-    fun createNestedGenerator(prefix: String) = VariableGenerator("${this.prefix}_${prefix}")
+    fun createNestedGenerator(prefix: String) = VariableGenerator("${this.prefix}_${prefix}", unique)
 }

@@ -24,9 +24,9 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
     private val methodImplementations = hashMapOf<Method, List<Method>>()
 
     override fun analyze(): Refinements {
-        val methodPaths = MethodRefinementSourceAnalyzer(cm, psa, method)
+        val methodPaths = MethodExecutionPathsAnalyzer(cm, psa, method)
         val state = buildMethodState(methodPaths)
-        val refinementSources = methodPaths.refinementSources
+        val refinementSources = methodPaths.exceptionalExecutionPaths
         val normalPaths = methodPaths.normalExecutionPaths
         val (nestedNormal, nestedRefinementSources) = inlineRefinements()
 
