@@ -17,7 +17,9 @@ import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
-import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.transformer.MemorySpacer
+import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
+import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method

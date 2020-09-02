@@ -148,10 +148,10 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
 
     companion object {
         fun Transformation.applyAdapters(methodAnalyzer: MethodAnalyzer) {
-            +Optimizer()
+            +Optimizer
             +ConstantPropagator
             +BoolTypeAdapter(methodAnalyzer.cm.type)
-            +Optimizer()
+            +Optimizer
         }
     }
 

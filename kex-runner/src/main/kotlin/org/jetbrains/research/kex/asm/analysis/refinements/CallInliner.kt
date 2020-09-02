@@ -4,10 +4,10 @@ import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
-import org.jetbrains.research.kex.state.predicate.*
+import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kex.util.VariableGenerator
@@ -76,16 +76,14 @@ class CallInliner(
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()
         val pathConditionExtension = inliner.callPathConditions.values.map { pathConditions ->
-            pathConditions.fmap { _, pcStates ->
-                pcStates.map {
-                    val variables = collectVariables(it)
-                    val varMapping = variables.associateWith { pv ->
-                        val newTerm = refinementVarGenerator.generatorFor(pv).createVar(pv.type)
-                        pcVarMapping[pv] = newTerm
-                        newTerm
-                    }
-                    TermMapper(refinementVariableGenerator, varMapping).apply(it)
+            pathConditions.fmap { _, pcState ->
+                val variables = collectVariables(pcState)
+                val varMapping = variables.associateWith { pv ->
+                    val newTerm = refinementVarGenerator.generatorFor(pv).createVar(pv.type)
+                    pcVarMapping[pv] = newTerm
+                    newTerm
                 }
+                TermMapper(refinementVariableGenerator, varMapping).apply(pcState)
             }
         }
         callPathConditions[predicate] = callPathConditions[predicate]?.merge(pathConditionExtension)
@@ -105,18 +103,17 @@ class CallInliner(
 
     private fun Refinement.createPathVariable(varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
         val argumentMapper = TermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
-        val preparedState = argumentMapper.apply(state)
-        val (refinementState, refinementPC) = createPathCondition(preparedState, varGenerator.createNestedGenerator("pv"))
+        val preparedState = state.accept(argumentMapper::apply)
         return when {
-            refinementState.evaluatesToFalse -> PathConditions(emptyMap())
-            refinementState.evaluatesToTrue -> {
+            preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
+            preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue -> {
                 log.warn("Inline call refinement which is always true")
-                currentBuilder += refinementState.negateWRTStatePredicates()
+                currentBuilder += preparedState.negate().toPredicateState()
                 PathConditions(emptyMap())
             }
             else -> {
-                currentBuilder += refinementState
-                PathConditions(mapOf(criteria to listOf(refinementPC)))
+                currentBuilder += preparedState.state
+                PathConditions(mapOf(criteria to preparedState.path))
             }
         }
     }
@@ -157,21 +154,3 @@ private class TermMapper(val variableGenerator: VariableGenerator, val mapping: 
         else -> term
     }
 }
-
-class PathPredicateToPathVariableTransformer(val variableGenerator: VariableGenerator) : Transformer<PathPredicateToPathVariableTransformer> {
-    val createdPathVars = arrayListOf<Term>()
-
-    override fun transformPredicate(predicate: Predicate): Predicate {
-        if (predicate.type != PredicateType.Path()) return super.transformPredicate(predicate)
-        val pathVar = variableGenerator.generatorFor(predicate).createVar(KexBool())
-        createdPathVars += pathVar
-        val pathCondition = when (predicate) {
-            is EqualityPredicate -> term { predicate.lhv eq predicate.rhv }
-            is InequalityPredicate -> term { predicate.lhv neq predicate.rhv }
-            else -> error("Unsupported predicate $predicate")
-        }
-        return EqualityPredicate(pathVar, pathCondition, PredicateType.State(), predicate.location)
-    }
-
-}
-

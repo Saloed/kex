@@ -48,7 +48,7 @@ class Checker(val method: Method, val loader: ClassLoader, private val psa: Pred
 
         +IntrinsicAdapter
         +ReflectionInfoAdapter(method, loader)
-        +Optimizer()
+        +Optimizer
         +ConstantPropagator
         +BoolTypeAdapter(method.cm.type)
         +ArrayBoundsAdapter()
@@ -102,8 +102,8 @@ class Checker(val method: Method, val loader: ClassLoader, private val psa: Pred
             log.debug("Slicing finished")
         }
 
-        state = Optimizer().apply(state)
-        query = Optimizer().apply(query)
+        state = Optimizer.apply(state)
+        query = Optimizer.apply(query)
         if (logQuery) {
             log.debug("Simplified state: $state")
             log.debug("Query: $query")

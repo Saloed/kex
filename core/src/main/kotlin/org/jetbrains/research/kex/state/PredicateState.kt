@@ -6,7 +6,10 @@ import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.BaseType
 import org.jetbrains.research.kex.InheritanceInfo
-import org.jetbrains.research.kex.state.predicate.*
+import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.PredicateBuilder
+import org.jetbrains.research.kex.state.predicate.PredicateType
+import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kfg.ir.Location
 
 interface TypeInfo {
@@ -52,6 +55,7 @@ class StateBuilder() : PredicateBuilder() {
     inline fun assume(body: PredicateBuilder.() -> Predicate) {
         this += Assume().body()
     }
+
     inline fun assume(location: Location, body: PredicateBuilder.() -> Predicate) {
         this += Assume(location).body()
     }
@@ -59,6 +63,7 @@ class StateBuilder() : PredicateBuilder() {
     inline fun state(body: PredicateBuilder.() -> Predicate) {
         this += State().body()
     }
+
     inline fun state(location: Location, body: PredicateBuilder.() -> Predicate) {
         this += State(location).body()
     }
@@ -66,6 +71,7 @@ class StateBuilder() : PredicateBuilder() {
     inline fun path(body: PredicateBuilder.() -> Predicate) {
         this += Path().body()
     }
+
     inline fun path(location: Location, body: PredicateBuilder.() -> Predicate) {
         this += Path(location).body()
     }
@@ -73,6 +79,7 @@ class StateBuilder() : PredicateBuilder() {
     inline fun require(body: PredicateBuilder.() -> Predicate) {
         this += Require().body()
     }
+
     inline fun require(location: Location, body: PredicateBuilder.() -> Predicate) {
         this += Require(location).body()
     }
@@ -106,13 +113,15 @@ inline fun chain(base: StateBuilder.() -> Unit, curr: StateBuilder.() -> Unit): 
     return sb.apply()
 }
 
+fun chain(states: List<PredicateState>) = states.reduceOrNull { acc, state -> ChainState(acc, state) } ?: emptyState()
+
 inline fun choice(left: StateBuilder.() -> Unit, right: StateBuilder.() -> Unit): PredicateState {
     val lhv = StateBuilder().apply { left() }.apply()
     val rhv = StateBuilder().apply { right() }.apply()
     return StateBuilder().apply { this += listOf(lhv, rhv) }.apply()
 }
 
-inline fun choice(vararg builders: StateBuilder.() -> Unit): PredicateState{
+inline fun choice(vararg builders: StateBuilder.() -> Unit): PredicateState {
     val states = builders.map { StateBuilder().apply { it() }.apply() }
     return StateBuilder().apply { this += states }.apply()
 }
@@ -174,7 +183,7 @@ abstract class PredicateState : TypeInfo {
 
     fun take(n: Int): PredicateState {
         var counter = 0
-        return this.filter { counter++ < n  }
+        return this.filter { counter++ < n }
     }
 
     fun takeLast(n: Int): PredicateState = reverse().take(n).reverse()
@@ -246,4 +255,20 @@ abstract class PredicateState : TypeInfo {
     protected abstract fun performSimplify(): PredicateState
     protected abstract fun checkEvaluationToTrue(): Boolean
     protected abstract fun checkEvaluationToFalse(): Boolean
+}
+
+@Serializable
+data class PredicateStateWithPath(val state: PredicateState, val path: PredicateState) {
+    fun negate() = PredicateStateWithPath(state, path.not())
+    fun toPredicateState(): PredicateState = ChainState(state, path)
+    fun accept(transform: (PredicateState) -> PredicateState) = PredicateStateWithPath(transform(state), transform(path))
+
+    companion object {
+        fun chain(ps: List<PredicateStateWithPath>) = PredicateStateWithPath(chainStates(ps), chainPaths(ps))
+        fun choice(ps: List<PredicateStateWithPath>) = PredicateStateWithPath(chainStates(ps), choicePaths(ps))
+
+        private fun chainStates(ps: List<PredicateStateWithPath>) = chain(ps.map { it.state })
+        private fun chainPaths(ps: List<PredicateStateWithPath>) = chain(ps.map { it.path })
+        private fun choicePaths(ps: List<PredicateStateWithPath>) = ChoiceState(ps.map { it.path })
+    }
 }

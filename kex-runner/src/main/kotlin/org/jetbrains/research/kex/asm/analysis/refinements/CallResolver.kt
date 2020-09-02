@@ -18,12 +18,11 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
-import org.jetbrains.research.kex.util.VariableGenerator
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager, private val baseScope: MemoryAccessScope = MemoryAccessScope.RootScope) {
     private var currentMemoryAccessScope: MemoryAccessScope? = null
 
-    inline fun <reified T : SolverQuery<T, List<RecoveredModel>>> callResolutionLoop(query: T): List<PredicateState> {
+    inline fun <reified T : SolverQuery<T, List<RecoveredModel>>> callResolutionLoop(query: T): List<PredicateStateWithPath> {
         while (true) {
             log.debug("Enter ${query.iteration} call resolution loop for ${methodAnalyzer.method}")
             val processed = query.updateIteration { it.inc() }
@@ -58,22 +57,22 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         if (calls.isEmpty()) return
         if (calls.size > 1) return tryResolveMultipleCalls(model)
         val (call, dependencies) = calls.entries.last()
-        resolveSingleCall(model.state, call, dependencies)
+        resolveSingleCall(model.state, call, dependencies, model.pathVariables, model.tmpVariables)
     }
 
     private fun tryResolveMultipleCalls(model: RecoveredModel) {
-        val singleDepsPredicates = collectPredicatesWithSingleDependentTerm(model.state, model.dependencies)
+//        val singleDepsPredicates = collectPredicatesWithSingleDependentTerm(model.state, model.dependencies)
         when {
-            singleDepsPredicates.isNotEmpty() -> singleDepsPredicates.forEach { (predicate, callIdx) ->
-                val depsToResolve = model.dependencies.filter { it.callIdx == callIdx }
-                val callToResolve = depsToResolve.first().call
-                resolveSingleCall(predicate.wrap(), callToResolve, depsToResolve)
-            }
+//            singleDepsPredicates.isNotEmpty() -> singleDepsPredicates.forEach { (predicate, callIdx) ->
+//                val depsToResolve = model.dependencies.filter { it.callIdx == callIdx }
+//                val callToResolve = depsToResolve.first().call
+//                resolveSingleCall(predicate.wrap(), callToResolve, depsToResolve, model.pathVariables, model.tmpVariables)
+//            }
             else -> {
                 val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
                 val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
                 val callToResolve = depsToResolve.first().call
-                resolveSingleCall(model.state, callToResolve, depsToResolve)
+                resolveSingleCall(model.state, callToResolve, depsToResolve, model.pathVariables, model.tmpVariables)
             }
         }
 
@@ -106,29 +105,28 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         return result
     }
 
-    private fun resolveSingleCall(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>) {
-        val callPreconditions = resolveCalls(state, call, dependencies)
+    private fun resolveSingleCall(state: PredicateStateWithPath, call: CallPredicate, dependencies: List<TermDependency>, pathVariables: Set<Term>, tmpVariables: Set<Term>) {
+        val callPreconditions = resolveCalls(state, call, dependencies, pathVariables, tmpVariables)
         approximationManager.update(call, MethodUnderApproximation(callPreconditions, state))
     }
 
-    private fun resolveCalls(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): PredicateState {
+    private fun resolveCalls(state: PredicateStateWithPath, call: CallPredicate, dependencies: List<TermDependency>, pathVariables: Set<Term>, tmpVariables: Set<Term>): PredicateStateWithPath {
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
-        val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val (preparedState, pathCondition) = createPathCondition(state, VariableGenerator("call_resolve"))
-        val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(preparedState, call, dependencies)
+        val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies, pathVariables, tmpVariables)
+        val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(state.state, call, dependencies)
         val stateToAnalyze = preprocessState(stateWithDependencyInlined, forwardMapping)
-        val positive = pathCondition
-        val negative = NegationState(pathCondition)
+        val positive = state.path
+        val negative = state.negate().path
         val argument = CallResolveSolverQuery(stateToAnalyze, positive, negative, arguments, emptySet(), memoryVersionInfo, 0)
         val result = analyzeState(argument)
-        val resultState = postprocessState(result, backwardMapping)
+        val resultState = postprocessState(result.state, backwardMapping)
         check(currentMemoryAccessScope != null) { "Incorrect scope state" }
         val resultWithRestoredMemory = restoreStateMemory(resultState, memoryMapping, call)
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
-        return resultWithRestoredMemory
+        return PredicateStateWithPath(resultWithRestoredMemory, result.path)
     }
 
-    private fun analyzeState(argument: CallResolveSolverQuery): PredicateState {
+    private fun analyzeState(argument: CallResolveSolverQuery): PredicateStateWithPath {
         check(currentMemoryAccessScope != null) { "Incorrect scope state" }
         val resolver = CallResolver(methodAnalyzer, approximationManager, currentMemoryAccessScope!!)
         return resolver.callResolutionLoop(argument.wrap()).first()
@@ -212,14 +210,17 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         return versionedMethodState to finalVersions
     }
 
-    private fun collectArguments(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): Triple<List<Term>, TermRemapper, TermRemapper> {
+    private fun collectArguments(state: PredicateStateWithPath, call: CallPredicate, dependencies: List<TermDependency>, pathVariables: Set<Term>, tmpVariables: Set<Term>): Triple<List<Term>, TermRemapper, TermRemapper> {
         val callArguments = VariableCollector().apply { transform(call.call) }.variables
         val callResultDependentTerms = dependencies.filterIsInstance<TermDependency.CallResultDependency>().map { it.term }.toSet()
         val memoryDependency = dependencies.filterIsInstance<TermDependency.MemoryDependency>().map { it.memoryAccess }.toSet()
-        val stateArguments = collectVariables(state)
+        val stateArguments = collectVariables(state.state).asSequence()
                 .filterNot { it is FieldTerm }
                 .filterNot { it in callResultDependentTerms }
                 .filterNot { it is MemoryAccess<*> && it in memoryDependency }
+                .filterNot { it in pathVariables }
+                .filterNot { it in tmpVariables }
+                .toList()
         val argumentsMapping = (callArguments + stateArguments).distinct().mapIndexed { i, term -> term to term { arg(term.type, i) } }.toMap()
         val backwardMapping = argumentsMapping.entries.associateBy({ it.value }, { it.key })
         val argumentTerms = backwardMapping.keys.toList()

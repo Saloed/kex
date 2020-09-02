@@ -51,7 +51,7 @@ class CallStackGenerator(val context: ExecutionContext, val psa: PredicateStateA
         if (isInliningEnabled) +MethodInliner(psa)
         +IntrinsicAdapter
         +ReflectionInfoAdapter(method, context.loader, ignores)
-        +Optimizer()
+        +Optimizer
         +ConstantPropagator
         +BoolTypeAdapter(method.cm.type)
         +ArrayBoundsAdapter()

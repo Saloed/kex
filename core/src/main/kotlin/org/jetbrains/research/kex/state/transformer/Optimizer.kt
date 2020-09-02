@@ -7,7 +7,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.ConstBoolTerm
 import org.jetbrains.research.kex.state.term.term
 
-class Optimizer : Transformer<Optimizer> {
+object Optimizer : Transformer<Optimizer> {
 
     override fun transformChain(ps: ChainState): PredicateState {
         val base = transform(ps.base)

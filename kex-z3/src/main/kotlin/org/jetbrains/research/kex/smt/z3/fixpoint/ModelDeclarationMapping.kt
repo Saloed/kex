@@ -56,18 +56,18 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         terms[declaration] = term
     }
 
-    fun getTerm(idx: Int, callDependencies: MutableSet<TermDependency>): TermWithAxiom {
+    fun getTerm(idx: Int, callDependencies: MutableSet<TermDependency>): Term {
         val declaration = declarations[idx]
         if (declaration is Declaration.CallResult) {
             val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
             val term = callInfo.predicate.lhv
             callDependencies.add(TermDependency.CallResultDependency(term, callInfo.index, callInfo.predicate))
-            return TermWithAxiom(term)
+            return term
         }
         val term = terms[declaration]
                 ?: throw IllegalArgumentException("No term for declaration $idx: ${declarations[idx]}")
         if (term is CallTerm) throw IllegalStateException("Unexpected CallTerm")
-        return TermWithAxiom(term)
+        return term
     }
 
 

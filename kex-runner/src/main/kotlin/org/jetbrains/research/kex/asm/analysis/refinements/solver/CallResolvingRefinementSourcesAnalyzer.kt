@@ -37,7 +37,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
     }
 
     private fun refinementIsCorrect(refinement: Refinement): Boolean {
-        if (PredicateCollector.collectIsInstance<CallPredicate>(refinement.state).isNotEmpty()) return false
+        if (PredicateCollector.collectIsInstance<CallPredicate>(refinement.state.state).isNotEmpty()) return false
         // todo: maybe more checks
         return true
     }

@@ -161,8 +161,8 @@ class ViolationChecker(override val cm: ClassManager,
         state = NullityAnnotator(nonNulls.map { term { value(it) } }.toSet()).apply(state)
         state = DoubleTypeAdapter().apply(state)
         query = DoubleTypeAdapter().apply(query)
-        state = Optimizer().apply(state)
-        query = Optimizer().apply(query)
+        state = Optimizer.apply(state)
+        query = Optimizer.apply(query)
         state = ConstantPropagator.apply(state)
         query = ConstantPropagator.apply(query)
         state = BoolTypeAdapter(method.cm.type).apply(state)
@@ -198,8 +198,8 @@ class ViolationChecker(override val cm: ClassManager,
             log.debug("Slicing finished")
         }
 
-        state = Optimizer().apply(state)
-        query = Optimizer().apply(query)
+        state = Optimizer.apply(state)
+        query = Optimizer.apply(query)
         if (logQuery) {
             log.debug("Simplified state: $state")
             log.debug("Query: $query")

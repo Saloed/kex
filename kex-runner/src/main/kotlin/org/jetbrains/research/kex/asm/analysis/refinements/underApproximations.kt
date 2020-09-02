@@ -1,7 +1,10 @@
 package org.jetbrains.research.kex.asm.analysis.refinements
 
 import com.abdullin.kthelper.collection.dequeOf
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.CallApproximationState
+import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.PredicateStateWithPath
+import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -19,14 +22,14 @@ class MethodApproximationManager {
 
     fun extendWithUnderApproximations(state: PredicateState): PredicateState = ApproximationInliner(underApproximations).apply(state)
     fun correctMemoryAfterApproximation(state: PredicateState, memoryVersionInfo: MemoryVersionInfo): Pair<PredicateState, MemoryVersionInfo> {
-        val corrector = NewApproximationMemoryCorrector()
+        val corrector = ApproximationMemoryCorrector()
         val newState = corrector.apply(state)
         val newMemoryVersionInfo = MemoryUtils.memoryVersionInfo(newState)
         return newState to newMemoryVersionInfo
     }
 }
 
-data class MethodUnderApproximation(val pre: PredicateState, val post: PredicateState)
+data class MethodUnderApproximation(val pre: PredicateStateWithPath, val post: PredicateStateWithPath)
 data class MethodUnderApproximations(val approximations: Set<MethodUnderApproximation> = emptySet()) {
     fun add(approximation: MethodUnderApproximation) = MethodUnderApproximations(approximations + approximation)
 }
@@ -40,86 +43,18 @@ class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApp
         val approximation = approximations[transformedCall]?.approximations
         val preconditions = approximation?.map { it.pre } ?: emptyList()
         val postconditions = approximation?.map { it.post } ?: emptyList()
-        val defaultPostcondition = postconditions.map { it.not() }
-                .reduceOrNull<PredicateState, PredicateState> { a, b -> ChainState(a, b) }
-                ?: emptyState()
-        currentBuilder += CallApproximationState(preconditions, postconditions, transformedCall, defaultPostcondition)
+        val defaultPostcondition = postconditions.map { it.negate() }.let { PredicateStateWithPath.chain(it) }
+        currentBuilder += CallApproximationState(
+                preconditions.map { it.toPredicateState() },
+                postconditions.map { it.toPredicateState() },
+                transformedCall,
+                defaultPostcondition.toPredicateState()
+        )
         return nothing()
     }
 }
 
-private class ApproximationMemoryState(
-        memory: Map<MemoryDescriptor, MemoryVersion>,
-        val pendingInsertions: MutableList<MemoryVersionInsertion>
-) : MemoryState(memory) {
-    override fun create(state: MemoryState) = ApproximationMemoryState(state.memory, pendingInsertions)
-}
-
-private class ApproximationMemorySimulator(memory: ApproximationMemoryState) : MemorySimulator(memory) {
-    override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
-        val memoryBeforeCall = memory as ApproximationMemoryState
-        transform(ps.callState)
-        val memoryAfterCall = memory as ApproximationMemoryState
-        val preconditionMemories = ps.preconditions.map { analyzeMemory(it, memoryBeforeCall) }
-        val postconditionMemories = ps.postconditions.map { analyzeMemory(it, memoryAfterCall) }
-        val defaultPostMemory = analyzeMemory(ps.defaultPostcondition, memoryAfterCall)
-        insertMemoryVersion(preconditionMemories, memoryBeforeCall, memoryAfterCall, InsertionType.BEFORE)
-        insertMemoryVersion(postconditionMemories + defaultPostMemory, memoryAfterCall, memoryAfterCall, InsertionType.AFTER)
-        return ps
-    }
-
-    private fun insertMemoryVersion(memories: List<ApproximationMemoryState>, initial: ApproximationMemoryState, where: ApproximationMemoryState, insertionType: InsertionType) {
-        val merged = initial.merge(memories)
-        merged.memory.forEach { (descriptor, version) ->
-            val whereVersion = where.memory.getValue(descriptor)
-            initial.pendingInsertions += MemoryVersionInsertion(descriptor, whereVersion, version, insertionType)
-        }
-    }
-
-    private fun analyzeMemory(state: PredicateState, initial: ApproximationMemoryState): ApproximationMemoryState {
-        val analyzer = ApproximationMemorySimulator(initial)
-        analyzer.apply(state)
-        return analyzer.memory as ApproximationMemoryState
-    }
-}
-
-private enum class InsertionType {
-    BEFORE, AFTER
-}
-
-private data class MemoryVersionInsertion(val descriptor: MemoryDescriptor, val where: MemoryVersion, val version: MemoryVersion, val insertionType: InsertionType)
-
-private class ApproximationMemoryCorrector(val memoryVersionInfo: MemoryVersionInfo) {
-    val pendingInsertions = arrayListOf<MemoryVersionInsertion>()
-
-    fun apply(ps: PredicateState): Pair<PredicateState, MemoryVersionInfo> {
-        val memoryState = ApproximationMemoryState(memoryVersionInfo.initial, pendingInsertions)
-        val memorySimulator = ApproximationMemorySimulator(memoryState)
-        memorySimulator.apply(ps)
-        val finalMemory = memorySimulator.memory
-        check(finalMemory.memory == memoryVersionInfo.final) { "Final memories" }
-        val replacements = pendingInsertions.groupBy { it.descriptor }.mapValues { (_, insertions) ->
-            insertions.distinct().map { insertion ->
-                val newVersion = when (insertion.insertionType) {
-                    InsertionType.AFTER -> insertion.version
-                    InsertionType.BEFORE -> when (insertion.where.type) {
-                        MemoryVersionType.NEW -> insertion.version.resetToVersion(insertion.where.version)
-                        MemoryVersionType.NORMAL -> insertion.version.increaseSubversion()
-                        MemoryVersionType.MERGE -> TODO("Merge is not implemented")
-                        MemoryVersionType.INITIAL,
-                        MemoryVersionType.DEFAULT -> error("Unsupported")
-                    }
-                }
-                insertion.where to newVersion
-            }.toMap()
-        }
-        val resultState = MemoryVersionReplacer.replaceMany(ps, replacements)
-        val newMemoryVersionInfo = MemoryVersionInfoCollector.collect(resultState)
-        return resultState to newMemoryVersionInfo
-    }
-}
-
-class NewApproximationMemoryCorrector : MemoryVersionRecollectingTransformer() {
+class ApproximationMemoryCorrector : MemoryVersionRecollectingTransformer() {
     private val callStateMapping = hashMapOf<CallApproximationState, PredicateState>()
     override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
         val initialMemory = memoryState

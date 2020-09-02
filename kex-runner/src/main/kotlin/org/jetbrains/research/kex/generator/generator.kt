@@ -106,7 +106,7 @@ class Generator(val ctx: ExecutionContext, val psa: PredicateStateAnalysis) {
         +ConcreteImplInliner(ctx, typeInfoMap, psa)
         +IntrinsicAdapter
         +ReflectionInfoAdapter(method, ctx.loader)
-        +Optimizer()
+        +Optimizer
         +ConstantPropagator
         +BoolTypeAdapter(method.cm.type)
         +ArrayBoundsAdapter()
