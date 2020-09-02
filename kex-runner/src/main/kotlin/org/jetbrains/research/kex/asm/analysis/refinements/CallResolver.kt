@@ -18,6 +18,7 @@ import org.jetbrains.research.kex.state.term.FieldTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.util.VariableGenerator
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager, private val baseScope: MemoryAccessScope = MemoryAccessScope.RootScope) {
     private var currentMemoryAccessScope: MemoryAccessScope? = null
@@ -113,7 +114,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     private fun resolveCalls(state: PredicateState, call: CallPredicate, dependencies: List<TermDependency>): PredicateState {
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, call, dependencies)
-        val (preparedState, pathCondition) = createPathCondition(state)
+        val (preparedState, pathCondition) = createPathCondition(state, VariableGenerator("call_resolve"))
         val (stateWithDependencyInlined, memoryMapping, memoryVersionInfo) = inlineCallDependencies(preparedState, call, dependencies)
         val stateToAnalyze = preprocessState(stateWithDependencyInlined, forwardMapping)
         val positive = pathCondition

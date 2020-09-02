@@ -76,11 +76,15 @@ class CallInliner(
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()
         val pathConditionExtension = inliner.callPathConditions.values.map { pathConditions ->
-            pathConditions.fmap { _, terms ->
-                terms.map {
-                    val newTerm = refinementVarGenerator.generatorFor(it).createVar(it.type)
-                    pcVarMapping[it] = newTerm
-                    newTerm
+            pathConditions.fmap { _, pcStates ->
+                pcStates.map {
+                    val variables = collectVariables(it)
+                    val varMapping = variables.associateWith { pv ->
+                        val newTerm = refinementVarGenerator.generatorFor(pv).createVar(pv.type)
+                        pcVarMapping[pv] = newTerm
+                        newTerm
+                    }
+                    TermMapper(refinementVariableGenerator, varMapping).apply(it)
                 }
             }
         }
@@ -101,11 +105,8 @@ class CallInliner(
 
     private fun Refinement.createPathVariable(varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
         val argumentMapper = TermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
-        val pathPredicateTransformer = PathPredicateToPathVariableTransformer(varGenerator.createNestedGenerator("pv"))
-        val refinementState = transform(state) {
-            +argumentMapper
-            +pathPredicateTransformer
-        }
+        val preparedState = argumentMapper.apply(state)
+        val (refinementState, refinementPC) = createPathCondition(preparedState, varGenerator.createNestedGenerator("pv"))
         return when {
             refinementState.evaluatesToFalse -> PathConditions(emptyMap())
             refinementState.evaluatesToTrue -> {
@@ -115,10 +116,7 @@ class CallInliner(
             }
             else -> {
                 currentBuilder += refinementState
-                val pathVariable = varGenerator.generatorFor(this).createVar(KexBool())
-                val pathCondition = term { pathPredicateTransformer.createdPathVars.reduce { acc, term -> acc and term } }
-                currentBuilder += EqualityPredicate(pathVariable, pathCondition)
-                PathConditions(mapOf(criteria to listOf(pathVariable)))
+                PathConditions(mapOf(criteria to listOf(refinementPC)))
             }
         }
     }

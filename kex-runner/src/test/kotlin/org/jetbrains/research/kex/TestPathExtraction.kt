@@ -13,6 +13,7 @@ import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kex.util.VariableGenerator
 import kotlin.test.Test
 
 class TestPathExtraction : KexTest() {
@@ -24,7 +25,7 @@ class TestPathExtraction : KexTest() {
     private fun run(builder: PSContext.() -> PredicateState) {
         val context = PSContext()
         val originalState = context.builder()
-        val (state, positivePath) = createPathCondition(originalState)
+        val (state, positivePath) = createPathCondition(originalState, VariableGenerator("x"))
         val negativePath = positivePath.not()
         val memoryVersioner = MemoryVersioner()
         val stateWithMemory = memoryVersioner.apply(state)

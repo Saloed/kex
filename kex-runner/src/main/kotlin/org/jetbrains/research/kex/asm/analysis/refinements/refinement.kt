@@ -11,12 +11,12 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.type.Type
 
 
-data class PathConditions(val pc: Map<RefinementCriteria, List<Term>>) {
+data class PathConditions(val pc: Map<RefinementCriteria, List<PredicateState>>) {
     fun noErrorCondition(): PredicateState = pc.values.flatten()
-            .map { it.noErrorPredicate() }
-            .let { BasicState(it) }
+            .map { it.not() }
+            .reduceOrNull<PredicateState, PredicateState> { acc, state -> ChainState(acc, state) } ?: emptyState()
 
-    fun fmap(transformer: (RefinementCriteria, List<Term>) -> List<Term>) = PathConditions(pc.mapValues { (criteria, terms) -> transformer(criteria, terms) })
+    fun fmap(transformer: (RefinementCriteria, List<PredicateState>) -> List<PredicateState>) = PathConditions(pc.mapValues { (criteria, terms) -> transformer(criteria, terms) })
 
     fun merge(others: List<PathConditions>): PathConditions {
         val entries = others.flatMap { it.pc.entries } + pc.entries
@@ -29,8 +29,8 @@ data class PathConditions(val pc: Map<RefinementCriteria, List<Term>>) {
     fun expandedErrorCondition(criteria: RefinementCriteria): PredicateState {
         val conditionVariables = pc[criteria] ?: error("No criteria $criteria")
         val otherVariables = pc.filter { it.key != criteria }.values.flatten()
-        val errorCondition = conditionVariables.map { it.errorPredicate() }.map { it.wrap() }.let { ChoiceState(it) }
-        val noOtherErrors = BasicState(otherVariables.map { it.noErrorPredicate() })
+        val errorCondition = ChoiceState(conditionVariables)
+        val noOtherErrors = otherVariables.map { it.not() }.reduceOrNull<PredicateState, PredicateState> { acc, state -> ChainState(acc, state) } ?: emptyState()
         return ChainState(errorCondition, noOtherErrors)
     }
 

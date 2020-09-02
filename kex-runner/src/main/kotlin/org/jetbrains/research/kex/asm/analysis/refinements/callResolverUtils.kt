@@ -33,14 +33,14 @@ private class MyNewPathPredicateToPathVariableTransformer(private val variableGe
     }
 }
 
-fun collapseStatePredicates(state: PredicateState): PredicateState = when (state) {
+fun collapseStatePredicates(state: PredicateState): BasicState = when (state) {
     is BasicState -> collapseStatePredicates(state)
     is ChainState -> collapseStatePredicates(state)
     is ChoiceState -> collapseStatePredicates(state)
     else -> error("State collapse is unsupported for $state")
 }
 
-fun collapseStatePredicates(state: ChoiceState): PredicateState {
+fun collapseStatePredicates(state: ChoiceState): BasicState {
     val collapsedChoices = state.choices.map { collapseStatePredicates(it) }
     val successfullyCollapsedChoices = collapsedChoices.castElementsOrNull<BasicState>() ?: TODO("Not collapsed")
     val memoryAccess = successfullyCollapsedChoices.flatMap { MemoryUtils.collectMemoryAccesses(it) }
@@ -50,19 +50,15 @@ fun collapseStatePredicates(state: ChoiceState): PredicateState {
     return BasicState(successfullyCollapsedChoices.flatMap { it.predicates })
 }
 
-fun collapseStatePredicates(state: BasicState): PredicateState = state
-fun collapseStatePredicates(state: ChainState): PredicateState {
+fun collapseStatePredicates(state: BasicState): BasicState = state
+fun collapseStatePredicates(state: ChainState): BasicState {
     val collapsedBase = collapseStatePredicates(state.base)
     val collapsedCurr = collapseStatePredicates(state.curr)
-    return when {
-        collapsedBase is BasicState && collapsedCurr is BasicState -> BasicState(collapsedBase.predicates + collapsedCurr.predicates)
-        else -> ChainState(collapsedBase, collapsedCurr)
-    }
+    return BasicState(collapsedBase.predicates + collapsedCurr.predicates)
 }
 
-fun createPathCondition(state: PredicateState): Pair<PredicateState, PredicateState> {
-    val variableGenerator = VariableGenerator("call_resolve").unique()
-    val transformer = MyNewPathPredicateToPathVariableTransformer(variableGenerator)
+fun createPathCondition(state: PredicateState, variableGenerator: VariableGenerator): Pair<PredicateState, PredicateState> {
+    val transformer = MyNewPathPredicateToPathVariableTransformer(variableGenerator.unique())
     val fullState = transformer.apply(state)
     val resultState = fullState.filterByType(PredicateType.State())
     val resultPath = fullState.filterByType(PredicateType.Path())
