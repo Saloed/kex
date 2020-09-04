@@ -4,6 +4,9 @@ import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.asm.analysis.refinements.*
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.NoInliningSimpleMethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.RecursiveMethodAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kfg.ClassManager

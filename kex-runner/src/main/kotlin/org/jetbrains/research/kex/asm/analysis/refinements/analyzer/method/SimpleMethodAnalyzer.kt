@@ -1,8 +1,11 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
-import org.jetbrains.research.kex.asm.analysis.refinements.solver.RefinementSourcesAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
+import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.RefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType

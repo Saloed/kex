@@ -1,6 +1,9 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer
 
 import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kex.asm.analysis.refinements.MethodApproximationManager
+import org.jetbrains.research.kex.asm.analysis.refinements.MethodUnderApproximation
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolveSolverQuery
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.SolverQuery

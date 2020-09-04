@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer
 
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kfg.ClassManager

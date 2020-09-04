@@ -1,5 +1,8 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer
 
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementCriteria
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSource
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState

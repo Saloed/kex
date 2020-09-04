@@ -1,9 +1,15 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method
 
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
-import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolvingRefinementSourcesAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.PathConditions
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSource
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
+import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.CallInliner
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesSingleAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.PredicateState
@@ -35,7 +41,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         log.info("Analyze: $method")
         log.debug("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
-        return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
+        return CallResolvingRefinementSourcesSingleAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
     }
 
     override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {

@@ -1,6 +1,12 @@
-package org.jetbrains.research.kex.asm.analysis.refinements.solver
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources
 
-import org.jetbrains.research.kex.asm.analysis.refinements.*
+import org.jetbrains.research.kex.asm.analysis.refinements.MethodApproximationManager
+import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
+import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
+import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.CallResolver
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.solver.RefinementsSolverQuery
 import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
@@ -10,7 +16,7 @@ import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
 
-class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : RefinementSourcesAnalyzer(methodAnalyzer) {
+open class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : RefinementSourcesAnalyzer(methodAnalyzer) {
     override fun createRefinements(refinements: List<Refinement>): Refinements = when {
         refinements.any { !refinementIsCorrect(it) } -> throw IllegalStateException("Incorrect refinement")
         else -> super.createRefinements(refinements)
@@ -27,7 +33,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         return Refinements.create(methodAnalyzer.method, refinements)
     }
 
-    private fun extendSourcesAndNormals(normals: PredicateState, allSources: RefinementSources) = allSources.value.map { source ->
+    fun extendSourcesAndNormals(normals: PredicateState, allSources: RefinementSources) = allSources.value.map { source ->
         val otherSources = allSources.value.filterNot { it == source }
                 .map { it.condition }
                 .let { ChoiceState(it) }
@@ -36,13 +42,13 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         extendedNormals to extendedSource
     }
 
-    private fun refinementIsCorrect(refinement: Refinement): Boolean {
+    fun refinementIsCorrect(refinement: Refinement): Boolean {
         if (PredicateCollector.collectIsInstance<CallPredicate>(refinement.state.state).isNotEmpty()) return false
         // todo: maybe more checks
         return true
     }
 
     companion object {
-        private val methodsUnderApproximations = MethodApproximationManager()
+        val methodsUnderApproximations = MethodApproximationManager()
     }
 }

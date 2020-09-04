@@ -1,6 +1,9 @@
-package org.jetbrains.research.kex.asm.analysis.refinements
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method
 
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
+import org.jetbrains.research.kex.asm.analysis.refinements.*
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodCallCollector
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
 import org.jetbrains.research.kex.state.*
