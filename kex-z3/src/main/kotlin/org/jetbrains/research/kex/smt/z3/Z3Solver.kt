@@ -12,6 +12,7 @@ import org.jetbrains.research.kex.ktype.KexReference
 import org.jetbrains.research.kex.smt.*
 import org.jetbrains.research.kex.smt.Solver
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.term.ArrayLengthTerm
 import org.jetbrains.research.kex.state.term.ArrayLoadTerm
@@ -62,16 +63,18 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
         }
     }
 
-    fun isAlwaysEqual(first: PredicateState, second: PredicateState): Result {
-        val ctx = Z3Context.createInitialized(ef, first, second)
+    fun isAlwaysEqual(first: PredicateStateWithPath, second: PredicateStateWithPath): Result {
+        val ctx = Z3Context.createInitialized(ef, first.state, first.path, second.state, second.path)
         val converter = Z3Converter(tf)
-        val z3First = converter.convertWithMemoryReset(first, ef, ctx)
-        val z3Second = converter.convertWithMemoryReset(second, ef, ctx)
-        val result = check(z3First neq z3Second, ctx.factory.makeTrue())
+        val z3FirstState = converter.convertWithMemoryReset(first.state, ef, ctx)
+        val z3FirstPath = converter.convert(first.path, ef, ctx)
+        val z3SecondState = converter.convertWithMemoryReset(second.state, ef, ctx)
+        val z3SecondPath = converter.convert(second.path, ef, ctx)
+        val result = check(z3FirstState and z3SecondState and !(z3FirstPath eq z3SecondPath), ctx.factory.makeTrue())
         return when (result.first) {
             Status.UNSATISFIABLE -> Result.UnsatResult
             Status.UNKNOWN -> Result.UnknownResult(result.second as String)
-            Status.SATISFIABLE -> Result.SatResult(collectModel(ctx, result.second as Model, first, second, evaluateAllTerms = true))
+            Status.SATISFIABLE -> Result.SatResult(collectModel(ctx, result.second as Model, first.state, first.path, second.state, second.path, evaluateAllTerms = true))
         }
     }
 

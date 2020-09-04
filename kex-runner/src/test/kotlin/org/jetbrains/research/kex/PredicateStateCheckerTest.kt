@@ -1,0 +1,46 @@
+package org.jetbrains.research.kex
+
+import org.jetbrains.research.kex.ktype.KexBool
+import org.jetbrains.research.kex.ktype.KexInt
+import org.jetbrains.research.kex.state.PredicateStateWithPath
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.emptyState
+import org.jetbrains.research.kex.state.term.term
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class PredicateStateCheckerTest : KexTest() {
+    private fun run(first: PredicateStateWithPath, second: PredicateStateWithPath) =
+            PredicateStateChecker(cm.type).check(first, second)
+
+    @Test
+    fun testEqual() {
+        val a = term { value(KexInt(), "a") }
+        val x = term { value(KexBool(), "x") }
+        val first = PredicateStateWithPath(emptyState(), basic {
+            path { a ge const(0) equality true }
+        })
+        val second = PredicateStateWithPath(basic {
+            state { a ge const(0) equality x }
+        }, basic {
+            path { x equality true }
+        })
+        assertTrue(run(first, second))
+    }
+
+    @Test
+    fun testNotEqual() {
+        val a = term { value(KexInt(), "a") }
+        val x = term { value(KexBool(), "x") }
+        val first = PredicateStateWithPath(emptyState(), basic {
+            path { a ge const(0) equality true }
+        })
+        val second = PredicateStateWithPath(basic {
+            state { a ge const(1) equality x }
+        }, basic {
+            path { x equality true }
+        })
+        assertFalse(run(first, second))
+    }
+}

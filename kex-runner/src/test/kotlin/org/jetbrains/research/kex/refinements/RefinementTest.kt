@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.refinements
 
-import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexTest
+import org.jetbrains.research.kex.PredicateStateChecker
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementCriteria
@@ -11,8 +11,6 @@ import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.random.easyrandom.EasyRandomDriver
 import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
-import org.jetbrains.research.kex.smt.Result
-import org.jetbrains.research.kex.smt.z3.Z3Solver
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.StateBuilder
@@ -69,33 +67,19 @@ abstract class RefinementTest(
         assertEquals(expectedRefinements.keys, actualRefinements.keys, "Refinement criterias not equal")
         val refinements = expectedRefinements.map { (criteria, reft) -> reft to actualRefinements[criteria]!! }
         for ((expectedReft, actualReft) in refinements) {
-            assertPredicateStateEquals(expectedReft.state.toPredicateState(), actualReft.state.toPredicateState())
+            assertPredicateStateEquals(expectedReft.state, actualReft.state)
         }
     }
 
     fun PredicateState.withMemoryVersions() = MemoryVersioner().apply(this)
 
-    private fun assertPredicateStateEquals(expected: PredicateState, actual: PredicateState) {
-        if (expected == actual) return
-        val solver = Z3Solver(cm.type)
-        val solution = solver.isAlwaysEqual(actual, expected)
-        val equality = when (solution) {
-            is Result.UnsatResult -> true
-            is Result.SatResult -> {
-                log.debug("Check failed: $solution")
-                log.debug("${solution.model}")
-                false
-            }
-            is Result.UnknownResult -> {
-                log.debug("Check failed: $solution")
-                log.debug(solution.reason)
-                false
-            }
-        }
+    private fun assertPredicateStateEquals(expected: PredicateStateWithPath, actual: PredicateStateWithPath) {
+        val equality = PredicateStateChecker(cm.type).check(expected, actual)
         if (!equality) {
             assertEquals(expected, actual, "Refinement states not equal")
         }
     }
+
 
     private fun findMethod(name: String) = `class`.methods.find { it.name == name }
             ?: throw IllegalStateException("Method $name not found in $`class`")
