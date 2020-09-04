@@ -6,6 +6,11 @@ class RecollectingMemoryState(
         val mapping: Map<MemoryDescriptor, MutableMap<MemoryVersion, MemoryVersion>>,
         memory: Map<MemoryDescriptor, MemoryVersion>
 ) : MemoryState(memory) {
+    override fun read(descriptor: MemoryDescriptor, memoryVersion: MemoryVersion): MemoryState {
+        mapping[descriptor]?.get(memoryVersion)
+                ?: error("Read from unmapped memory")
+        return super.read(descriptor, memoryVersion)
+    }
     override fun write(descriptor: MemoryDescriptor, memoryVersion: MemoryVersion): MemoryState {
         val current = memory.getValue(descriptor)
         val newVersion = current.increaseSubversion().transformMapped(descriptor, current) { it.increaseSubversion() }

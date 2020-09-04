@@ -58,7 +58,7 @@ class ApproximationMemoryCorrector : MemoryVersionRecollectingTransformer() {
         val initialMemory = memoryState
         transform(ps.callState)
         val finalMemoryWithoutApproximation = memoryState
-        val (finalMemoryWithApproximation, correctedState) = analyzeMemory(ps, initialMemory)
+        val (finalMemoryWithApproximation, correctedState) = analyzeMemory(ps, initialMemory, ps.call.memoryVersion)
         finalMemoryWithoutApproximation.memory.forEach { (descriptor, version) ->
             val newVersion = finalMemoryWithApproximation.memory.getValue(descriptor)
             memoryState.mapping.getValue(descriptor)[version] = newVersion
@@ -67,18 +67,38 @@ class ApproximationMemoryCorrector : MemoryVersionRecollectingTransformer() {
         return ps
     }
 
-    private fun analyzeMemory(state: PredicateState, initial: RecollectingMemoryState): Pair<RecollectingMemoryState, PredicateState> {
+    private fun analyzeMemory(state: CallApproximationState, initial: RecollectingMemoryState, newVersion: MemoryVersion): Pair<RecollectingMemoryState, PredicateState> {
         val mappedInitial = initial.memory.mapValues { (descriptor, version) ->
             initial.mapping.getValue(descriptor)[version]
                     ?: error("No version mapped")
         }
         val newMapping = initial.mapping.toMutableMap()
         mappedInitial.forEach { (descriptor, version) -> newMapping.getValue(descriptor)[version] = version }
-        val stateCopy = RecollectingMemoryState(newMapping, mappedInitial)
-        val memoryTransformer = MemoryVersionRecollectingTransformer()
-        val analyzedMemoryState = memoryTransformer.apply(state, stateCopy)
-        val transformedState = memoryTransformer.applyMapping(state, analyzedMemoryState)
-        return analyzedMemoryState to transformedState
+
+        val mappingForPreconditions = newMapping.toMutableMap()
+        mappingForPreconditions.forEach { (descriptor, versions) ->
+            versions[newVersion] = mappedInitial[descriptor]
+                    ?: error("Version not mapped")
+        }
+        val stateForPreconditions = RecollectingMemoryState(mappingForPreconditions, mappedInitial)
+        val preconditionsMemoryTransformer = MemoryVersionRecollectingTransformer()
+        preconditionsMemoryTransformer.apply(PredicateStateWithPath.choice(state.preconditions).state, stateForPreconditions)
+        preconditionsMemoryTransformer.transformChoices(state.preconditions.map { it.path })
+        val memoryAfterPreconditions = preconditionsMemoryTransformer.memoryState
+        val transformedPreconditions = state.preconditions.map { it.accept { ps -> preconditionsMemoryTransformer.applyMapping(ps, memoryAfterPreconditions) } }
+
+        val stateForPostConditions = RecollectingMemoryState(newMapping, memoryAfterPreconditions.memory)
+        val postConditionsMemoryTransformer = MemoryVersionRecollectingTransformer()
+        postConditionsMemoryTransformer.apply(state.callState, stateForPostConditions)
+        postConditionsMemoryTransformer.transform(PredicateStateWithPath.choice(state.postconditions + state.defaultPostcondition).state)
+        postConditionsMemoryTransformer.transformChoices((state.postconditions + state.defaultPostcondition).map { it.path })
+        val memoryAfterPostConditions = postConditionsMemoryTransformer.memoryState
+        val transformedCallState = postConditionsMemoryTransformer.applyMapping(state.callState, memoryAfterPostConditions)
+        val transformedPostConditions = state.postconditions.map { it.accept { ps -> postConditionsMemoryTransformer.applyMapping(ps, memoryAfterPostConditions) } }
+        val transformedDefaultPostCondition = state.defaultPostcondition.accept { ps -> postConditionsMemoryTransformer.applyMapping(ps, memoryAfterPostConditions) }
+
+        val transformedState = CallApproximationState(transformedPreconditions, transformedPostConditions, transformedCallState, transformedDefaultPostCondition, state.call)
+        return memoryAfterPostConditions to transformedState
     }
 
     override fun applyMapping(state: PredicateState, recollectedState: RecollectingMemoryState) = transform(state) {

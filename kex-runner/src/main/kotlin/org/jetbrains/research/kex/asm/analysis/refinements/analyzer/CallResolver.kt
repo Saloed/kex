@@ -22,6 +22,7 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kex.util.VariableGenerator
+import kotlin.math.absoluteValue
 
 class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager: MethodApproximationManager, private val parentResolver: CallResolver? = null) {
     private val baseScope: MemoryAccessScope
@@ -125,7 +126,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
     }
 
     private fun renameStateVariables(state: PredicateStateWithPath, pathVariables: Set<Term>, tmpVariables: Set<Term>, call: CallPredicate, prefix: String): PredicateStateWithPath {
-        val rootVariableGenerator = variableGenerator.createNestedGenerator("${call.hashCode()}")
+        val rootVariableGenerator = variableGenerator.createNestedGenerator("${call.hashCode().absoluteValue}")
         val tmpVariableGenerator = rootVariableGenerator.createNestedGenerator(prefix).createNestedGenerator("tmp")
         val pathVariableGenerator = rootVariableGenerator.createNestedGenerator(prefix).createNestedGenerator("path")
         val tmpMapping = tmpVariables.associateWith { tmpVariableGenerator.generatorFor(it).createVar(it.type) }
@@ -145,7 +146,7 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         val resultModel = analyzeState(argument)
         val resultState = backwardMapping.apply(resultModel.state.state)
         check(currentMemoryAccessScope != null) { "Incorrect scope state" }
-        val resultWithRestoredMemory = restoreStateMemory(resultState, memoryMapping, call)
+        val resultWithRestoredMemory = restoreStateMemory(resultState, memoryMapping)
         check(currentMemoryAccessScope == null) { "Incorrect scope state" }
         val resultStateWithPath = PredicateStateWithPath(resultWithRestoredMemory, resultModel.state.path)
         return RecoveredModel(resultStateWithPath, emptySet(), resultModel.pathVariables, resultModel.tmpVariables)
@@ -157,13 +158,9 @@ class CallResolver(val methodAnalyzer: MethodAnalyzer, val approximationManager:
         return resolver.callResolutionLoop(argument.wrap()).first()
     }
 
-    private fun restoreStateMemory(state: PredicateState, memoryMapping: MemoryMappingType, call: CallPredicate): PredicateState {
+    private fun restoreStateMemory(state: PredicateState, memoryMapping: MemoryMappingType): PredicateState {
         val backwardMapping = memoryMapping.entries.associateBy({ it.value }, { it.key })
-        val restoredMemoryState = MemoryUtils.mapMemory(state, backwardMapping)
-        val callVersion = call.memoryVersion
-        check(callVersion.type == MemoryVersionType.NEW && callVersion.predecessors.size == 1) { "Unexpected call version" }
-        val predecessor = callVersion.predecessors.first()
-        val result = MemoryUtils.replaceMemoryVersion(restoredMemoryState, callVersion, predecessor)
+        val result = MemoryUtils.mapMemory(state, backwardMapping)
         currentMemoryAccessScope = null
         return result
     }

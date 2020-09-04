@@ -9,7 +9,7 @@ import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.CallInliner
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
-import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesSingleAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.PredicateState
@@ -41,7 +41,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         log.info("Analyze: $method")
         log.debug("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
-        return CallResolvingRefinementSourcesSingleAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
+        return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
     }
 
     override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
