@@ -17,7 +17,11 @@ open class RefinementSourcesAnalyzer(val methodAnalyzer: MethodAnalyzer) {
 
     open fun createRefinements(refinements: List<Refinement>): Refinements =
             Refinements.create(methodAnalyzer.method, refinements)
-                    .fmap { transform(it) { applyAdapters(methodAnalyzer) } }
+                    .fmap {
+                        val state = transform(it.state) { applyAdapters(methodAnalyzer) }
+                        val path = transform(it.path) { applyAdapters(methodAnalyzer) }
+                        PredicateStateWithPath(state, path)
+                    }
 
     private fun searchForDummySolution(normals: PredicateState, exceptions: RefinementSources): Pair<Refinements, RefinementSources> {
         val sourcesToQuery = mutableListOf<RefinementSource>()

@@ -45,7 +45,14 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         if (implementations.isEmpty()) return super.findRefinement(method)
         val implementationsRefinements = implementations.map { super.findRefinement(it) }
         return zip(implementations, implementationsRefinements)
-                .map { (impl, reft) -> transformToMethodImplementation(method.`class`.kexType, impl, reft::fmap) }
+                .map { (impl, reft) ->
+                    transformToMethodImplementation(method.`class`.kexType, impl) { transformer ->
+                        reft.fmap {
+                            val state = transformer(it.state)
+                            PredicateStateWithPath(state, it.path)
+                        }
+                    }
+                }
                 .reduce { a, b -> a.merge(b) }
     }
 
@@ -110,7 +117,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         val castState = state {
             castedThis.cast(currentThis, newType)
         }
-        val mapped =  transform(methodState) {
+        val mapped = transform(methodState) {
             +TermRemapper(mapOf(currentThis to castedThis))
         }
         return ChainState(castState.wrap(), mapped)

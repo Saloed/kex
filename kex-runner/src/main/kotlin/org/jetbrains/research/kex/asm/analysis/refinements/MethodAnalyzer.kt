@@ -93,7 +93,7 @@ abstract class MethodAnalyzer(val cm: ClassManager, val psa: PredicateStateAnaly
                     .mapValues { it.value.allStates().negateWRTStatePredicates() }
             val (state, callInstructions) = nestedMethodCallStates(builder, call)
             for (reft in refinement.expanded().value) {
-                val mapping = otherCalls + (call to reft.state)
+                val mapping = otherCalls + (call to reft.state.toPredicateState())
                 val refSource = buildRefinementSource(reft.criteria, state, mapping, callInstructions, ignoredCalls)
                 result.add(refSource)
             }

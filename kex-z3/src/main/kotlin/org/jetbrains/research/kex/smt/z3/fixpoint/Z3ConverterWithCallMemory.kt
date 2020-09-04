@@ -5,6 +5,7 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.CallApproximationState
+import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
@@ -37,16 +38,18 @@ class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVe
         }
         val callInfo = callInfo[call] ?: throw IllegalStateException("Impossible")
 
-        val preconditions = convertChoices(callApproximation.preconditions, ef, ctx, false)
+        val preState = convert(PredicateStateWithPath.choice(callApproximation.preconditions).state, ef, ctx, false)
+        val preconditions = convertChoices(callApproximation.preconditions.map { it.path }, ef, ctx, false)
         val callState = convert(callApproximation.callState, ef, ctx, false)
         ctx.resetMemoryToVersion(callInfo.predicate.memoryVersion, memoryVersionInfo)
-        val allPostConditions = convertChoices(callApproximation.postconditions + callApproximation.defaultPostcondition, ef, ctx, false)
+        val postState = convert(PredicateStateWithPath.choice(callApproximation.postconditions + callApproximation.defaultPostcondition).state, ef, ctx, false)
+        val allPostConditions = convertChoices((callApproximation.postconditions + callApproximation.defaultPostcondition).map { it.path }, ef, ctx, false)
         val postconditions = allPostConditions.dropLast(1)
         val defaultPost = allPostConditions.last()
         val cases = preconditions.zip(postconditions).toMap()
         val defaultCase = callState and defaultPost
         callStack.removeLast()
-        return ef.switch(cases, defaultCase)
+        return preState and postState and ef.switch(cases, defaultCase)
     }
 
     override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Bool_ {

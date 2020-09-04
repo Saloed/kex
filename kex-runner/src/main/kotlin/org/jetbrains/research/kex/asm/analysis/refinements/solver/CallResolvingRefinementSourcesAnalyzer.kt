@@ -22,7 +22,7 @@ class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : R
         val (_, extendedSources) = extendSourcesAndNormals(normals, sources).unzip()
         val solverQuery = RefinementsSolverQuery(state, normals, extendedSources, emptySet(), memoryVersionInfo, 0)
         val callResolver = CallResolver(methodAnalyzer, methodsUnderApproximations)
-        val result = callResolver.callResolutionLoop(solverQuery)
+        val result = callResolver.callResolutionLoop(solverQuery).map { it.finalStateOrException() }
         val refinements = sources.value.zip(result).map { (src, answer) -> Refinement.create(src.criteria, answer) }
         return Refinements.create(methodAnalyzer.method, refinements)
     }

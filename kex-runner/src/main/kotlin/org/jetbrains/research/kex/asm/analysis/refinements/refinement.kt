@@ -29,42 +29,79 @@ data class PathConditions(val pc: Map<RefinementCriteria, PredicateState>) {
     }
 }
 
-data class Refinement private constructor(private val refinementData: RefinementData) : RefinementData {
-    override val criteria = refinementData.criteria
-    override val state = refinementData.state
-    override fun expand(others: List<PredicateState>): Refinement = Refinement(refinementData.expand(others))
-    override fun fmap(transform: (PredicateState) -> PredicateState) = Refinement(refinementData.fmap(transform))
-    override fun merge(other: RefinementData) = Refinement(refinementData.merge(other))
+data class Refinement private constructor(val criteria: RefinementCriteria, val state: PredicateStateWithPath) {
+    fun expand(others: List<PredicateStateWithPath>): Refinement {
+        val negateOtherPaths = others.map { it.negate() }.let { PredicateStateWithPath.chain(it) }
+        val expandedState = PredicateStateWithPath.chain(listOf(state, negateOtherPaths))
+        return Refinement(criteria, expandedState)
+    }
+
+    fun fmap(transform: (PredicateStateWithPath) -> PredicateStateWithPath) = Refinement(criteria, transform(state))
+
+    fun merge(other: Refinement): Refinement {
+        if (criteria != other.criteria) throw IllegalArgumentException("Try to merge different refinement conditions")
+        val mergedCondition = PredicateStateWithPath.choice(listOf(state, other.state))
+        return Refinement(criteria, mergedCondition)
+    }
 
     override fun toString(): String = "$criteria -> $state"
 
     companion object {
-        fun create(criteria: RefinementCriteria, state: PredicateStateWithPath) = Refinement(RefinementDataImpl(criteria, state))
+        fun create(criteria: RefinementCriteria, state: PredicateStateWithPath) = Refinement(criteria, state)
     }
 }
 
-data class Refinements private constructor(private val refinementData: RefinementDataList, val method: Method) : RefinementDataList {
-    override val value: List<Refinement> = refinementData.value as List<Refinement>
-    override fun merge(other: RefinementDataList) = Refinements(refinementData.merge(other), method)
-    override fun expanded(): Refinements = Refinements(refinementData.expanded(), method)
-    override fun fmap(transform: (PredicateState) -> PredicateState) = Refinements(refinementData.fmap(transform), method)
+data class Refinements private constructor(val value: List<Refinement>, val method: Method) {
 
-    fun allStates(): PredicateState = ChoiceState(value.map { it.state })
+    fun expanded(): Refinements = value
+            .map { reft ->
+                val others = value.filter { it.criteria != reft.criteria }
+                val otherSates = others.map { it.state }
+                reft.expand(otherSates)
+            }
+            .let { Refinements(it, method) }
+
+    fun merge(other: Refinements): Refinements {
+        val lhs = this.value.groupBy { it.criteria }
+        val rhs = other.value.groupBy { it.criteria }
+        val merged = (lhs.keys + rhs.keys).map {
+            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b) }
+        }
+        return Refinements(merged, method)
+    }
+
+    fun fmap(transform: (PredicateStateWithPath) -> PredicateStateWithPath) = Refinements(value.map { it.fmap(transform) }, method)
+
+    fun allStates(): PredicateState = ChoiceState(value.map { it.state.toPredicateState() })
     fun isUnknown() = value.isEmpty()
 
     override fun toString(): String = "Refinements $method: \n" + value.joinToString("\n") { "$it" }
 
     companion object {
-        fun unknown(method: Method) = Refinements(RefinementDataListImpl(emptyList()), method)
-        fun create(method: Method, refinements: List<Refinement>) = Refinements(RefinementDataListImpl(refinements), method)
+        fun unknown(method: Method) = Refinements(emptyList(), method)
+        fun create(method: Method, refinements: List<Refinement>) = Refinements(refinements, method)
     }
 }
 
-data class RefinementSources private constructor(private val refinementData: RefinementDataList) : RefinementDataList {
-    override val value: List<RefinementSource> = refinementData.value as List<RefinementSource>
-    override fun expanded() = RefinementSources(refinementData.expanded())
-    override fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSources(refinementData.fmap(transform))
-    override fun merge(other: RefinementDataList) = RefinementSources(refinementData.merge(other))
+data class RefinementSources private constructor(val value: List<RefinementSource>) {
+    fun expanded(): RefinementSources = value
+            .map { reft ->
+                val others = value.filter { it.criteria != reft.criteria }
+                val otherSates = others.map { it.state }
+                reft.expand(otherSates)
+            }
+            .let { RefinementSources(it) }
+
+    fun merge(other: RefinementSources): RefinementSources {
+        val lhs = this.value.groupBy { it.criteria }
+        val rhs = other.value.groupBy { it.criteria }
+        val merged = (lhs.keys + rhs.keys).map {
+            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b) }
+        }
+        return RefinementSources(merged)
+    }
+
+    fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSources(value.map { it.fmap(transform) })
     fun simplify() = merge(empty())
     fun zip(other: RefinementSources): List<Pair<RefinementSource, RefinementSource>> {
         val otherSources = other.value.map { it.criteria to it }.toMap()
@@ -76,77 +113,32 @@ data class RefinementSources private constructor(private val refinementData: Ref
     override fun toString(): String = "RefinementSources: \n" + value.joinToString("\n") { "$it" }
 
     companion object {
-        fun empty() = RefinementSources(RefinementDataListImpl(emptyList()))
-        fun create(sources: List<RefinementSource>) = RefinementSources(RefinementDataListImpl(sources))
+        fun empty() = RefinementSources(emptyList())
+        fun create(sources: List<RefinementSource>) = RefinementSources(sources)
     }
 }
 
-data class RefinementSource private constructor(private val refinementData: RefinementData) : RefinementData {
-    override val state: PredicateState = refinementData.state
-    override val criteria: RefinementCriteria = refinementData.criteria
+data class RefinementSource private constructor(val criteria: RefinementCriteria, val state: PredicateState) {
     val condition: PredicateState = state
+    fun expand(others: List<PredicateState>): RefinementSource {
+        val negateOtherPaths = ChoiceState(others).negateWRTStatePredicates()
+        val expandedState = ChainState(state, negateOtherPaths)
+        return RefinementSource(criteria, expandedState)
+    }
 
-    override fun expand(others: List<PredicateState>) = RefinementSource(refinementData.expand(others))
-    override fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSource(refinementData.fmap(transform))
-    override fun merge(other: RefinementData) = RefinementSource(refinementData.merge(other))
+    fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSource(criteria, transform(state))
+
+    fun merge(other: RefinementSource): RefinementSource {
+        if (criteria != other.criteria) throw IllegalArgumentException("Try to merge different refinement conditions")
+        val mergedCondition = ChoiceState(listOf(state, other.state))
+        return RefinementSource(criteria, mergedCondition)
+    }
 
     override fun toString(): String = "$criteria -> $state"
 
     companion object {
-        fun create(criteria: RefinementCriteria, state: PredicateState) = RefinementSource(RefinementDataImpl(criteria, state))
+        fun create(criteria: RefinementCriteria, state: PredicateState) = RefinementSource(criteria, state)
     }
-}
-
-interface RefinementData {
-    val criteria: RefinementCriteria
-    val state: PredicateStateWithPath
-    fun expand(others: List<PredicateState>): RefinementData
-    fun fmap(transform: (PredicateState) -> PredicateState): RefinementData
-    fun merge(other: RefinementData): RefinementData
-}
-
-interface RefinementDataList {
-    val value: List<RefinementData>
-    fun expanded(): RefinementDataList
-    fun merge(other: RefinementDataList): RefinementDataList
-    fun fmap(transform: (PredicateState) -> PredicateState): RefinementDataList
-}
-
-private data class RefinementDataImpl(override val criteria: RefinementCriteria, override val state: PredicateStateWithPath) : RefinementData {
-    override fun expand(others: List<PredicateState>): RefinementData {
-        val negateOtherPaths = ChoiceState(others).negateWRTStatePredicates()
-        val expandedState = ChainState(state, negateOtherPaths)
-        return RefinementDataImpl(criteria, expandedState)
-    }
-
-    override fun fmap(transform: (PredicateState) -> PredicateState) = RefinementDataImpl(criteria, transform(state))
-
-    override fun merge(other: RefinementData): RefinementData {
-        if (criteria != other.criteria) throw IllegalArgumentException("Try to merge different refinement conditions")
-        val mergedCondition = ChoiceState(listOf(state, other.state))
-        return RefinementDataImpl(criteria, mergedCondition)
-    }
-}
-
-private data class RefinementDataListImpl(override val value: List<RefinementData>) : RefinementDataList {
-    override fun expanded(): RefinementDataList = value
-            .map { reft ->
-                val others = value.filter { it.criteria != reft.criteria }
-                val otherSates = others.map { it.state }
-                reft.expand(otherSates)
-            }
-            .let { RefinementDataListImpl(it) }
-
-    override fun merge(other: RefinementDataList): RefinementDataList {
-        val lhs = this.value.groupBy { it.criteria }
-        val rhs = other.value.groupBy { it.criteria }
-        val merged = (lhs.keys + rhs.keys).map {
-            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b) }
-        }
-        return RefinementDataListImpl(merged)
-    }
-
-    override fun fmap(transform: (PredicateState) -> PredicateState) = RefinementDataListImpl(value.map { it.fmap(transform) })
 }
 
 fun PredicateState.negateWRTStatePredicates(): PredicateState = negatePsIgnoringStatePredicates(this)

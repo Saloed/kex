@@ -14,7 +14,9 @@ import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
 import org.jetbrains.research.kex.smt.Result
 import org.jetbrains.research.kex.smt.z3.Z3Solver
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
@@ -67,7 +69,7 @@ abstract class RefinementTest(
         assertEquals(expectedRefinements.keys, actualRefinements.keys, "Refinement criterias not equal")
         val refinements = expectedRefinements.map { (criteria, reft) -> reft to actualRefinements[criteria]!! }
         for ((expectedReft, actualReft) in refinements) {
-            assertPredicateStateEquals(expectedReft.state, actualReft.state)
+            assertPredicateStateEquals(expectedReft.state.toPredicateState(), actualReft.state.toPredicateState())
         }
     }
 
@@ -109,7 +111,7 @@ abstract class RefinementTest(
         fun refinement(exception: Exception?, psBuilder: StateBuilder.() -> PredicateState) {
             val criteria = criteriaForException(exception)
             val ps = StateBuilder().psBuilder()
-            values.add(Refinement.create(criteria, ps))
+            values.add(Refinement.create(criteria, PredicateStateWithPath(emptyState(), ps)))
         }
 
         fun refinementFromResource(exception: Exception) {
@@ -120,7 +122,7 @@ abstract class RefinementTest(
             val ps = RefinementsKexSerializer(cm).fromJson<PredicateState>(resourceContent)
 //            val serialized = KexSerializer(cm).toJson(ps.withMemoryVersions())
 //            File(resourceName).writeText(serialized)
-            values.add(Refinement.create(criteria, ps))
+            values.add(Refinement.create(criteria, PredicateStateWithPath(emptyState(), ps)))
         }
 
         fun refinements() = Refinements.create(method, values)

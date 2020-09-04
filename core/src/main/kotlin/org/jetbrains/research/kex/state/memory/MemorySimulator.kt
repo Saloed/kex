@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.state.memory
 import org.jetbrains.research.kex.state.CallApproximationState
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 
@@ -65,9 +66,11 @@ open class MemorySimulator() : MemoryVersionTransformer {
     }
 
     override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
-        transformChoices(ps.preconditions)
+        transform(PredicateStateWithPath.choice(ps.preconditions).state)
+        transformChoices(ps.preconditions.map { it.path })
         transform(ps.callState)
-        transformChoices(ps.postconditions + ps.defaultPostcondition)
+        transform(PredicateStateWithPath.choice(ps.postconditions + ps.defaultPostcondition).state)
+        transformChoices((ps.postconditions + ps.defaultPostcondition).map { it.path })
         return ps
     }
 

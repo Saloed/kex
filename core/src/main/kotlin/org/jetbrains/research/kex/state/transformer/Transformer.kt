@@ -343,10 +343,10 @@ interface RecollectingTransformer<T> : Transformer<RecollectingTransformer<T>> {
     }
 
     override fun transformCallApproximation(ps: CallApproximationState): PredicateState {
-        val newPre = ps.preconditions.map { transformPs(it) }
-        val newPost = ps.postconditions.map { transformPs(it) }
+        val newPre = ps.preconditions.map { it.accept(::transformPs) }
+        val newPost = ps.postconditions.map { it.accept(::transformPs) }
         val newCallState = transformPs(ps.callState)
-        val newDefaultPost = transformPs(ps.defaultPostcondition)
+        val newDefaultPost = ps.defaultPostcondition.accept(::transformPs)
         currentBuilder += CallApproximationState(newPre, newPost, newCallState, newDefaultPost, ps.call)
         return ps
     }

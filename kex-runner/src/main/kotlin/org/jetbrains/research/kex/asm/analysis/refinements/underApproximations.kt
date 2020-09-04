@@ -45,10 +45,8 @@ class ApproximationInliner(val approximations: Map<CallPredicate, MethodUnderApp
         val postconditions = approximation?.map { it.post } ?: emptyList()
         val defaultPostcondition = postconditions.map { it.negate() }.let { PredicateStateWithPath.chain(it) }
         currentBuilder += CallApproximationState(
-                preconditions.map { it.toPredicateState() },
-                postconditions.map { it.toPredicateState() },
-                transformedCall,
-                defaultPostcondition.toPredicateState()
+                preconditions, postconditions,
+                transformedCall, defaultPostcondition
         )
         return nothing()
     }

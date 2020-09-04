@@ -45,16 +45,18 @@ class PredicateStateDiffTool(first: PredicateState, second: PredicateState) : Di
     private fun psDiff(node: DiffNode.Different<PredicateState>, first: CallApproximationState, second: CallApproximationState): DiffNode<PredicateState> {
         if (first.call != second.call) return node
         if (first.preconditions.size != second.preconditions.size) return node
-        val defaultPre = CallApproximationSelector(null, CallApproximationType.PRE)
-        val defaultPost = CallApproximationSelector(null, CallApproximationType.POST)
-        node.children += diff(node, defaultPre, defaultPre.get(first), defaultPre.get(second))
-        node.children += diff(node, defaultPost, defaultPost.get(first), defaultPost.get(second))
-        node.children += first.preconditions.indices.map { idx ->
-            val selector = CallApproximationSelector(idx, CallApproximationType.PRE)
-            diff(node, selector, selector.get(first), selector.get(second))
+        val selectors = listOf(
+                CallApproximationSelector(null, CallApproximationType.PRE, PSWithPath.STATE),
+                CallApproximationSelector(null, CallApproximationType.POST, PSWithPath.STATE),
+                CallApproximationSelector(null, CallApproximationType.POST, PSWithPath.PATH),
+        ) + first.preconditions.indices.flatMap { idx ->
+            listOf(CallApproximationSelector(idx, CallApproximationType.PRE, PSWithPath.STATE),
+                    CallApproximationSelector(idx, CallApproximationType.PRE, PSWithPath.PATH))
+        } + first.postconditions.indices.flatMap { idx ->
+            listOf(CallApproximationSelector(idx, CallApproximationType.POST, PSWithPath.STATE),
+                    CallApproximationSelector(idx, CallApproximationType.POST, PSWithPath.PATH))
         }
-        node.children += first.postconditions.indices.map { idx ->
-            val selector = CallApproximationSelector(idx, CallApproximationType.POST)
+        node.children += selectors.map { selector ->
             diff(node, selector, selector.get(first), selector.get(second))
         }
         return node
@@ -127,26 +129,41 @@ private enum class CallApproximationType {
     PRE, POST
 }
 
-private class CallApproximationSelector(val idx: Int?, val type: CallApproximationType) : DiffSelector<PredicateState> {
+private enum class PSWithPath {
+    STATE, PATH
+}
+
+private class CallApproximationSelector(val idx: Int?, val type: CallApproximationType, val psWithPath: PSWithPath) : DiffSelector<PredicateState> {
+
+    private fun PredicateStateWithPath.get() = when (psWithPath) {
+        PSWithPath.STATE -> state
+        PSWithPath.PATH -> path
+    }
+
+    private fun PredicateStateWithPath.set(value: PredicateState) = when (psWithPath) {
+        PSWithPath.STATE -> PredicateStateWithPath(value, path)
+        PSWithPath.PATH -> PredicateStateWithPath(state, value)
+    }
+
     override fun get(expr: PredicateState): PredicateState {
         expr as CallApproximationState
         return if (idx == null) when (type) {
             CallApproximationType.PRE -> expr.callState
-            CallApproximationType.POST -> expr.defaultPostcondition
+            CallApproximationType.POST -> expr.defaultPostcondition.get()
         } else when (type) {
-            CallApproximationType.PRE -> expr.preconditions[idx]
-            CallApproximationType.POST -> expr.postconditions[idx]
+            CallApproximationType.PRE -> expr.preconditions[idx].get()
+            CallApproximationType.POST -> expr.postconditions[idx].get()
         }
     }
 
     override fun set(expr: PredicateState, value: PredicateState): PredicateState {
         expr as CallApproximationState
         return if (idx == null) when (type) {
-            CallApproximationType.PRE -> CallApproximationState(expr.preconditions, expr.postconditions, value, expr.defaultPostcondition, expr.call)
-            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions, expr.callState, value, expr.call)
+            CallApproximationType.PRE -> CallApproximationState(expr.preconditions, expr.postconditions, value.path, expr.defaultPostcondition, expr.call)
+            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions, expr.callState, expr.defaultPostcondition.set(value), expr.call)
         } else when (type) {
-            CallApproximationType.PRE -> CallApproximationState(expr.preconditions.toMutableList().apply { set(idx, value) }, expr.postconditions, expr.callState, expr.defaultPostcondition, expr.call)
-            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions.toMutableList().apply { set(idx, value) }, expr.callState, expr.defaultPostcondition, expr.call)
+            CallApproximationType.PRE -> CallApproximationState(expr.preconditions.toMutableList().apply { set(idx, get(idx).set(value)) }, expr.postconditions, expr.callState, expr.defaultPostcondition, expr.call)
+            CallApproximationType.POST -> CallApproximationState(expr.preconditions, expr.postconditions.toMutableList().apply { set(idx, get(idx).set(value)) }, expr.callState, expr.defaultPostcondition, expr.call)
         }
     }
 }
