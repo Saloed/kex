@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.PredicateStateChecker
@@ -52,6 +53,7 @@ abstract class RefinementTest(
     }
 
     fun run(method: String, expected: RefinementBuilder.() -> Unit) {
+        log.info("Run test: $method")
         val testMethod = findMethod(method)
         val refinements = refinementsForMethod(testMethod)
         val expectedRefinements = RefinementBuilder(testMethod).apply { expected() }.refinements()
@@ -104,8 +106,6 @@ abstract class RefinementTest(
             val resource = RefinementTest::class.java.getResource(resourceName)
             val resourceContent = resource.readText()
             val ps = RefinementsKexSerializer(cm).fromJson<PredicateState>(resourceContent)
-//            val serialized = KexSerializer(cm).toJson(ps.withMemoryVersions())
-//            File(resourceName).writeText(serialized)
             values.add(Refinement.create(criteria, PredicateStateWithPath(emptyState(), ps)))
         }
 

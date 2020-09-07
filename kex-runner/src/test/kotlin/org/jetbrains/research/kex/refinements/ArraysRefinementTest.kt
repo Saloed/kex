@@ -18,23 +18,23 @@ class ArraysRefinementTest : RefinementTest("Arrays") {
                 }
             }, {
                 path {
-                    arg(KexInt(), 1) ge arg(KexArray(KexInt(), memspace = 1), 0).length() equality const(true)
+                    arg(KexInt(), 1) ge arg(KexArray(KexInt(), memspace = 0), 0).length() equality const(true)
                 }
-            })
+            }).withMemoryVersions()
         }
         refinement(IllegalArgumentException()) {
             basic {
                 path {
-                    val array = arg(KexArray(KexInt(), memspace = 1), 0)
+                    val array = arg(KexArray(KexInt(), memspace = 0), 0)
                     val index = tf.getArrayIndex(array, arg(KexInt(), 1))
                     tf.getArrayLoad(index) lt const(0) equality const(true)
                 }
-            }
+            }.withMemoryVersions()
         }
     }
 
     @Test
-    fun testManyArrays() = run("arrayTest2"){
-        refinement(IllegalArgumentException()) { emptyState()}
+    fun testManyArrays() = run("arrayTest2") {
+        refinement(IllegalArgumentException()) { emptyState() }
     }
 }
