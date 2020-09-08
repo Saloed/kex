@@ -14,8 +14,7 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
         get() = predicateState.size
 
     override fun print() = buildString {
-        appendLine("(")
-        appendLine("NOT")
+        appendLine("(NOT")
         appendLine(predicateState.print())
         append(")")
     }
@@ -34,7 +33,7 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
         return this.predicateState == other.predicateState
     }
 
-    override fun addPredicate(predicate: Predicate) = NegationState(predicateState + predicate)
+    override fun addPredicate(predicate: Predicate) = ChainState(this, BasicState(arrayListOf(predicate)))
 
     override fun sliceOn(state: PredicateState): PredicateState? {
         val sliced = predicateState.sliceOn(state) ?: return null
