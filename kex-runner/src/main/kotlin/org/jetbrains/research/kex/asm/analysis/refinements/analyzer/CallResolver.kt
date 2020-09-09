@@ -16,7 +16,6 @@ import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.predicate.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.*
@@ -160,9 +159,7 @@ class CallResolver(
             val version: MemoryVersion,
             method: Method
     ) : MethodImplementationMerge(method) {
-        override val baseGenerator: VariableGenerator
-            get() = VariableGenerator("resolved_impls")
-
+        override val baseGenerator: VariableGenerator = VariableGenerator("resolved_impls")
         override fun mapUnmappedTerm(method: Method, term: Term): Term? {
             val model = preconditions[method] ?: error("Method not found in preconditions")
             return when (term) {
@@ -171,13 +168,8 @@ class CallResolver(
                 else -> term
             }
         }
-
         override fun createInstanceOf(term: Term, type: KexType) =
                 (super.createInstanceOf(term, type) as InstanceOfTerm).withScopeInfo(scope).withMemoryVersion(version)
-
-        override fun createCast(builder: PredicateBuilder, lhs: Term, term: Term, type: KexType) =
-                super.createCast(builder, lhs, term, type).withScopeInfo(scope).withMemoryVersion(version)
-
     }
 
     private fun resolveOpenCall(

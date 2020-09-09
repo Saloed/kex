@@ -15,18 +15,13 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.OuterClass
 
 open class MethodImplementationMerge(val method: Method) {
-    open val baseGenerator: VariableGenerator
-        get() = VariableGenerator("inheritance")
-    val pathGenerator: VariableGenerator
-        get() = baseGenerator.createNestedGenerator("path")
-    val tmpGenerator: VariableGenerator
-        get() = baseGenerator.createNestedGenerator("tmp")
-    val owner: Term
-        get() = term { `this`(method.`class`.kexType) }
+    open val baseGenerator: VariableGenerator = VariableGenerator("inheritance")
+    val pathGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("path") }
+    val tmpGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("tmp") }
+    val owner: Term by lazy { term { `this`(method.`class`.kexType) } }
 
     open fun mapUnmappedTerm(method: Method, term: Term): Term? = if (term is ArgumentTerm) term else null
     open fun createInstanceOf(term: Term, type: KexType) = term { tf.getInstanceOf(type, term) }
-    open fun createCast(builder: PredicateBuilder, lhs: Term, term: Term, type: KexType) = builder.pf.getCast(lhs, term, type, builder.type, builder.location)
 
     fun mergeImplementations(
             implementations: List<Pair<PredicateStateWithPath, Method>>
@@ -86,7 +81,7 @@ open class MethodImplementationMerge(val method: Method) {
             otherTypeVariables.forEach {
                 path { it equality false }
             }
-            state { createCast(this, thisTerm, owner, type) }
+            state { thisTerm equality owner }
         }
         val pathState = basic {
             state { result equality pathTerm }

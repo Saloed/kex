@@ -257,7 +257,7 @@ class FixpointModelConverter(
                 rhs.type is KexArray -> rhs to lhs
                 else -> throw IllegalStateException("Array load has no base and index")
             }
-            term { tf.getArrayIndex(base, index).load().withMemoryVersion(decl.version).withScopeInfo(decl.descriptor.scopeInfo)  }
+            term { tf.getArrayIndex(base, index).load().withMemoryVersion(decl.version).withScopeInfo(decl.descriptor.scopeInfo) }
         }
         MemoryType.SPECIAL -> when (decl.descriptor.memoryName) {
             InstanceOfTerm.TYPE_MEMORY_NAME -> InstanceOfTerm(UnknownType, convertTerm(location), decl.version)
@@ -295,12 +295,8 @@ class FixpointModelConverter(
             val type = it.`class`.kexType
             val tmpVar = converterContext.tmpVariable(type)
             basic {
-                path {
-                    owner.instanceOf(it.`class`, version, scope) equality const(true)
-                }
-                state {
-                    tmpVar.cast(owner, type).withMemoryVersion(version).withScopeInfo(scope)
-                }
+                path { owner.instanceOf(it.`class`, version, scope) equality const(true) }
+                state { tmpVar equality owner }
                 state {
                     resultFiledLoad equality tmpVar.field(it.type.kexType, it.name).load().withMemoryVersion(version).withScopeInfo(scope)
                 }

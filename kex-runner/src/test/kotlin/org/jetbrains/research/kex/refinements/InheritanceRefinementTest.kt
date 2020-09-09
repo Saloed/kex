@@ -126,7 +126,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
     fun testSingleExceptionSource() = run("exceptionIfEmpty") {
         refinement(IllegalArgumentException()) {
             val argument = arg(myList, 0).withMemspace(1)
-            choice({
+            (choice({
                 path {
                     listOf(myList, myListA, myListA1).map { argument `is` it }.reduce<Term, Term> { a, b -> a and b } equality const(true)
                 }
@@ -175,7 +175,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                 path {
                     argAsListB2.field(KexInt(), "size").load() equality const(0)
                 }
-            }).withMemoryVersions()
+            })).withMemoryVersions()
         }
     }
 
