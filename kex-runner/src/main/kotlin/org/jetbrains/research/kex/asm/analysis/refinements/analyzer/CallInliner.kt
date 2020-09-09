@@ -15,10 +15,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.ValueTerm
-import org.jetbrains.research.kex.state.transformer.IntrinsicAdapter
-import org.jetbrains.research.kex.state.transformer.PredicateCollector
-import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
-import org.jetbrains.research.kex.state.transformer.collectVariables
+import org.jetbrains.research.kex.state.transformer.*
 import org.jetbrains.research.kex.util.VariableGenerator
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
@@ -30,6 +27,7 @@ class CallInliner(
         val psa: PredicateStateAnalysis,
         val refinementProvider: RefinementProvider,
         val forceDeepInline: Boolean = false,
+        val forceMethodInlining: Method? = null
 ) : RecollectingTransformer<CallInliner> {
     override val builders = dequeOf(StateBuilder())
     private val refinementVariableGenerator = VariableGenerator("refinement")
@@ -48,7 +46,9 @@ class CallInliner(
         val varGenerator = methodVariableGenerator.generatorFor(predicate)
         val method = predicate.method()
         val inlineStatus = MethodManager.InlineManager.isInlinable(method)
-        if (inlineStatus != MethodManager.InlineManager.InlineStatus.INLINE) return predicate
+        if (inlineStatus != MethodManager.InlineManager.InlineStatus.INLINE) {
+            if (method != forceMethodInlining) return predicate
+        }
         val argumentMapping = MethodManager.InlineManager.methodArguments(predicate)
         return when {
             method.isConstructor -> inlineConstructor(predicate, method, varGenerator, argumentMapping)
@@ -129,7 +129,8 @@ class CallInliner(
 
     override fun apply(ps: PredicateState): PredicateState {
         val intrinsicsResolved = IntrinsicAdapter.apply(ps)
-        return super.apply(intrinsicsResolved)
+        val result =  super.apply(intrinsicsResolved)
+        return BoolTypeAdapter(cm.type).apply(result)
     }
 
     companion object {
