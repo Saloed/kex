@@ -57,7 +57,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                 path {
                     arg(KexInt(), 1) lt const(0) equality const(true)
                 }
-            })
+            }).withMemoryVersions()
         }
     }
 
@@ -82,7 +82,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                 path {
                     arg(KexInt(), 1) le const(0) equality const(true)
                 }
-            })
+            }).withMemoryVersions()
         }
     }
 
@@ -175,7 +175,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                 path {
                     argAsListB2.field(KexInt(), "size").load() equality const(0)
                 }
-            })
+            }).withMemoryVersions()
         }
     }
 
@@ -216,7 +216,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
                 path {
                     argAsListB2.field(KexInt(), "size").load() equality const(0)
                 }
-            })
+            }).withMemoryVersions()
         }
     }
 

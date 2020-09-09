@@ -52,7 +52,7 @@ class FixpointModelConverter(
         val state = rawState
                 .let { ComparisonNormalizer().apply(it) }
                 .let { Optimizer.apply(it) }
-                .let { InstanceOfCorrector(z3Context).apply(it) }
+                .let { InstanceOfCorrector(z3Context, tf).apply(it) }
                 .simplify()
         val path = Optimizer.apply(rawPath)
         analyzeMemoryDependencies(state)

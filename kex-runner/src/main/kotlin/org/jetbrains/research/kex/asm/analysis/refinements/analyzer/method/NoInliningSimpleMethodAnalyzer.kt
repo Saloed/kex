@@ -44,9 +44,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
         return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
     }
 
-    override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement(): Pair<Refinements, PredicateState> {
-        throw IllegalStateException("Unavailable")
-    }
+    override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement() = error("Unavailable")
 
     private fun buildRefinementSources(callPathConditions: Map<CallPredicate, PathConditions>): Pair<PredicateState, RefinementSources> {
         val refinementSources = callPathConditions

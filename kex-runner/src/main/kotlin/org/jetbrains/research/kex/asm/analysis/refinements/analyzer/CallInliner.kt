@@ -12,8 +12,13 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.state.term.*
-import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.ValueTerm
+import org.jetbrains.research.kex.state.transformer.IntrinsicAdapter
+import org.jetbrains.research.kex.state.transformer.PredicateCollector
+import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
+import org.jetbrains.research.kex.state.transformer.collectVariables
 import org.jetbrains.research.kex.util.VariableGenerator
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
@@ -87,12 +92,12 @@ class CallInliner(
                     pcVarMapping[pv] = newTerm
                     newTerm
                 }
-                TermMapper(refinementVariableGenerator, varMapping, forceThis = true).apply(pcState)
+                ForceThisTermMapper(refinementVariableGenerator, varMapping).apply(pcState)
             }
         }
         callPathConditions[predicate] = callPathConditions[predicate]?.merge(pathConditionExtension)
                 ?: error("No path conditions for predicate $predicate")
-        val state = TermMapper(varGenerator.createNestedGenerator(prefix), argumentMapping + pcVarMapping, forceThis = true).apply(stateResolved)
+        val state = ForceThisTermMapper(varGenerator.createNestedGenerator(prefix), argumentMapping + pcVarMapping).apply(stateResolved)
         currentBuilder += state
         return nothing()
     }
@@ -106,7 +111,7 @@ class CallInliner(
     }
 
     private fun Refinement.createPathVariable(varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
-        val argumentMapper = TermMapper(varGenerator.createNestedGenerator("var"), argumentMapping, forceThis = true)
+        val argumentMapper = ForceThisTermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
         val preparedState = state.accept(argumentMapper::apply)
         return when {
             preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
@@ -152,15 +157,12 @@ class CallInliner(
 
 }
 
-private class TermMapper(val variableGenerator: VariableGenerator, val mapping: Map<Term, Term>, val forceThis: Boolean = false) : Transformer<TermMapper> {
-    override fun transformTerm(term: Term): Term = mapping[term] ?: run {
-        if (forceThis && term is ValueTerm && term.name == "this") {
-            val mappedThis = mapping.filterKeys { it.name == "this" }.entries.firstOrNull()
-            if (mappedThis != null) return@run mappedThis.value
-        }
-        when (term) {
-            is ValueTerm, is ArgumentTerm, is ReturnValueTerm -> variableGenerator.generatorFor(term).createVar(term.type)
-            else -> term
-        }
-    }
+private fun forceThisTerm(term: Term, mapping: Map<Term, Term>): Term? {
+    if (term !is ValueTerm || term.name != "this") return null
+    return mapping.filterKeys { it.name == "this" }.entries.firstOrNull()?.value
 }
+
+private class ForceThisTermMapper(
+        variableGenerator: VariableGenerator,
+        mapping: Map<Term, Term>
+) : TermMapper(variableGenerator, mapping, { forceThisTerm(it, mapping) })
