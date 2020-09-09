@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
@@ -9,6 +10,7 @@ import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.state
@@ -31,8 +33,11 @@ class OpenMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Meth
             }
         }
         return when (refinements.size) {
-            1 -> refinements.first()
-            0 -> TODO("empty implementations")
+            0 -> {
+                log.warn("No implementations found for method $method")
+                Refinements.unknown(method)
+            }
+            1 -> refinements.first().let { Refinements.create(method, it.value) }
             else -> mergeRefinements(refinements)
         }
     }
@@ -124,6 +129,7 @@ class OpenMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Meth
             lhv is ConstBoolTerm -> if ((lhv as ConstBoolTerm).value) rhv else term { rhv.not() }
             else -> term { lhv eq rhv }
         }
+        is ConstantPredicate -> term { const(value) }
         else -> error("No term convertion for predicate $this")
     }
 
