@@ -46,4 +46,15 @@ class InliningRefinementTest : RefinementTest("Inlining") {
             trueState()
         }
     }
+
+    @Test
+    fun testInlineWithResultDependency() = run("inlineWithResultDependency") {
+        refinement(IllegalStateException()) {
+            choice({
+                path { arg(KexInt(), 0) lt const(0) equality true }
+            }, {
+                path { arg(KexInt(), 0) gt const(0) equality true }
+            })
+        }
+    }
 }

@@ -24,12 +24,12 @@ import org.jetbrains.research.kfg.type.TypeFactory
 internal class ConverterContext {
     val callDependencies = hashSetOf<TermDependency>()
     val variableGenerator = VariableGenerator("model")
-    val pathVarGenerator = variableGenerator.createNestedGenerator("pv").unique()
+    val pathVarGenerator = variableGenerator.createNestedGenerator("pv")
     val tmpVarGenerator = variableGenerator.createNestedGenerator("tmp").unique()
     val stateBuilder = StateBuilder()
 
     fun makePath(term: Term, pathCondition: Boolean): PredicateState {
-        val pathVariable = pathVarGenerator.createUniqueVar(KexBool())
+        val pathVariable = pathVarGenerator.generatorFor(term).createVar(KexBool())
         stateBuilder += state { pathVariable equality term }
         return path { pathVariable equality pathCondition }.wrap()
     }

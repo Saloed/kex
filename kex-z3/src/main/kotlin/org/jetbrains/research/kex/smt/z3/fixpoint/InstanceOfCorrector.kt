@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.state.ChainState
@@ -38,6 +39,7 @@ internal class InstanceOfCorrector(private val z3Context: Z3Context, private val
         if (selectedTypeCandidates.isNotEmpty()) {
             return instanceOfTerms(instanceOfTerm.operand, selectedTypeCandidates, instanceOfTerm.memoryVersion, instanceOfTerm.scopeInfo)
         }
+        log.warn("Instance of corrector negate types")
         val negatedTypeCandidates = typeMapping.filterValues { !predicate(it, typeBound.value) }.keys
         val instTerms = instanceOfTerms(instanceOfTerm.operand, negatedTypeCandidates, instanceOfTerm.memoryVersion, instanceOfTerm.scopeInfo)
         return term { instTerms.not() }

@@ -3,7 +3,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
-import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.CallResolver
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls.CallResolver
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.RefinementsSolverQuery
 import org.jetbrains.research.kex.state.PredicateState

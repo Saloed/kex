@@ -7,7 +7,7 @@ import org.jetbrains.research.kex.asm.analysis.refinements.PathConditions
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSource
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
-import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.CallInliner
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls.CallInliner
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis

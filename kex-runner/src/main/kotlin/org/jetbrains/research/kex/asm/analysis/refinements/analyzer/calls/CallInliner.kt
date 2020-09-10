@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.asm.analysis.refinements.analyzer
+package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls
 
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
@@ -6,6 +6,8 @@ import org.jetbrains.research.kex.asm.analysis.refinements.PathConditions
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinement
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementProvider
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.TermMapper
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.PredicateState
