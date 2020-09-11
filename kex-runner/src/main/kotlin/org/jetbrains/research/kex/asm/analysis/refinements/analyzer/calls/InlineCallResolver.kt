@@ -142,8 +142,8 @@ class InlineCallResolver(
                 predicate(PredicateType.State()) { dependency.term equality retvalPlaceholder }
             }
         }
-        val methodStateForInlining = ChainState(methodState, retvalBindings)
-
+        val normalExecutionConditions = inliner.callPathConditions[predicateToInline]?.noErrorCondition() ?: emptyState()
+        val methodStateForInlining = chain(listOf(methodState, retvalBindings, normalExecutionConditions))
         val memoryVersioner = MemoryVersioner()
         val versionedMethodState = memoryVersioner.apply(methodStateForInlining)
         val finalVersions = memoryVersioner.memoryInfo().final
