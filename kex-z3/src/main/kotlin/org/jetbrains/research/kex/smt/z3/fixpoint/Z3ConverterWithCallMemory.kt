@@ -46,10 +46,15 @@ class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVe
         val allPostConditions = convertChoices((callApproximation.postconditions + callApproximation.defaultPostcondition).map { it.path }, ef, ctx, false)
         val postconditions = allPostConditions.dropLast(1)
         val defaultPost = allPostConditions.last()
-        val cases = preconditions.zip(postconditions).toMap()
         val defaultCase = callState and defaultPost
         callStack.removeLast()
-        return preState and postState and ef.switch(cases, defaultCase)
+        val approximations = preconditions.zip(postconditions)
+                .map { it.first implies it.second }
+                .fold(ef.makeTrue()) { acc, cond -> acc and cond }
+        val defaultApproximation = preconditions
+                .fold(ef.makeFalse()) { acc, cond -> acc or cond }
+                .not() implies defaultCase
+        return preState and postState and approximations and defaultApproximation
     }
 
     override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Bool_ {
