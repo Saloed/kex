@@ -9,18 +9,12 @@ import org.jetbrains.research.kex.asm.analysis.refinements.solver.SolverQuery
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
-import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.PredicateStateWithPath
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.memory.MemoryAccess
-import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.EqualityPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
-import org.jetbrains.research.kex.state.term.ConstBoolTerm
 import org.jetbrains.research.kex.state.term.Term
-import org.jetbrains.research.kex.state.transformer.*
+import org.jetbrains.research.kex.state.transformer.PredicateCollector
+import org.jetbrains.research.kex.state.transformer.TermRemapper
 import kotlin.math.absoluteValue
 
 class CallResolver(
@@ -60,11 +54,6 @@ class CallResolver(
     }
 
     fun resolveCalls(model: RecoveredModel) {
-        val splitted = splitModel(model)
-        splitted.forEach { resolveCallsInSplitModel(it) }
-    }
-
-    private fun resolveCallsInSplitModel(model: RecoveredModel){
         if (model.isFinal) return
         val calls = model.dependencies.groupBy { it.call }
         if (calls.isEmpty()) return
@@ -74,80 +63,10 @@ class CallResolver(
     }
 
     private fun tryResolveMultipleCalls(model: RecoveredModel) {
-//        val singleDepsPredicates = collectPredicatesWithSingleDependentTerm(model.state, model.dependencies)
-        when {
-//            singleDepsPredicates.isNotEmpty() -> singleDepsPredicates.forEach { (predicate, callIdx) ->
-//                val depsToResolve = model.dependencies.filter { it.callIdx == callIdx }
-//                val callToResolve = depsToResolve.first().call
-//                resolveSingleCall(predicate.wrap(), callToResolve, depsToResolve, model.pathVariables, model.tmpVariables)
-//            }
-            else -> {
-                val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
-                val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
-                val callToResolve = depsToResolve.first().call
-                resolveSingleCall(model.state, callToResolve, depsToResolve, model.pathVariables, model.tmpVariables)
-            }
-        }
-    }
-
-    private fun splitModel(model: RecoveredModel): List<RecoveredModel> {
-        val (state, path) = model.state
-        val aliasAnalysis = StensgaardAA().apply { apply(state) }
-        val slicedStates = PredicateCollector.collectIsInstance<EqualityPredicate>(path)
-                .groupBy({ it.lhv }, { it.rhv })
-                .mapValues { (_, values) -> values.filterIsInstance<ConstBoolTerm>().map { it.value }.distinct() }
-                .mapValues { (pv, conditionValues) ->
-                    val slicedState = Slicer(state, setOf(pv), aliasAnalysis).apply(state)
-                    val conditions = conditionValues.map { basic { path { pv equality it } } }
-                    conditions.map { slicedState to it }
-                }
-                .flatMap { (_, stateWithConds) -> stateWithConds }
-                .map { (state, condition) -> PredicateStateWithPath(state, condition) }
-        return slicedStates.map { it.asModelWithRelatedDependencies(model) }
-    }
-
-    private fun PredicateStateWithPath.asModelWithRelatedDependencies(model: RecoveredModel): RecoveredModel {
-        val memoryAccess = MemoryUtils.collectMemoryAccesses(state).toSet()
-        val stateTerms = TermCollector.getFullTermSet(state)
-        val pathTerms = TermCollector.getFullTermSet(path)
-
-        val memoryDependencies = model.dependencies
-                .filterIsInstance<TermDependency.MemoryDependency>()
-                .filter { it.memoryAccess in memoryAccess }
-        val callResultDependencies = model.dependencies
-                .filterIsInstance<TermDependency.CallResultDependency>()
-                .filter { it.term in stateTerms || it.term in pathTerms }
-        val dependencies = memoryDependencies + callResultDependencies
-        val tmpVariables = model.tmpVariables.filter { it in stateTerms || it in pathTerms }.toSet()
-        val pathVariables = model.pathVariables.filter { it in stateTerms || it in pathTerms }.toSet()
-        return RecoveredModel(this, dependencies.toSet(), pathVariables, tmpVariables)
-    }
-
-    private fun collectPredicatesWithSingleDependentTerm(state: PredicateState, dependencies: Set<TermDependency>): List<Pair<Predicate, Int>> {
-        val memoryDependency = dependencies.filterIsInstance<TermDependency.MemoryDependency>().associateBy { it.memoryAccess }
-        val callResultDependency = dependencies.filterIsInstance<TermDependency.CallResultDependency>().associateBy { it.term }
-        val result = mutableListOf<Pair<Predicate, Int>>()
-        PredicateCollector.collectIsInstance<Predicate>(state).forEach { predicate ->
-            val dependentTerms = TermCollector.getFullTermSet(predicate).mapNotNull {
-                when (it) {
-                    is MemoryAccess<*> -> memoryDependency[it]?.callIdx
-                    else -> callResultDependency[it]?.callIdx
-                }
-            }.distinct()
-            when {
-                predicate is MemoryAccess<*> && dependentTerms.isEmpty() -> {
-                    val dependency = memoryDependency[predicate]
-                    if (dependency != null) {
-                        result += predicate to dependency.callIdx
-                    }
-                }
-                predicate !is MemoryAccess<*> && dependentTerms.size == 1 -> {
-                    val dependency = dependentTerms.first()
-                    result += predicate to dependency
-                }
-            }
-        }
-        return result
+        val maxId = model.dependencies.map { it.callIdx }.maxOrNull() ?: error("impossible")
+        val depsToResolve = model.dependencies.filter { it.callIdx == maxId }
+        val callToResolve = depsToResolve.first().call
+        resolveSingleCall(model.state, callToResolve, depsToResolve, model.pathVariables, model.tmpVariables)
     }
 
     private fun resolveSingleCall(
