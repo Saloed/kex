@@ -143,7 +143,7 @@ class InlineCallResolver(
         val retvalPlaceholder = term { value(resolvingMethod.returnType.kexType, "retval_${resolvingCallTerm.hashCode()}") }
         val predicateToInline = CallPredicate(retvalPlaceholder, resolvingCallTerm)
         val inliner = CallInliner(methodAnalyzer.cm, methodAnalyzer.psa, methodAnalyzer, forceDeepInline = true, forceMethodInlining = resolvingMethod)
-        val methodState = inliner.apply(predicateToInline.wrap())
+        val methodState = inliner.inlineCalls(predicateToInline.wrap(), null)
         check(predicateToInline !in PredicateCollector.collectIsInstance<CallPredicate>(methodState)) { "Call was not inlined" }
         val retvalBindings = basic {
             dependencies.filterIsInstance<TermDependency.CallResultDependency>().forEach { dependency ->

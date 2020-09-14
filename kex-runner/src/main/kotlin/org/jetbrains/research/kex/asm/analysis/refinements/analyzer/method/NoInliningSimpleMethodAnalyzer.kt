@@ -1,6 +1,5 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method
 
-import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.PathConditions
@@ -9,18 +8,16 @@ import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls.CallInliner
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls.CallExecutionConditionInliner
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChainState
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
-import org.jetbrains.research.kex.state.transformer.RecollectingTransformer
 import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
@@ -30,7 +27,7 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
     override fun analyze(): Refinements {
         val methodPaths = MethodExecutionPathsAnalyzer(cm, psa, method)
         val inliner = CallInliner(cm, psa, this)
-        val statePrepared = inliner.apply(methodPaths.methodRawFullState()).optimize()
+        val statePrepared = inliner.inlineCalls(methodPaths.methodRawFullState(), psa.builder(method)).optimize()
         val versioner = MemoryVersioner()
         val state = versioner.apply(statePrepared)
         val memoryVersionInfo = versioner.memoryInfo()
@@ -65,27 +62,10 @@ class NoInliningSimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalys
     ): RefinementSources {
         val state = psa.builder(method).getInstructionState(predicate.instruction)
                 ?: error("No state for instruction which is in state")
-        val pathConditions = state.filter { it.type == PredicateType.Path() || it is CallPredicate && it != predicate }
-        val pathConditionsWithCallsResolved = CallNormalExecutionConditionInliner(callPathConditions).apply(pathConditions)
+        val pathConditionsWithCallsResolved = CallExecutionConditionInliner.normalExecutionConditions(state, predicate, callPathConditions)
         val refinementSources = refinements.expandedErrorConditions()
         val refinementSourcesWithFullPath = refinementSources.mapValues { (_, path) -> ChainState(pathConditionsWithCallsResolved, path) }
         val sources = refinementSourcesWithFullPath.map { (criteria, path) -> RefinementSource.create(criteria, path) }
         return RefinementSources.create(sources)
     }
-
-    private class CallNormalExecutionConditionInliner(val callPathConditions: Map<CallPredicate, PathConditions>) : RecollectingTransformer<CallNormalExecutionConditionInliner> {
-        override val builders = dequeOf(StateBuilder())
-        override fun transformCallPredicate(predicate: CallPredicate): Predicate {
-            val conditions = callPathConditions[predicate] ?: return nothing()
-            currentBuilder += conditions.noErrorCondition()
-            return nothing()
-        }
-
-        override fun apply(ps: PredicateState): PredicateState {
-            builders.clear()
-            builders += StateBuilder()
-            return super.apply(ps)
-        }
-    }
-
 }

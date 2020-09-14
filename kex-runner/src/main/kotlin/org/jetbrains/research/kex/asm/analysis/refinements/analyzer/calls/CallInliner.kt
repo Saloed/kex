@@ -10,8 +10,9 @@ import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecut
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.TermMapper
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.StateBuilder
+import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
+import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.PredicateStateWithPath.Companion.chain
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
@@ -41,6 +42,7 @@ class CallInliner(
         val refinement = refinementProvider.findRefinement(predicate.method())
         val pathConditions = refinement.createPathVariables(argumentMapping, refinementVariableGenerator.generatorFor(predicate))
         callPathConditions[predicate] = pathConditions
+        currentBuilder += pathConditions.noErrorCondition()
         return super.transformCall(predicate)
     }
 
@@ -83,7 +85,7 @@ class CallInliner(
 
     private fun inlineNestedCalls(methodState: PredicateState, prefix: String, predicate: CallPredicate, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
         val inliner = CallInliner(cm, psa, refinementProvider, forceDeepInline = false)
-        val stateResolved = inliner.apply(methodState)
+        val stateResolved = inliner.inlineCalls(methodState, false, null)
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()
         val pathConditionExtension = inliner.callPathConditions.values.map { pathConditions ->
@@ -105,6 +107,7 @@ class CallInliner(
     }
 
     private fun CallPredicate.method() = (call as CallTerm).method
+    private fun CallPredicate.callTerm() = call as CallTerm
 
     private fun Refinements.createPathVariables(argumentMapping: Map<Term, Term>, generator: VariableGenerator): PathConditions {
         val varGenerator = generator.createNestedGenerator("pc")
@@ -129,11 +132,32 @@ class CallInliner(
         }
     }
 
-    override fun apply(ps: PredicateState): PredicateState {
+    fun inlineCalls(ps: PredicateState, builder: PredicateStateBuilder?) = inlineCalls(ps, true, builder)
+    private fun inlineCalls(ps: PredicateState, isRoot: Boolean, builder: PredicateStateBuilder?): PredicateState {
         val intrinsicsResolved = IntrinsicAdapter.apply(ps)
-        val result =  super.apply(intrinsicsResolved)
-        return BoolTypeAdapter(cm.type).apply(result)
+        val result = super.apply(intrinsicsResolved)
+        val resultAdapted = BoolTypeAdapter(cm.type).apply(result)
+        if (!isRoot) return resultAdapted
+        val nonEmptyPathConditions = callPathConditions.filterValues { it.pc.isNotEmpty() }
+        if (nonEmptyPathConditions.isEmpty()) return resultAdapted
+        return extendStateWithErrorExecutionPaths(resultAdapted, nonEmptyPathConditions, builder)
     }
+
+    private fun extendStateWithErrorExecutionPaths(
+            state: PredicateState,
+            pathConditions: Map<CallPredicate, PathConditions>,
+            builder: PredicateStateBuilder?
+    ): PredicateState {
+        val negativeExecutions = pathConditions.map { (call, conditions) ->
+            val callState = builder?.getInstructionState(call.callTerm().instruction) ?: emptyState()
+            val inlined = CallExecutionConditionInliner.normalExecutionConditions(callState, call, callPathConditions)
+            chain(inlined, conditions.noErrorCondition().not())
+        }
+        return choice(state, *negativeExecutions.toTypedArray())
+    }
+
+    @Deprecated("Use inlineCalls instead of apply", ReplaceWith("inlineCalls(ps)"))
+    override fun apply(ps: PredicateState): PredicateState = error("Use inline calls instead of apply")
 
     companion object {
         private fun isObjectConstructor(method: Method): Boolean {
