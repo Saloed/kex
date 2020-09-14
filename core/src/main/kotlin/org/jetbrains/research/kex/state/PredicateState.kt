@@ -114,6 +114,7 @@ inline fun chain(base: StateBuilder.() -> Unit, curr: StateBuilder.() -> Unit): 
 }
 
 fun chain(states: List<PredicateState>) = states.reduceOrNull { acc, state -> ChainState(acc, state) } ?: emptyState()
+fun chain(vararg states: PredicateState) = chain(states.toList())
 
 inline fun choice(left: StateBuilder.() -> Unit, right: StateBuilder.() -> Unit): PredicateState {
     val lhv = StateBuilder().apply { left() }.apply()
@@ -125,6 +126,9 @@ inline fun choice(vararg builders: StateBuilder.() -> Unit): PredicateState {
     val states = builders.map { StateBuilder().apply { it() }.apply() }
     return StateBuilder().apply { this += states }.apply()
 }
+
+fun choice(states: List<PredicateState>) = ChoiceState(states)
+fun choice(vararg states: PredicateState) = choice(states.toList())
 
 operator fun PredicateState.not() = NegationState(this)
 

@@ -28,7 +28,7 @@ fun Dynamic_.axiomExpr(): Bool_ = Bool_(ctx, axiom)
 
 open class ${valexpr} : ${SMTvalexpr} {
     companion object {
-        inline fun < reified Type : Dynamic_> getStaticSort(ctx: SolverContext_) = getStaticSort(ctx, Type::class)
+        inline fun < reified Type : Dynamic_ > getStaticSort(ctx: SolverContext_) = getStaticSort(ctx, Type::class)
         fun getStaticSort(ctx: SolverContext_, type: KClass< out Dynamic_ >) = when (type) {
 #foreach($class in $exprClasses)
             $class::class -> ${class}.getStaticSort(ctx)
@@ -204,7 +204,7 @@ $modifiers class $fullname : $parent {
     operator fun not(): $self = $self(ctx, Engine_.negate(ctx, expr), axiom)
 }
 
-#generateClass($Bitvector, "BV", "open", "Dynamic_", "Engine_.getBVSort(ctx, SMTEngine.WORD * 8)", "Long")
+#generateClass($Bitvector, "BV", "open", $valexpr, "Engine_.getBVSort(ctx, SMTEngine.WORD * 8)", "Long")
     override fun withAxiom(ax: Dynamic_) = $self(ctx, expr, spliceAxioms(ctx, axiom, ax.expr, ax.axiom))
 
     fun getBitsize() = Engine_.bvBitsize(ctx, getSort())
@@ -284,7 +284,7 @@ class $self$width : $self {
 
 #set($floats = ["Float", "Double"])
 #foreach($float in $floats)
-#generateClass("$solver$float", $float, "", "Dynamic_", "Engine_.get${float}Sort(ctx)", $float)
+#generateClass("$solver$float", $float, "", $valexpr, "Engine_.get${float}Sort(ctx)", $float)
     override fun withAxiom(ax: Dynamic_) = $self(ctx, expr, spliceAxioms(ctx, axiom, ax.expr, ax.axiom))
 
     fun getEBitsize() = Engine_.floatEBitsize(ctx, getSort())
@@ -315,7 +315,7 @@ class $self$width : $self {
 
 #end
 
-class ${Array}< Element : Dynamic_, in Index : Dynamic_ > : Dynamic_ {
+class ${Array}< Element : Dynamic_, in Index : Dynamic_ > : $valexpr {
     companion object {
         fun < Element : Dynamic_, Index : Dynamic_ > merge(default: Array_< Element, Index >,
             cases: List< Pair< Bool_, Array_< Element, Index >>>): Array_< Element, Index > {

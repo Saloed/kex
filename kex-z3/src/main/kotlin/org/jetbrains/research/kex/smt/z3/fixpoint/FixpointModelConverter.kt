@@ -189,7 +189,7 @@ class FixpointModelConverter(
 
     private fun convertComplexMemoryArray(expr: ArrayExpr): Pair<Term, Declaration.Memory> = when {
         expr.isVar -> {
-            val decl = mapping.declarations[expr.index] as? Declaration.Memory
+            val decl = mapping.arguments[expr.index] as? Declaration.Memory
                     ?: error("Non memory declaration")
             term { const(true) } to decl
         }
@@ -237,7 +237,7 @@ class FixpointModelConverter(
 
     private fun convertMemoryLoad(memory: Expr, location: Expr): Term {
         check(memory.isVar) { "Memory is not var $memory" }
-        val decl = mapping.declarations[memory.index] as? Declaration.Memory
+        val decl = mapping.arguments[memory.index] as? Declaration.Memory
                 ?: error("Non memory descriptor")
         return convertMemoryLoad(decl, location)
     }

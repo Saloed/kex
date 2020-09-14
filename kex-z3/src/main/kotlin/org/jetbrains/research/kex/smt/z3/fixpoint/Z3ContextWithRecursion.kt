@@ -16,7 +16,7 @@ class Z3ContextWithRecursion(
         callPrototype: CallPredicate,
         private val predicateName: String, tf: TypeFactory) : Z3Converter(tf) {
 
-    private val orderedDeclarations: MutableList<Declaration>
+    private val orderedDeclarations: ArgumentDeclarations
     private val orderedProperties: List<Declaration.Memory>
     private val propertyTypes = hashMapOf<Declaration.Memory, KexType>()
     val mapper: ModelDeclarationMapping
@@ -29,7 +29,7 @@ class Z3ContextWithRecursion(
         val ownerDecl = Declaration.This()
         val receiverDecl = Declaration.Other()
         orderedProperties = prepareMemoryProperties()
-        orderedDeclarations = (listOf(ownerDecl) + argumentDecls + listOf(receiverDecl) + orderedProperties).toMutableList()
+        orderedDeclarations = ArgumentDeclarations.create(listOf(ownerDecl) + argumentDecls + listOf(receiverDecl) + orderedProperties)
         mapper = ModelDeclarationMapping(orderedDeclarations)
         argumentDecls.zip(call.arguments).forEach { (decl, term) -> mapper.setTerm(decl, term) }
         mapper.setTerm(ownerDecl, call.owner)

@@ -29,7 +29,7 @@ class UnknownCallsProcessor(val ignore: Set<CallPredicate> = emptySet(), val rep
     fun apply(ps: List<PredicateState>) = ps.map { apply(it) }
 
     fun addToDeclarationMapping(declarationMapping: ModelDeclarationMapping) {
-        val calls = declarationMapping.declarations.filterIsInstance<Declaration.CallResult>()
+        val calls = declarationMapping.arguments.declarations.filterIsInstance<Declaration.CallResult>()
         for (call in calls) {
             val unknownCall = unknownCalls[call.index]
                     ?: throw IllegalStateException("No call for index ${call.index}")

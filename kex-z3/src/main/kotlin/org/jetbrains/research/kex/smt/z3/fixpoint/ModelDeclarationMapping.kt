@@ -10,19 +10,18 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.ValueTerm
 import org.jetbrains.research.kex.state.transformer.collectArguments
 
-class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
+class ModelDeclarationMapping(val arguments: ArgumentDeclarations) {
     private val terms = hashMapOf<Declaration, Term>()
     val callDependentDeclarations = hashMapOf<Pair<MemoryDescriptor, MemoryVersion>, Z3ConverterWithCallMemory.CallInfo>()
     val calls = hashMapOf<Int, Z3ConverterWithCallMemory.CallInfo>()
 
-
     fun initializeTerms(vararg ps: PredicateState) {
         val (thisArg, otherArgs) = collectArguments(ps)
-        declarations.filterIsInstance<Declaration.This>().forEach { declaration ->
+        arguments.declarations.filterIsInstance<Declaration.This>().forEach { declaration ->
             terms[declaration] = thisArg
                     ?: throw IllegalStateException("This $declaration not found ")
         }
-        declarations.filterIsInstance<Declaration.Argument>().forEach { declaration ->
+        arguments.declarations.filterIsInstance<Declaration.Argument>().forEach { declaration ->
             terms[declaration] = otherArgs.values.find { it.index == declaration.index }
                     ?: throw IllegalStateException("Argument $declaration not found ")
         }
@@ -33,20 +32,9 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         initializeCallDependentMemory(calls)
     }
 
-    fun initializeMemoryVersions(memoryVersionInfo: MemoryVersionInfo) = declarations.replaceAll { declaration ->
-        when (declaration) {
-            is Declaration.Memory -> {
-                val originalVersion = memoryVersionInfo.findMemoryVersion(declaration.descriptor, declaration.version)
-                        ?: error("No such memory info $declaration")
-                Declaration.Memory(declaration.descriptor, originalVersion, declaration.info)
-            }
-            else -> declaration
-        }
-    }
-
     private fun initializeCallDependentMemory(calls: List<Z3ConverterWithCallMemory.CallInfo>) {
         val callMemoryVersions = calls.associateBy { it.predicate.memoryVersion }
-        declarations.filterIsInstance<Declaration.Memory>()
+        arguments.declarations.filterIsInstance<Declaration.Memory>()
                 .map { it to callMemoryVersions[it.version] }
                 .filter { it.second != null }
                 .associateByTo(callDependentDeclarations, { it.first.descriptor to it.first.version }, { it.second!! })
@@ -57,19 +45,19 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
     }
 
     fun getTerm(idx: Int, callDependencies: MutableSet<TermDependency>): Term {
-        val declaration = declarations[idx]
+        val declaration = arguments[idx]
         if (declaration is Declaration.CallResult) {
-            val callInfo = calls[declaration.index] ?: throw IllegalStateException("No info about call $declaration")
+            val callInfo = calls[declaration.index]
+                    ?: throw IllegalStateException("No info about call $declaration")
             val term = callInfo.predicate.lhv
             callDependencies.add(TermDependency.CallResultDependency(term, callInfo.index, callInfo.predicate))
             return term
         }
         val term = terms[declaration]
-                ?: throw IllegalArgumentException("No term for declaration $idx: ${declarations[idx]}")
+                ?: throw IllegalArgumentException("No term for declaration $idx: ${arguments[idx]}")
         if (term is CallTerm) throw IllegalStateException("Unexpected CallTerm")
         return term
     }
-
 
     private fun collectArguments(ps: Array<out PredicateState>): Pair<ValueTerm?, Map<Int, ArgumentTerm>> {
         val collected = ps.map { collectArguments(it) }
@@ -78,14 +66,17 @@ class ModelDeclarationMapping(val declarations: MutableList<Declaration>) {
         return thisArg to args
     }
 
-    override fun toString(): String = "ModelDeclarationMappings($declarations)"
+    override fun toString(): String = "ModelDeclarationMappings($arguments)"
 
     companion object {
-        fun create(declarations: List<Declaration>, memoryVersionInfo: MemoryVersionInfo, vararg ps: PredicateState): ModelDeclarationMapping {
-            val mapping = ModelDeclarationMapping(declarations.toMutableList())
-            mapping.initializeTerms(*ps)
-            mapping.initializeMemoryVersions(memoryVersionInfo)
-            return mapping
+        fun create(
+                arguments: ArgumentDeclarations,
+                memoryVersionInfo: MemoryVersionInfo,
+                vararg ps: PredicateState
+        ): ModelDeclarationMapping {
+            val argumentsWithMemory = arguments.initializeMemoryVersions(memoryVersionInfo)
+            return ModelDeclarationMapping(argumentsWithMemory)
+                    .apply { initializeTerms(*ps) }
         }
     }
 }

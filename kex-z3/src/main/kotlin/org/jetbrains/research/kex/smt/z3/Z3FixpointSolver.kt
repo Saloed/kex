@@ -116,9 +116,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
     private data class Predicate(val idx: Int) {
         val name = "$BASE_NAME$idx"
-        fun call(ctx: CallCtx, arguments: List<Declaration>) = ctx.build {
-            val argumentsSorts = arguments.map { it.sort }
-            val callArguments = arguments.map { it.expr }
+        fun call(ctx: CallCtx, arguments: ArgumentDeclarations) = ctx.build {
+            val argumentsSorts = arguments.declarations.map { it.sort }
+            val callArguments = arguments.declarations.map { it.expr }
             val predicate = boolFunction(name, argumentsSorts)
             boolFunctionApp(predicate, callArguments)
         }
@@ -191,7 +191,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
     ): FixpointResult {
         return CallCtx(tf, state, positive, negative) { tf -> Z3ConverterWithCallMemory(tf, memoryInfo) }.use { ctx ->
             val callPredicateConverter = ctx.converter as Z3ConverterWithCallMemory
-             val z3State = ctx.build {
+            val z3State = ctx.build {
                 convert(state).asAxiom() as BoolExpr
             }
             val z3positive = ctx.convert(positive).asAxiom() as BoolExpr
@@ -202,7 +202,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 val declaration = ctx.knownDeclarations.first { it.expr == expr }
                 term to declaration
             }.toMap()
-            val argumentDeclarations = (ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct()
+            val argumentDeclarations = ArgumentDeclarations.create((ctx.knownDeclarations.filter { it.isValuable() } + additionalArgsDeclarations.values).distinct())
             val declarationExprs = (ctx.knownDeclarations.map { it.expr } + additionalArgsDeclarations.values.map { it.expr }).distinct()
             val declarationMapping = ModelDeclarationMapping.create(
                     argumentDeclarations, memoryInfo,
@@ -245,6 +245,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                     .filter { it.isValuable() }
                     .filterNot { it is Declaration.CallResult && it.index in ignoredCallIds }
                     .filterNot { it is Declaration.Memory && it.version in ignoredCallsMemoryVersions }
+                    .let { ArgumentDeclarations.create(it) }
             val declarationMapping = ModelDeclarationMapping.create(
                     argumentDeclarations, memoryVersionInfo,
                     state, query, *positivePaths.toTypedArray()
@@ -288,7 +289,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 log.debug("State:\n$z3State\nPositive:\n$z3positive\nQuery:\n$z3query")
 
                 val declarationExprs = ctx.knownDeclarations.map { it.expr }
-                val argumentDeclarations = ctx.knownDeclarations.filter { it.isValuable() }
+                val argumentDeclarations = ArgumentDeclarations.create(ctx.knownDeclarations.filter { it.isValuable() })
                 val declarationMapping = ModelDeclarationMapping.create(
                         argumentDeclarations, memoryVersionInfo,
                         state, query, *positivePaths.toTypedArray()
@@ -350,10 +351,9 @@ class Z3FixpointSolver(val tf: TypeFactory) {
             if (predicateInterpretation.numEntries != 0) TODO("Model with entries")
             val elseEntry = predicateInterpretation.`else`
             log.debug("\n$elseEntry")
-            log.debug("\n${mapping.declarations}")
+            log.debug("\n${mapping}")
             log.debug("\n${z3Context.getTypeMapping()}")
             modelConverter.apply(elseEntry)
         }
     }
-
 }
