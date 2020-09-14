@@ -81,7 +81,7 @@ class CallResolver(
             MethodManager.InlineManager.InlineStatus.MAY_INLINE -> SingleCallResolver.open(callContext, call, methodAnalyzer, approximationManager)
             MethodManager.InlineManager.InlineStatus.NO_INLINE -> SingleCallResolver.empty(callContext, call, methodAnalyzer, approximationManager)
         }
-        val callPreconditions = resolver.resolve(state, call, dependencies, pathVariables, tmpVariables)
+        val callPreconditions = resolver.resolve(state, dependencies, pathVariables, tmpVariables)
         val renamedCallPreconditions = renameStateVariables(callPreconditions.state, callPreconditions.pathVariables, callPreconditions.tmpVariables, call, "pre")
         val renamedCallPostConditions = renameStateVariables(state, pathVariables, tmpVariables, call, "post")
         approximationManager.update(call, MethodUnderApproximation(renamedCallPreconditions, renamedCallPostConditions))

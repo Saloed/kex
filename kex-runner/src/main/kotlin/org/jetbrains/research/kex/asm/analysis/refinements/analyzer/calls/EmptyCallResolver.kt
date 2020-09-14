@@ -9,14 +9,15 @@ import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.Term
 
 class EmptyCallResolver(
+        resolvingCall: CallPredicate,
         currentCallContext: CallContext,
         methodAnalyzer: MethodAnalyzer,
         approximationManager: MethodApproximationManager
-) : SingleCallResolver(currentCallContext, methodAnalyzer, approximationManager) {
+) : SingleCallResolver(resolvingCall, currentCallContext, methodAnalyzer, approximationManager) {
     override fun resolve(
             state: PredicateStateWithPath,
-            call: CallPredicate, dependencies: List<TermDependency>,
-            pathVariables: Set<Term>, tmpVariables: Set<Term>
+            dependencies: List<TermDependency>, pathVariables: Set<Term>,
+            tmpVariables: Set<Term>
     ): RecoveredModel {
         TODO("No inline")
     }
