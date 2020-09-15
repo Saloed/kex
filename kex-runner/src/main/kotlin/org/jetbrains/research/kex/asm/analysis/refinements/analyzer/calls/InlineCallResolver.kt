@@ -18,7 +18,7 @@ import org.jetbrains.research.kex.state.transformer.TermRemapper
 import org.jetbrains.research.kex.state.transformer.VariableCollector
 import org.jetbrains.research.kex.state.transformer.collectVariables
 
-class InlineCallResolver(
+open class InlineCallResolver(
         resolvingCall: CallPredicate,
         currentCallContext: CallContext,
         methodAnalyzer: MethodAnalyzer,
@@ -32,16 +32,15 @@ class InlineCallResolver(
             tmpVariables: Set<Term>
     ): RecoveredModel {
         val (arguments, forwardMapping, backwardMapping) = collectArguments(state, dependencies, pathVariables, tmpVariables)
-        val methodWithInlinedDependencies = inlineCallDependencies(state.state, dependencies)
-        val stateToAnalyze = forwardMapping.apply(methodWithInlinedDependencies.state)
-        val normalExecutionPath = forwardMapping.apply(methodWithInlinedDependencies.normalExecutionPath)
-        val positive = chain(state.path, normalExecutionPath)
-        val negative = choice(state.path.not(), normalExecutionPath.not())
-        val argument = CallResolveSolverQuery(stateToAnalyze, positive, negative, arguments, emptySet(),
-                methodWithInlinedDependencies.memoryVersionInfo, 0)
+        val preparedMethod = inlineCallDependencies(state.state, dependencies)
+        val stateToAnalyze = forwardMapping.apply(preparedMethod.state)
+        val positive = state.path
+        val negative = state.path.not()
+        val argument = CallResolveSolverQuery(stateToAnalyze, positive, negative, arguments,
+                emptySet(), preparedMethod.memoryVersionInfo, 0)
         val resultModel = analyzeState(argument)
         val resultState = backwardMapping.apply(resultModel.state.state)
-        val resultWithRestoredMemory = restoreStateMemory(resultState, methodWithInlinedDependencies.memoryMapping)
+        val resultWithRestoredMemory = restoreStateMemory(resultState, preparedMethod.memoryMapping)
         val resultStateWithPath = PredicateStateWithPath(resultWithRestoredMemory, resultModel.state.path)
         return RecoveredModel(resultStateWithPath, emptySet(), resultModel.pathVariables, resultModel.tmpVariables)
     }
@@ -53,14 +52,12 @@ class InlineCallResolver(
 
     private data class InlinedCallInfo(
             val state: PredicateState,
-            val normalExecutionPath: PredicateState,
             val memoryMapping: MemoryMappingType,
             val memoryVersionInfo: MemoryVersionInfo
     )
 
     private data class PreparedInlinedCall(
             val state: PredicateState,
-            val normalExecutionPath: PredicateState,
             val finalMemory: Map<MemoryDescriptor, MemoryVersion>
     )
 
@@ -93,9 +90,8 @@ class InlineCallResolver(
         val resultState = ChainState(scopedMethodState, newState)
         val memoryVersionInfo = MemoryVersionInfoCollector.collect(resultState)
         MemoryUtils.verify(resultState, memoryVersionInfo)
-        return InlinedCallInfo(resultState, preparedMethod.normalExecutionPath, mapping, memoryVersionInfo)
+        return InlinedCallInfo(resultState, mapping, memoryVersionInfo)
     }
-
 
     internal class ScopeInfoMapper(val mapping: Map<MemoryDescriptor, MemoryAccessScope>) : MemoryVersionTransformer {
         override fun <T> transformMemoryVersion(element: MemoryAccess<T>): T {
@@ -142,21 +138,26 @@ class InlineCallResolver(
     private fun prepareInliningMethod(dependencies: List<TermDependency>): PreparedInlinedCall {
         val retvalPlaceholder = term { value(resolvingMethod.returnType.kexType, "retval_${resolvingCallTerm.hashCode()}") }
         val predicateToInline = CallPredicate(retvalPlaceholder, resolvingCallTerm)
-        val inliner = CallInliner(methodAnalyzer.cm, methodAnalyzer.psa, methodAnalyzer, forceDeepInline = true, forceMethodInlining = resolvingMethod)
-        val methodState = inliner.apply(predicateToInline.wrap())
+        val methodState = inliningMethodState(predicateToInline)
         check(predicateToInline !in PredicateCollector.collectIsInstance<CallPredicate>(methodState)) { "Call was not inlined" }
         val retvalBindings = basic {
             dependencies.filterIsInstance<TermDependency.CallResultDependency>().forEach { dependency ->
                 predicate(PredicateType.State()) { dependency.term equality retvalPlaceholder }
             }
         }
-        val normalExecutionConditions = inliner.callPathConditions[predicateToInline]?.noErrorCondition()
-                ?: emptyState()
         val methodStateForInlining = chain(methodState, retvalBindings)
         val memoryVersioner = MemoryVersioner()
         val versionedMethodState = memoryVersioner.apply(methodStateForInlining)
         val finalVersions = memoryVersioner.memoryInfo().final
-        return PreparedInlinedCall(versionedMethodState, normalExecutionConditions, finalVersions)
+        return PreparedInlinedCall(versionedMethodState, finalVersions)
+    }
+
+    open fun inliningMethodState(callPredicate: CallPredicate): PredicateState {
+        val inliner = CallInliner(methodAnalyzer.cm,
+                methodAnalyzer.psa,
+                methodAnalyzer,
+                forceDeepInline = true, forceMethodInlining = resolvingMethod)
+        return inliner.apply(callPredicate.wrap())
     }
 
     private fun collectArguments(

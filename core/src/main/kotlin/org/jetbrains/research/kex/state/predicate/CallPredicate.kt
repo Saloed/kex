@@ -15,12 +15,12 @@ import org.jetbrains.research.kfg.ir.Location
 @Serializable
 class CallPredicate(
         val lhvUnsafe: Term?,
-        val callTerm: Term,
+        val callTermUnsafe: Term,
         @Required override val type: PredicateType = PredicateType.State(),
         @Required @Contextual override val location: Location = Location()) : Predicate() {
 
     val hasLhv by lazy { lhvUnsafe != null }
-    override val operands by lazy { listOfNotNull(lhvUnsafe, callTerm) }
+    override val operands by lazy { listOfNotNull(lhvUnsafe, callTermUnsafe) }
 
     constructor(callTerm: Term, type: PredicateType = PredicateType.State(), location: Location = Location())
             : this(null, callTerm, type, location)
@@ -31,8 +31,11 @@ class CallPredicate(
     val call: Term
         get() = if (hasLhv) operands[1] else operands[0]
 
+    val callTerm: CallTerm
+        get() = callTermUnsafe as CallTerm
+
     val memoryVersion: MemoryVersion
-        get() = (callTerm as CallTerm).memoryVersion
+        get() = callTerm.memoryVersion
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate {
         val tlhv = if (hasLhv) t.transform(lhv) else null

@@ -68,7 +68,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     private data class MemspacingArguments(val state: PredicateState, val recursion: PredicateState, val normal: PredicateState, val sources: RefinementSources)
 
     private fun PredicateState.filterRecursiveCalls(): PredicateState =
-            filterNot { it is CallPredicate && (it.callTerm as CallTerm).method == method }
+            filterNot { it is CallPredicate && (it.call as CallTerm).method == method }
 
 
     private fun createRootCall(): CallPredicate = state {

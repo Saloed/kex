@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.refinements
 
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
+import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.term.term
@@ -55,6 +56,15 @@ class InliningRefinementTest : RefinementTest("Inlining") {
             }, {
                 path { arg(KexInt(), 0) gt const(0) equality true }
             })
+        }
+    }
+
+    @Test
+    fun testInlineWithResultDependency2() = run("inlineWithResultDependency2") {
+        refinement(IllegalStateException()) {
+            basic {
+                path { arg(KexInt(), 0) ge const(0) equality true }
+            }
         }
     }
 }

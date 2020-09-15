@@ -75,4 +75,15 @@ object Inlining {
         if (!x && a < 0) throw IllegalStateException("bad result")
         return 0
     }
+
+    fun exceptionSource2(a: Int): Int {
+        if (a > 0) throw IllegalStateException("Positive check")
+        return a
+    }
+
+    fun inlineWithResultDependency2(x: Int): Int {
+        val res = exceptionSource2(x)
+        if (res == 0) throw IllegalStateException("Zero")
+        return res
+    }
 }
