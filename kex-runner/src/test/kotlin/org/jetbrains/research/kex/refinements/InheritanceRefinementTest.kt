@@ -7,6 +7,7 @@ import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.withMemspace
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 class InheritanceRefinementTest : RefinementTest("Inheritance") {
@@ -95,6 +96,7 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
     val myListB2 = nestedClass("MyListB2").kexClass()
 
 
+    @Ignore
     @Test
     fun testFieldAccess() = run("testFieldAccess") {
         refinement(IllegalStateException()) {

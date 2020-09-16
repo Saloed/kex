@@ -3,7 +3,7 @@ package org.jetbrains.research.kex.refinements
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.emptyState
-import kotlin.test.Test
+import kotlin.test.*
 
 class SimpleRefinementTest : RefinementTest("Simple") {
     @Test
@@ -72,6 +72,7 @@ class SimpleRefinementTest : RefinementTest("Simple") {
         }
     }
 
+    @Ignore
     @Test
     fun testFloatsAndDoubles() = run("floatsAndDoubles"){
         refinement(IllegalArgumentException()){ emptyState() }

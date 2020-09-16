@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.refinements.MethodApproximationManager
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplementationMerge
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplementations
@@ -13,8 +14,6 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.chain
-import org.jetbrains.research.kex.state.memory.MemoryAccessScope
-import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.InstanceOfTerm
@@ -33,12 +32,13 @@ class OpenCallResolver(
             dependencies: List<TermDependency>, pathVariables: Set<Term>,
             tmpVariables: Set<Term>
     ): RecoveredModel {
+        log.debug("Resolve open call: $resolvingCall")
         val implementations = MethodImplementations(methodAnalyzer.cm, methodAnalyzer.refinementsManager).collectImplementations(resolvingMethod)
         val preconditions = implementations.associateWith { method ->
             analyzeImplementation(method, dependencies, state, pathVariables, tmpVariables)
         }
         val preconditionStates = preconditions.mapValues { (_, model) -> model.finalStateOrException() }.map { it.value to it.key }
-        val preconditionMerger = OpenCallPreconditionMerge(preconditions, currentCallContext.parent.scope, resolvingCall.memoryVersion, resolvingMethod)
+        val preconditionMerger = OpenCallPreconditionMerge(preconditions)
         val mergedState = preconditionMerger.mergeImplementations(preconditionStates)
         val mergedTmpVariables = preconditionMerger.tmpGenerator.generatedVariables().toSet()
         val mergedPathVariables = preconditionMerger.pathGenerator.generatedVariables().toSet()
@@ -52,12 +52,12 @@ class OpenCallResolver(
             pathVariables: Set<Term>,
             tmpVariables: Set<Term>
     ): RecoveredModel {
-        val callOwner = resolvingCallTerm.owner
-        if (!checkOwnerTypes(method, callOwner)) {
+        log.debug("Resolve open call implementation: $method")
+        if (!checkOwnerTypes(method, resolvingCallTerm.owner)) {
             return RecoveredModel.error()
         }
         val newCall = CallTerm(
-                resolvingCallTerm.type, callOwner,
+                resolvingCallTerm.type, resolvingCallTerm.owner,
                 method, resolvingCallTerm.instruction,
                 resolvingCallTerm.arguments, resolvingCallTerm.memoryVersion
         )
@@ -90,12 +90,11 @@ class OpenCallResolver(
         }
     }
 
-    class OpenCallPreconditionMerge(
-            val preconditions: Map<Method, RecoveredModel>,
-            val scope: MemoryAccessScope,
-            val version: MemoryVersion,
-            method: Method
-    ) : MethodImplementationMerge(method) {
+    inner class OpenCallPreconditionMerge(
+            val preconditions: Map<Method, RecoveredModel>
+    ) : MethodImplementationMerge(resolvingMethod) {
+        override val owner: Term
+            get() = resolvingCallTerm.owner
         override val baseGenerator: VariableGenerator = VariableGenerator("resolved_impls")
         override fun mapUnmappedTerm(method: Method, term: Term): Term? {
             val model = preconditions[method] ?: error("Method not found in preconditions")
@@ -107,6 +106,8 @@ class OpenCallResolver(
         }
 
         override fun createInstanceOf(term: Term, type: KexType) =
-                (super.createInstanceOf(term, type) as InstanceOfTerm).withScopeInfo(scope).withMemoryVersion(version)
+                (super.createInstanceOf(term, type) as InstanceOfTerm)
+                        .withScopeInfo(currentCallContext.parent.scope)
+                        .withMemoryVersion(resolvingCall.memoryVersion)
     }
 }

@@ -18,7 +18,7 @@ open class MethodImplementationMerge(val method: Method) {
     open val baseGenerator: VariableGenerator = VariableGenerator("inheritance")
     val pathGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("path") }
     val tmpGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("tmp") }
-    val owner: Term by lazy { term { `this`(method.`class`.kexType) } }
+    open val owner: Term by lazy { term { `this`(method.`class`.kexType) } }
 
     open fun mapUnmappedTerm(method: Method, term: Term): Term? = if (term is ArgumentTerm) term else null
     open fun createInstanceOf(term: Term, type: KexType) = term { tf.getInstanceOf(type, term) }
