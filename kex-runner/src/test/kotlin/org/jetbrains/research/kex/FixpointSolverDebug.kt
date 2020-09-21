@@ -20,8 +20,7 @@ class FixpointSolverDebug : KexTest() {
         log.debug(query)
         val solver = FixpointSolver(cm)
         val res = query.run(solver)
-        assert(res is FixpointResult.Sat) { "$res" }
-        println((res as FixpointResult.Sat).result)
+        assert(false) { "$res" }
     }
 
     @Test

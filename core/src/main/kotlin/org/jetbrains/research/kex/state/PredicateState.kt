@@ -270,6 +270,12 @@ data class PredicateStateWithPath(val state: PredicateState, val path: Predicate
     val size: Int
         get() = state.size + path.size
 
+    override fun toString() = buildString {
+        append(state.print())
+        append(" path -> ")
+        append(path.print())
+    }
+
     companion object {
         fun chain(ps: List<PredicateStateWithPath>) = PredicateStateWithPath(chainStates(ps), chainPaths(ps))
         fun choice(ps: List<PredicateStateWithPath>) = PredicateStateWithPath(chainStates(ps), choicePaths(ps))
