@@ -7,13 +7,9 @@ import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplem
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.PredicateStateWithPath
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.chain
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.InstanceOfTerm
@@ -80,15 +76,7 @@ class OpenCallResolver(
     inner class ImplementationResolver(
             val method: Method,
             callPredicate: CallPredicate
-    ) : InlineCallResolver(callPredicate, currentCallContext, methodAnalyzer, approximationManager) {
-        override fun inliningMethodState(callPredicate: CallPredicate): PredicateState {
-            val methodState = super.inliningMethodState(callPredicate)
-            val typeCheck = basic {
-                assume { callPredicate.callTerm.owner `is` method.`class`.kexType equality true }
-            }
-            return chain(typeCheck, methodState)
-        }
-    }
+    ) : InlineCallResolver(callPredicate, currentCallContext, methodAnalyzer, approximationManager)
 
     inner class OpenCallPreconditionMerge(
             val preconditions: Map<Method, RecoveredModel>

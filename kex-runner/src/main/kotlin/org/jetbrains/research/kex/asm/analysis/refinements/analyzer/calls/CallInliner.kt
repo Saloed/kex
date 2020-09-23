@@ -35,11 +35,14 @@ class CallInliner(
     private val refinementVariableGenerator = VariableGenerator("refinement")
     private val methodVariableGenerator = VariableGenerator("method")
     val callPathConditions = hashMapOf<CallPredicate, PathConditions>()
+    val callPathConditionState = StateBuilder()
 
     override fun transformCall(predicate: CallPredicate): Predicate {
         val argumentMapping = MethodManager.InlineManager.methodArguments(predicate)
         val refinement = refinementProvider.findRefinement(predicate.method())
-        val pathConditions = refinement.createPathVariables(argumentMapping, refinementVariableGenerator.generatorFor(predicate))
+        val (pathConditions, pathVarState) = refinement.createPathVariables(argumentMapping, refinementVariableGenerator.generatorFor(predicate))
+        currentBuilder += pathVarState
+        callPathConditionState += pathVarState
         callPathConditions[predicate] = pathConditions
         return super.transformCall(predicate)
     }
@@ -58,7 +61,12 @@ class CallInliner(
         }
     }
 
-    private fun inlineSimple(predicate: CallPredicate, method: Method, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
+    private fun inlineSimple(
+            predicate: CallPredicate,
+            method: Method,
+            varGenerator: VariableGenerator,
+            argumentMapping: Map<Term, Term>
+    ): Predicate {
         if (method.isEmpty()) return predicate
         val methodState = methodState(method) ?: return predicate
         val nestedCalls = PredicateCollector.collectIsInstance<CallPredicate>(methodState)
@@ -66,7 +74,12 @@ class CallInliner(
         return inlineNestedCalls(methodState, "method", predicate, varGenerator, argumentMapping)
     }
 
-    private fun inlineConstructor(predicate: CallPredicate, method: Method, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
+    private fun inlineConstructor(
+            predicate: CallPredicate,
+            method: Method,
+            varGenerator: VariableGenerator,
+            argumentMapping: Map<Term, Term>
+    ): Predicate {
         if (method.isEmpty()) return when {
             isObjectConstructor(method) -> nothing()
             else -> predicate
@@ -81,7 +94,13 @@ class CallInliner(
         return methodExecutionPaths.methodRawFullState()
     }
 
-    private fun inlineNestedCalls(methodState: PredicateState, prefix: String, predicate: CallPredicate, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): Predicate {
+    private fun inlineNestedCalls(
+            methodState: PredicateState,
+            prefix: String,
+            predicate: CallPredicate,
+            varGenerator: VariableGenerator,
+            argumentMapping: Map<Term, Term>
+    ): Predicate {
         val inliner = CallInliner(cm, psa, refinementProvider, forceDeepInline = false)
         val stateResolved = inliner.apply(methodState)
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
@@ -99,39 +118,18 @@ class CallInliner(
         }
         callPathConditions[predicate] = callPathConditions[predicate]?.merge(pathConditionExtension)
                 ?: error("No path conditions for predicate $predicate")
-        val state = ForceThisTermMapper(varGenerator.createNestedGenerator(prefix), argumentMapping + pcVarMapping).apply(stateResolved)
+        val stateVarMapper = ForceThisTermMapper(varGenerator.createNestedGenerator(prefix), argumentMapping + pcVarMapping)
+        val state = stateVarMapper.apply(stateResolved)
         currentBuilder += state
+        callPathConditionState += stateVarMapper.apply(inliner.callPathConditionState.apply())
         return nothing()
     }
 
     private fun CallPredicate.method() = (call as CallTerm).method
 
-    private fun Refinements.createPathVariables(argumentMapping: Map<Term, Term>, generator: VariableGenerator): PathConditions {
-        val varGenerator = generator.createNestedGenerator("pc")
-        val pathConditions = value.map { it.createPathVariable(varGenerator.generatorFor(it), argumentMapping) }
-        return PathConditions(emptyMap()).merge(pathConditions)
-    }
-
-    private fun Refinement.createPathVariable(varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
-        val argumentMapper = ForceThisTermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
-        val preparedState = state.accept(argumentMapper::apply)
-        return when {
-            preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
-            preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue -> {
-                log.warn("Inline call refinement which is always true")
-                currentBuilder += preparedState.negate().toPredicateState()
-                PathConditions(emptyMap())
-            }
-            else -> {
-                currentBuilder += preparedState.state
-                PathConditions(mapOf(criteria to preparedState.path))
-            }
-        }
-    }
-
     override fun apply(ps: PredicateState): PredicateState {
         val intrinsicsResolved = IntrinsicAdapter.apply(ps)
-        val result =  super.apply(intrinsicsResolved)
+        val result = super.apply(intrinsicsResolved)
         return BoolTypeAdapter(cm.type).apply(result)
     }
 
@@ -158,6 +156,30 @@ class CallInliner(
         private val KOTLIN_PACKAGE = Package.parse("kotlin")
     }
 
+}
+
+private fun Refinements.createPathVariables(argumentMapping: Map<Term, Term>, generator: VariableGenerator): Pair<PathConditions, PredicateState> {
+    val stateBuilder = StateBuilder()
+    val varGenerator = generator.createNestedGenerator("pc")
+    val pathConditions = value.map { it.createPathVariable(stateBuilder, varGenerator.generatorFor(it), argumentMapping) }
+    return PathConditions(emptyMap()).merge(pathConditions) to stateBuilder.apply()
+}
+
+private fun Refinement.createPathVariable(currentBuilder: StateBuilder, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
+    val argumentMapper = ForceThisTermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
+    val preparedState = state.accept(argumentMapper::apply)
+    return when {
+        preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
+        preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue -> {
+            log.warn("Inline call refinement which is always true")
+            currentBuilder += preparedState.negate().toPredicateState()
+            PathConditions(emptyMap())
+        }
+        else -> {
+            currentBuilder += preparedState.state
+            PathConditions(mapOf(criteria to preparedState.path))
+        }
+    }
 }
 
 private fun forceThisTerm(term: Term, mapping: Map<Term, Term>): Term? {
