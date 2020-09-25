@@ -32,6 +32,7 @@ class CallResolver(
                         approximationManager.correctMemoryAfterApproximation(ps, versionInfo)
                     }
                     .run(FixpointSolver(methodAnalyzer.cm))
+//            log.debug("Resolved ${query.iteration} call resolution loop for ${methodAnalyzer.method}\n$processed")
             when {
                 processed.all { it.isFinal } -> return processed
                 else -> processed.forEach { resolveCalls(it) }
@@ -84,7 +85,13 @@ class CallResolver(
         val callPreconditions = resolver.resolve(state, dependencies, pathVariables, tmpVariables)
         val renamedCallPreconditions = renameStateVariables(callPreconditions.state, callPreconditions.pathVariables, callPreconditions.tmpVariables, call, "pre")
         val renamedCallPostConditions = renameStateVariables(state, pathVariables, tmpVariables, call, "post")
-        approximationManager.update(call, MethodUnderApproximation(renamedCallPreconditions, renamedCallPostConditions))
+        saveApproximation(call, renamedCallPreconditions, renamedCallPostConditions)
+    }
+
+    private fun saveApproximation(call: CallPredicate, renamedCallPreconditions: PredicateStateWithPath, renamedCallPostConditions: PredicateStateWithPath) {
+        val approximation = MethodUnderApproximation(renamedCallPreconditions, renamedCallPostConditions)
+        log.debug("Learn approximation for $call:\n$approximation")
+        approximationManager.update(call, approximation)
     }
 
     private fun renameStateVariables(
