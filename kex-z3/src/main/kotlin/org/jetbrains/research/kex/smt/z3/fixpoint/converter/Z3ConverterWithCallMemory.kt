@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.converter
 
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log

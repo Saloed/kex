@@ -1,6 +1,8 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
 import org.jetbrains.research.kex.ktype.kexType
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate

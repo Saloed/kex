@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
 import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
@@ -7,6 +7,7 @@ import com.microsoft.z3.enumerations.Z3_lbool
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.MemoryAccessScope
 import org.jetbrains.research.kex.state.memory.MemoryType

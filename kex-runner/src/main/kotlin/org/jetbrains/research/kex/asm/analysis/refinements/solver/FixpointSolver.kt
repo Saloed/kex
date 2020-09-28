@@ -3,10 +3,9 @@ package org.jetbrains.research.kex.asm.analysis.refinements.solver
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
-import org.jetbrains.research.kex.smt.z3.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult
-import org.jetbrains.research.kex.smt.z3.fixpoint.QueryCheckStatus
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
 import org.jetbrains.research.kfg.ClassManager
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -31,22 +30,18 @@ class FixpointSolver(val cm: ClassManager) {
             crossinline query: Z3FixpointSolver.(FixpointSolver) -> FixpointResult,
             crossinline onResult: FixpointSolver.(List<RecoveredModel>) -> T,
             crossinline onError: FixpointSolver.(FixpointResult?) -> T
-    ): T = try {
-        when (val result = Z3FixpointSolver(cm.type).query(this)) {
-            is FixpointResult.Sat -> onResult(result.result)
-            is FixpointResult.Unknown -> {
-                log.error("Unknown: ${result.reason}")
-                onError(result)
-            }
-            is FixpointResult.Unsat -> {
-                log.error("Unsat: ${result.core.contentToString()}")
-                onError(result)
-            }
+    ): T = when (val result = Z3FixpointSolver(cm.type).query(this)) {
+        is FixpointResult.Sat -> onResult(result.result)
+        is FixpointResult.Unknown -> {
+            log.error("Unknown: ${result.reason}")
+            onError(result)
         }
-    } catch (ex: QueryCheckStatus.FixpointQueryException) {
-        log.error("Bad fixpoint query: ${ex.status}")
-        onError(null)
+        is FixpointResult.Unsat -> {
+            log.error("Unsat: ${result.core.contentToString()}")
+            onError(result)
+        }
     }
+
 
     fun dumpQuery(query: SolverQuery<*, *>, debug: Boolean = false) {
         val failDirPath = Paths.get(failDir)

@@ -1,9 +1,12 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.converter
 
 import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
@@ -11,7 +14,7 @@ import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3ContextWithRecursion(
+class Z3ConverterWithRecursion(
         private val recursiveCalls: Map<CallPredicate, Map<Field, FieldLoadTerm>>,
         callPrototype: CallPredicate,
         private val predicateName: String, tf: TypeFactory) : Z3Converter(tf) {

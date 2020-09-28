@@ -1,5 +1,8 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
+import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithCallMemory
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryVersion

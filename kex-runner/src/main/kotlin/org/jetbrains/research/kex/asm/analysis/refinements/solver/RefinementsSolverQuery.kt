@@ -4,7 +4,8 @@ import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.query.V2SimpleFixpointSolverQuery
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryUtils
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
@@ -40,7 +41,7 @@ data class RefinementsSolverQuery(
                 {
                     it.dumpQuery(this@RefinementsSolverQuery, debug = true)
                     MemoryUtils.verifyVersions(state)
-                    mkFixpointQueryV2(state, sources, normals, ignoredCalls, memoryVersionInfo)
+                    query { V2SimpleFixpointSolverQuery(state, sources, normals, ignoredCalls, memoryVersionInfo) }
                 },
                 { ex ->
                     dumpQuery(this@RefinementsSolverQuery)

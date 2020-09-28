@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
 import org.jetbrains.research.kex.state.term.BinaryTerm
 import org.jetbrains.research.kex.state.term.CmpTerm

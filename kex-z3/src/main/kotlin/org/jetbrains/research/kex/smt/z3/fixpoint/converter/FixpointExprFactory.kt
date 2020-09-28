@@ -1,8 +1,8 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.converter
 
 import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.smt.z3.*
-import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.DeclarationTracker
 
 class FixpointExprFactory private constructor(override val ctx: ContextWithIntSortSizeInfo) : Z3ExprFactory() {
     companion object {

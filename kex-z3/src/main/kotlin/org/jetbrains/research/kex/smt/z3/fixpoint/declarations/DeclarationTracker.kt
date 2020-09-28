@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3.fixpoint
+package org.jetbrains.research.kex.smt.z3.fixpoint.declarations
 
 import com.abdullin.kthelper.defaultHashCode
 import com.microsoft.z3.Expr

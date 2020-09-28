@@ -5,7 +5,8 @@ import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.query.RecursionFixpointSolverQuery
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
@@ -23,7 +24,7 @@ class RecursiveRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : Refin
         val refinements = sources.value.map { source ->
             val refinement = FixpointSolver(methodAnalyzer.cm)
                     .querySingle(
-                            { analyzeRecursion(state, recursiveCalls, recursiveRootCall, recursivePaths, source.condition, correctPath) },
+                            { query { RecursionFixpointSolverQuery(state, recursiveCalls, recursiveRootCall, recursivePaths, source.condition, correctPath) } },
                             { RecoveredModel.error() }
                     ).finalStateOrException()
             Refinement.create(source.criteria, refinement)

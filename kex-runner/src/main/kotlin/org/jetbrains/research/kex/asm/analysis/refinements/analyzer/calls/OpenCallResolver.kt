@@ -7,8 +7,8 @@ import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplem
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
-import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.TermDependency
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm

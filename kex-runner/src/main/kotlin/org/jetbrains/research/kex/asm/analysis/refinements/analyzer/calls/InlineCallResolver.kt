@@ -4,8 +4,8 @@ import org.jetbrains.research.kex.asm.analysis.refinements.MethodApproximationMa
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.solver.CallResolveSolverQuery
 import org.jetbrains.research.kex.ktype.kexType
-import org.jetbrains.research.kex.smt.z3.fixpoint.RecoveredModel
-import org.jetbrains.research.kex.smt.z3.fixpoint.TermDependency
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
+import org.jetbrains.research.kex.smt.z3.fixpoint.model.TermDependency
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -17,6 +17,7 @@ import org.jetbrains.research.kex.state.transformer.PredicateCollector
 import org.jetbrains.research.kex.state.transformer.TermRemapper
 import org.jetbrains.research.kex.state.transformer.VariableCollector
 import org.jetbrains.research.kex.state.transformer.collectVariables
+import kotlin.math.absoluteValue
 
 open class InlineCallResolver(
         resolvingCall: CallPredicate,
@@ -156,7 +157,7 @@ open class InlineCallResolver(
     }
 
     private fun prepareInliningMethod(dependencies: List<TermDependency>): PreparedInlinedCall {
-        val retvalPlaceholder = term { value(resolvingMethod.returnType.kexType, "retval_${resolvingCallTerm.hashCode()}") }
+        val retvalPlaceholder = term { value(resolvingMethod.returnType.kexType, "retval_${resolvingCallTerm.hashCode().absoluteValue}") }
         val predicateToInline = CallPredicate(retvalPlaceholder, resolvingCallTerm)
         val inliner = CallInliner(methodAnalyzer.cm, methodAnalyzer.psa, methodAnalyzer,
                 forceDeepInline = true, forceMethodInlining = resolvingMethod)
@@ -215,7 +216,6 @@ open class InlineCallResolver(
             val callPreconditions: PredicateStateWithPath,
             val finalMemory: Map<MemoryDescriptor, MemoryVersion>
     )
-
 
     data class CallArguments(
             val arguments: List<Term>,
