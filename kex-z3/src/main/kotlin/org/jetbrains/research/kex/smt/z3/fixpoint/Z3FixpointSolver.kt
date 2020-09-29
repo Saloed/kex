@@ -98,23 +98,23 @@ class Z3FixpointSolver(val tf: TypeFactory) {
 
         inline fun <reified T : Expr> T.withContext() = translate(context) as T
 
+        fun BoolExpr.optimize(): BoolExpr = Optimizer(context).apply(typedSimplify())
+
+        fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
+
+        override fun close() = context.close()
+
         fun debugFixpointSmtLib(statementBuilder: StatementBuilder) = """
                 (set-logic HORN)
                 ${options.smtLib()}
                 
-                ${statementBuilder.debug()}
+                ${statementBuilder.debug().debugSmtLib()}
                 
                 (check-sat)
                 (get-model)
                 (get-info :reason-unknown)
 
                 """.trimIndent()
-
-        fun BoolExpr.optimize(): BoolExpr = Optimizer(context).apply(typedSimplify())
-
-        fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
-
-        override fun close() = context.close()
     }
 
     data class Predicate(val idx: Int) {

@@ -12,13 +12,13 @@ import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class RefineFixpointSolverQuery (
+class RefineFixpointSolverQuery(
         val state: PredicateState,
         val positive: PredicateState,
         val negative: PredicateState,
         val additionalArgs: List<Term>,
         val memoryInfo: MemoryVersionInfo
-): FixpointSolverQuery(){
+) : FixpointSolverQuery() {
     override fun makeConverter(tf: TypeFactory) = Z3ConverterWithCallMemory(tf, memoryInfo)
     override fun allStatesForMemoryInitialization() = listOf(state, positive, negative)
     override val Z3FixpointSolver.CallCtx.psConverter: Z3ConverterWithCallMemory
@@ -48,17 +48,17 @@ class RefineFixpointSolverQuery (
 
         val predicate = Z3FixpointSolver.Predicate(0)
 
-        return FixpointSolverCall(listOf(predicate), declarationMapping, object : StatementBuilder(z3State, declarationExprs) {
+        return FixpointSolverCall(listOf(predicate), declarationMapping, object : StatementBuilder(ctx, z3State, declarationExprs) {
             override fun StatementOperation.positiveStatement(): List<BoolExpr> {
                 val statement = ctx.build {
-                    val statement = (getState() and z3positive) implies applyPredicate(ctx, predicate, argumentDeclarations)
+                    val statement = (getState() and z3positive) implies applyPredicate(predicate, argumentDeclarations)
                     statement.forall(declarationExprs).typedSimplify()
                 }
                 return listOf(statement)
             }
 
             override fun StatementOperation.queryStatement() = ctx.build {
-                val statement = (getState() and z3query and applyPredicate(ctx, predicate, argumentDeclarations)) implies context.mkFalse()
+                val statement = (getState() and z3query and applyPredicate(predicate, argumentDeclarations)) implies context.mkFalse()
                 statement.forall(declarationExprs).typedSimplify()
             }
         })

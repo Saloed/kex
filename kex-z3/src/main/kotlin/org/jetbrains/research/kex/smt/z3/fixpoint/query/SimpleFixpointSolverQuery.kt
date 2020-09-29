@@ -40,16 +40,16 @@ class SimpleFixpointSolverQuery(
 
         val predicates = z3positive.indices.map { idx -> Z3FixpointSolver.Predicate(idx) }
 
-        return FixpointSolverCall(predicates, declarationMapping, object : StatementBuilder(z3State, declarationExprs) {
+        return FixpointSolverCall(predicates, declarationMapping, object : StatementBuilder(ctx, z3State, declarationExprs) {
             override fun StatementOperation.positiveStatement() = z3positive.mapIndexed { idx, it ->
                 ctx.build {
-                    val statement = (getState() and it) implies applyPredicate(ctx, predicates[idx], argumentDeclarations)
+                    val statement = (getState() and it) implies applyPredicate(predicates[idx], argumentDeclarations)
                     statement.forall(declarations).typedSimplify()
                 }
             }
 
             override fun StatementOperation.queryStatement() = ctx.build {
-                val predicateApplications = predicates.map { applyPredicate(ctx, it, argumentDeclarations) }
+                val predicateApplications = predicates.map { applyPredicate(it, argumentDeclarations) }
                 val applications = predicateApplications.toTypedArray()
                 val allApplications = context.mkOr(*applications)
                 val statement = ((getState() and z3query) and allApplications) implies context.mkFalse()

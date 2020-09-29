@@ -47,7 +47,7 @@ class RecursionFixpointSolverQuery(
 
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
 
-        return FixpointSolverCall(listOf(recursionPredicate), ctx.psConverter.mapper, object : StatementBuilder(z3State, declarationExprs) {
+        return FixpointSolverCall(listOf(recursionPredicate), ctx.psConverter.mapper, object : StatementBuilder(ctx, z3State, declarationExprs) {
             override fun StatementOperation.positiveStatement(): List<BoolExpr> {
                 val statement = ctx.build {
                     val statement = (getState() and z3Positive) implies rootPredicate
