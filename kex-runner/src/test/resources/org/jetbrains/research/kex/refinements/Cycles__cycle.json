@@ -1,0 +1,2340 @@
+{
+  "className": "org.jetbrains.research.kex.state.ChainState",
+  "simplified": true,
+  "base": {
+    "className": "org.jetbrains.research.kex.state.ChainState",
+    "simplified": true,
+    "base": {
+      "className": "org.jetbrains.research.kex.state.ChainState",
+      "simplified": true,
+      "base": {
+        "className": "org.jetbrains.research.kex.state.ChainState",
+        "simplified": true,
+        "base": {
+          "className": "org.jetbrains.research.kex.state.ChainState",
+          "simplified": true,
+          "base": {
+            "className": "org.jetbrains.research.kex.state.ChainState",
+            "simplified": true,
+            "base": {
+              "className": "org.jetbrains.research.kex.state.ChainState",
+              "simplified": true,
+              "base": {
+                "className": "org.jetbrains.research.kex.state.ChainState",
+                "simplified": true,
+                "base": {
+                  "className": "org.jetbrains.research.kex.state.ChainState",
+                  "simplified": true,
+                  "base": {
+                    "className": "org.jetbrains.research.kex.state.ChoiceState",
+                    "simplified": true,
+                    "choices": [
+                      {
+                        "className": "org.jetbrains.research.kex.state.BasicState",
+                        "predicates": [
+                          {
+                            "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexBool"
+                              },
+                              "opcode": ">=",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "index": 1
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                "value": 0
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                              "value": true
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                              "name": "P"
+                            },
+                            "location": {
+                              "package": "/*",
+                              "file": "unknown",
+                              "line": -1
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "className": "org.jetbrains.research.kex.state.BasicState",
+                        "predicates": [
+                          {
+                            "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexBool"
+                              },
+                              "opcode": "<=",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "opcode": "+",
+                                "lhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  },
+                                  "field": {
+                                    "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                    "ownerClass": {
+                                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                    },
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                      "reference": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                      }
+                                    },
+                                    "owner": {
+                                      "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                        "memspace": 1
+                                      },
+                                      "index": 0
+                                    },
+                                    "fieldName": {
+                                      "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "java/lang/String"
+                                      },
+                                      "value": "clsFieldB"
+                                    }
+                                  },
+                                  "memoryVersion": {
+                                    "version": 0,
+                                    "subversion": 0,
+                                    "type": "INITIAL",
+                                    "predecessors": [
+                                    ]
+                                  }
+                                },
+                                "rhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  },
+                                  "opcode": "*",
+                                  "lhv": {
+                                    "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                    "value": -1
+                                  },
+                                  "rhv": {
+                                    "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                    },
+                                    "field": {
+                                      "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                      "ownerClass": {
+                                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                      },
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                        "reference": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                        }
+                                      },
+                                      "owner": {
+                                        "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                        "type": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                          "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                          "memspace": 1
+                                        },
+                                        "index": 0
+                                      },
+                                      "fieldName": {
+                                        "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                        "type": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                          "class": "java/lang/String"
+                                        },
+                                        "value": "clsFieldA"
+                                      }
+                                    },
+                                    "memoryVersion": {
+                                      "version": 0,
+                                      "subversion": 0,
+                                      "type": "INITIAL",
+                                      "predecessors": [
+                                      ]
+                                    }
+                                  }
+                                }
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                "value": 0
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                              "value": true
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                              "name": "P"
+                            },
+                            "location": {
+                              "package": "/*",
+                              "file": "unknown",
+                              "line": -1
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "curr": {
+                    "className": "org.jetbrains.research.kex.state.ChoiceState",
+                    "simplified": true,
+                    "choices": [
+                      {
+                        "className": "org.jetbrains.research.kex.state.BasicState",
+                        "predicates": [
+                          {
+                            "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexBool"
+                              },
+                              "opcode": ">=",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "opcode": "+",
+                                "lhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  },
+                                  "field": {
+                                    "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                    "ownerClass": {
+                                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                    },
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                      "reference": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                      }
+                                    },
+                                    "owner": {
+                                      "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                        "memspace": 1
+                                      },
+                                      "index": 0
+                                    },
+                                    "fieldName": {
+                                      "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "java/lang/String"
+                                      },
+                                      "value": "clsFieldA"
+                                    }
+                                  },
+                                  "memoryVersion": {
+                                    "version": 993,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 0,
+                                        "subversion": 0,
+                                        "type": "INITIAL",
+                                        "predecessors": [
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "rhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  },
+                                  "opcode": "*",
+                                  "lhv": {
+                                    "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                    "value": -1
+                                  },
+                                  "rhv": {
+                                    "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                    },
+                                    "field": {
+                                      "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                      "ownerClass": {
+                                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                      },
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                        "reference": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                        }
+                                      },
+                                      "owner": {
+                                        "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                        "type": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                          "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                          "memspace": 1
+                                        },
+                                        "index": 0
+                                      },
+                                      "fieldName": {
+                                        "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                        "type": {
+                                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                          "class": "java/lang/String"
+                                        },
+                                        "value": "clsFieldB"
+                                      }
+                                    },
+                                    "memoryVersion": {
+                                      "version": 993,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 0,
+                                          "subversion": 0,
+                                          "type": "INITIAL",
+                                          "predecessors": [
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                "value": -1
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                              "value": false
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                              "name": "P"
+                            },
+                            "location": {
+                              "package": "/*",
+                              "file": "unknown",
+                              "line": -1
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "className": "org.jetbrains.research.kex.state.BasicState",
+                        "predicates": [
+                          {
+                            "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexBool"
+                              },
+                              "opcode": "<=",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "index": 1
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                "value": 0
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                              "value": true
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                              "name": "P"
+                            },
+                            "location": {
+                              "package": "/*",
+                              "file": "unknown",
+                              "line": -1
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "curr": {
+                  "className": "org.jetbrains.research.kex.state.ChoiceState",
+                  "simplified": true,
+                  "choices": [
+                    {
+                      "className": "org.jetbrains.research.kex.state.BasicState",
+                      "predicates": [
+                        {
+                          "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexBool"
+                            },
+                            "opcode": "<=",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              },
+                              "index": 1
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                              "value": 1
+                            }
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                            "value": false
+                          },
+                          "type": {
+                            "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                            "name": "P"
+                          },
+                          "location": {
+                            "package": "/*",
+                            "file": "unknown",
+                            "line": -1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "className": "org.jetbrains.research.kex.state.BasicState",
+                      "predicates": [
+                        {
+                          "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexBool"
+                            },
+                            "opcode": ">=",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              },
+                              "opcode": "+",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "field": {
+                                  "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                  "ownerClass": {
+                                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                  },
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                    "reference": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                    }
+                                  },
+                                  "owner": {
+                                    "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                      "memspace": 1
+                                    },
+                                    "index": 0
+                                  },
+                                  "fieldName": {
+                                    "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                      "class": "java/lang/String"
+                                    },
+                                    "value": "clsFieldB"
+                                  }
+                                },
+                                "memoryVersion": {
+                                  "version": 955269,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 993,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 0,
+                                          "subversion": 0,
+                                          "type": "INITIAL",
+                                          "predecessors": [
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "opcode": "*",
+                                "lhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                  "value": -1
+                                },
+                                "rhv": {
+                                  "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  },
+                                  "field": {
+                                    "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                    "ownerClass": {
+                                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                    },
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                      "reference": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                      }
+                                    },
+                                    "owner": {
+                                      "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                        "memspace": 1
+                                      },
+                                      "index": 0
+                                    },
+                                    "fieldName": {
+                                      "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                      "type": {
+                                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                        "class": "java/lang/String"
+                                      },
+                                      "value": "clsFieldA"
+                                    }
+                                  },
+                                  "memoryVersion": {
+                                    "version": 955269,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 993,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 0,
+                                            "subversion": 0,
+                                            "type": "INITIAL",
+                                            "predecessors": [
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                              "value": 3
+                            }
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                            "value": false
+                          },
+                          "type": {
+                            "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                            "name": "P"
+                          },
+                          "location": {
+                            "package": "/*",
+                            "file": "unknown",
+                            "line": -1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "curr": {
+                "className": "org.jetbrains.research.kex.state.ChoiceState",
+                "simplified": true,
+                "choices": [
+                  {
+                    "className": "org.jetbrains.research.kex.state.BasicState",
+                    "predicates": [
+                      {
+                        "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexBool"
+                          },
+                          "opcode": ">=",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            },
+                            "index": 1
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                            "value": 2
+                          }
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                          "value": false
+                        },
+                        "type": {
+                          "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                          "name": "P"
+                        },
+                        "location": {
+                          "package": "/*",
+                          "file": "unknown",
+                          "line": -1
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "className": "org.jetbrains.research.kex.state.BasicState",
+                    "predicates": [
+                      {
+                        "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexBool"
+                          },
+                          "opcode": ">=",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            },
+                            "opcode": "+",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              },
+                              "field": {
+                                "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                "ownerClass": {
+                                  "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                },
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                  "reference": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  }
+                                },
+                                "owner": {
+                                  "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                    "memspace": 1
+                                  },
+                                  "index": 0
+                                },
+                                "fieldName": {
+                                  "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                    "class": "java/lang/String"
+                                  },
+                                  "value": "clsFieldA"
+                                }
+                              },
+                              "memoryVersion": {
+                                "version": 918014505,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 955269,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 993,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 0,
+                                            "subversion": 0,
+                                            "type": "INITIAL",
+                                            "predecessors": [
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              },
+                              "opcode": "*",
+                              "lhv": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                                "value": -1
+                              },
+                              "rhv": {
+                                "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                },
+                                "field": {
+                                  "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                  "ownerClass": {
+                                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                  },
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                    "reference": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                    }
+                                  },
+                                  "owner": {
+                                    "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                      "memspace": 1
+                                    },
+                                    "index": 0
+                                  },
+                                  "fieldName": {
+                                    "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                    "type": {
+                                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                      "class": "java/lang/String"
+                                    },
+                                    "value": "clsFieldB"
+                                  }
+                                },
+                                "memoryVersion": {
+                                  "version": 918014505,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 955269,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 993,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 0,
+                                              "subversion": 0,
+                                              "type": "INITIAL",
+                                              "predecessors": [
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                            "value": -2
+                          }
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                          "value": false
+                        },
+                        "type": {
+                          "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                          "name": "P"
+                        },
+                        "location": {
+                          "package": "/*",
+                          "file": "unknown",
+                          "line": -1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "curr": {
+              "className": "org.jetbrains.research.kex.state.ChoiceState",
+              "simplified": true,
+              "choices": [
+                {
+                  "className": "org.jetbrains.research.kex.state.BasicState",
+                  "predicates": [
+                    {
+                      "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                      "lhv": {
+                        "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexBool"
+                        },
+                        "opcode": "<=",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          },
+                          "index": 1
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                          "value": 2
+                        }
+                      },
+                      "rhv": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                        "value": false
+                      },
+                      "type": {
+                        "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                        "name": "P"
+                      },
+                      "location": {
+                        "package": "/*",
+                        "file": "unknown",
+                        "line": -1
+                      }
+                    }
+                  ]
+                },
+                {
+                  "className": "org.jetbrains.research.kex.state.BasicState",
+                  "predicates": [
+                    {
+                      "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                      "lhv": {
+                        "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexBool"
+                        },
+                        "opcode": ">=",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          },
+                          "opcode": "+",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            },
+                            "field": {
+                              "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                              "ownerClass": {
+                                "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                              },
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                "reference": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                }
+                              },
+                              "owner": {
+                                "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                  "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                  "memspace": 1
+                                },
+                                "index": 0
+                              },
+                              "fieldName": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                  "class": "java/lang/String"
+                                },
+                                "value": "clsFieldB"
+                              }
+                            },
+                            "memoryVersion": {
+                              "version": 1743644621,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 918014505,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 955269,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 993,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 0,
+                                              "subversion": 0,
+                                              "type": "INITIAL",
+                                              "predecessors": [
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            },
+                            "opcode": "*",
+                            "lhv": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                              "value": -1
+                            },
+                            "rhv": {
+                              "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              },
+                              "field": {
+                                "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                                "ownerClass": {
+                                  "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                                },
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                  "reference": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                  }
+                                },
+                                "owner": {
+                                  "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                    "memspace": 1
+                                  },
+                                  "index": 0
+                                },
+                                "fieldName": {
+                                  "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                  "type": {
+                                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                    "class": "java/lang/String"
+                                  },
+                                  "value": "clsFieldA"
+                                }
+                              },
+                              "memoryVersion": {
+                                "version": 1743644621,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 918014505,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 955269,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 993,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 0,
+                                                "subversion": 0,
+                                                "type": "INITIAL",
+                                                "predecessors": [
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                          "value": 4
+                        }
+                      },
+                      "rhv": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                        "value": false
+                      },
+                      "type": {
+                        "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                        "name": "P"
+                      },
+                      "location": {
+                        "package": "/*",
+                        "file": "unknown",
+                        "line": -1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "curr": {
+            "className": "org.jetbrains.research.kex.state.ChoiceState",
+            "simplified": true,
+            "choices": [
+              {
+                "className": "org.jetbrains.research.kex.state.BasicState",
+                "predicates": [
+                  {
+                    "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                    "lhv": {
+                      "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexBool"
+                      },
+                      "opcode": ">=",
+                      "lhv": {
+                        "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        },
+                        "index": 1
+                      },
+                      "rhv": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                        "value": 0
+                      }
+                    },
+                    "rhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                      "value": false
+                    },
+                    "type": {
+                      "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                      "name": "P"
+                    },
+                    "location": {
+                      "package": "/*",
+                      "file": "unknown",
+                      "line": -1
+                    }
+                  }
+                ]
+              },
+              {
+                "className": "org.jetbrains.research.kex.state.BasicState",
+                "predicates": [
+                  {
+                    "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                    "lhv": {
+                      "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexBool"
+                      },
+                      "opcode": ">=",
+                      "lhv": {
+                        "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        },
+                        "opcode": "+",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          },
+                          "field": {
+                            "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                            "ownerClass": {
+                              "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexReference",
+                              "reference": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              }
+                            },
+                            "owner": {
+                              "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                "memspace": 1
+                              },
+                              "index": 0
+                            },
+                            "fieldName": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                "class": "java/lang/String"
+                              },
+                              "value": "clsFieldA"
+                            }
+                          },
+                          "memoryVersion": {
+                            "version": 605236337,
+                            "subversion": 0,
+                            "type": "MERGE",
+                            "predecessors": [
+                              {
+                                "version": 1743644621,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 918014505,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 955269,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 993,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 0,
+                                                "subversion": 0,
+                                                "type": "INITIAL",
+                                                "predecessors": [
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          },
+                          "opcode": "*",
+                          "lhv": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                            "value": -1
+                          },
+                          "rhv": {
+                            "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            },
+                            "field": {
+                              "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                              "ownerClass": {
+                                "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                              },
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexReference",
+                                "reference": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                                }
+                              },
+                              "owner": {
+                                "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                  "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                  "memspace": 1
+                                },
+                                "index": 0
+                              },
+                              "fieldName": {
+                                "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                                "type": {
+                                  "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                  "class": "java/lang/String"
+                                },
+                                "value": "clsFieldB"
+                              }
+                            },
+                            "memoryVersion": {
+                              "version": 605236337,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 1743644621,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 918014505,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 955269,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 993,
+                                              "subversion": 0,
+                                              "type": "MERGE",
+                                              "predecessors": [
+                                                {
+                                                  "version": 0,
+                                                  "subversion": 0,
+                                                  "type": "INITIAL",
+                                                  "predecessors": [
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "rhv": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                        "value": 0
+                      }
+                    },
+                    "rhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                      "value": false
+                    },
+                    "type": {
+                      "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                      "name": "P"
+                    },
+                    "location": {
+                      "package": "/*",
+                      "file": "unknown",
+                      "line": -1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "curr": {
+          "className": "org.jetbrains.research.kex.state.ChoiceState",
+          "simplified": true,
+          "choices": [
+            {
+              "className": "org.jetbrains.research.kex.state.BasicState",
+              "predicates": [
+                {
+                  "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                  "lhv": {
+                    "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexBool"
+                    },
+                    "opcode": "<=",
+                    "lhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                      },
+                      "index": 1
+                    },
+                    "rhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                      "value": 0
+                    }
+                  },
+                  "rhv": {
+                    "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                    "value": false
+                  },
+                  "type": {
+                    "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                    "name": "P"
+                  },
+                  "location": {
+                    "package": "/*",
+                    "file": "unknown",
+                    "line": -1
+                  }
+                }
+              ]
+            },
+            {
+              "className": "org.jetbrains.research.kex.state.BasicState",
+              "predicates": [
+                {
+                  "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+                  "lhv": {
+                    "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexBool"
+                    },
+                    "opcode": ">=",
+                    "lhv": {
+                      "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                      },
+                      "opcode": "+",
+                      "lhv": {
+                        "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        },
+                        "field": {
+                          "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                          "ownerClass": {
+                            "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                          },
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexReference",
+                            "reference": {
+                              "className": "org.jetbrains.research.kex.ktype.KexInt"
+                            }
+                          },
+                          "owner": {
+                            "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexClass",
+                              "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                              "memspace": 1
+                            },
+                            "index": 0
+                          },
+                          "fieldName": {
+                            "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexClass",
+                              "class": "java/lang/String"
+                            },
+                            "value": "clsFieldB"
+                          }
+                        },
+                        "memoryVersion": {
+                          "version": 1811535893,
+                          "subversion": 0,
+                          "type": "MERGE",
+                          "predecessors": [
+                            {
+                              "version": 605236337,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 1743644621,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 918014505,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 955269,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 993,
+                                              "subversion": 0,
+                                              "type": "MERGE",
+                                              "predecessors": [
+                                                {
+                                                  "version": 0,
+                                                  "subversion": 0,
+                                                  "type": "INITIAL",
+                                                  "predecessors": [
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "rhv": {
+                        "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        },
+                        "opcode": "*",
+                        "lhv": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                          "value": -1
+                        },
+                        "rhv": {
+                          "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          },
+                          "field": {
+                            "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                            "ownerClass": {
+                              "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                            },
+                            "type": {
+                              "className": "org.jetbrains.research.kex.ktype.KexReference",
+                              "reference": {
+                                "className": "org.jetbrains.research.kex.ktype.KexInt"
+                              }
+                            },
+                            "owner": {
+                              "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                                "memspace": 1
+                              },
+                              "index": 0
+                            },
+                            "fieldName": {
+                              "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                              "type": {
+                                "className": "org.jetbrains.research.kex.ktype.KexClass",
+                                "class": "java/lang/String"
+                              },
+                              "value": "clsFieldA"
+                            }
+                          },
+                          "memoryVersion": {
+                            "version": 1811535893,
+                            "subversion": 0,
+                            "type": "MERGE",
+                            "predecessors": [
+                              {
+                                "version": 605236337,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 1743644621,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 918014505,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 955269,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 993,
+                                                "subversion": 0,
+                                                "type": "MERGE",
+                                                "predecessors": [
+                                                  {
+                                                    "version": 0,
+                                                    "subversion": 0,
+                                                    "type": "INITIAL",
+                                                    "predecessors": [
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "rhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                      "value": 2
+                    }
+                  },
+                  "rhv": {
+                    "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                    "value": false
+                  },
+                  "type": {
+                    "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                    "name": "P"
+                  },
+                  "location": {
+                    "package": "/*",
+                    "file": "unknown",
+                    "line": -1
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "curr": {
+        "className": "org.jetbrains.research.kex.state.BasicState",
+        "simplified": true,
+        "predicates": [
+          {
+            "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+            "lhv": {
+              "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+              "type": {
+                "className": "org.jetbrains.research.kex.ktype.KexBool"
+              },
+              "opcode": ">=",
+              "lhv": {
+                "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                "type": {
+                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                },
+                "opcode": "+",
+                "lhv": {
+                  "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                  },
+                  "field": {
+                    "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                    "ownerClass": {
+                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                    },
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexReference",
+                      "reference": {
+                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                      }
+                    },
+                    "owner": {
+                      "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                        "memspace": 1
+                      },
+                      "index": 0
+                    },
+                    "fieldName": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexClass",
+                        "class": "java/lang/String"
+                      },
+                      "value": "clsFieldB"
+                    }
+                  },
+                  "memoryVersion": {
+                    "version": 1424239289,
+                    "subversion": 0,
+                    "type": "MERGE",
+                    "predecessors": [
+                      {
+                        "version": 1811535893,
+                        "subversion": 0,
+                        "type": "MERGE",
+                        "predecessors": [
+                          {
+                            "version": 605236337,
+                            "subversion": 0,
+                            "type": "MERGE",
+                            "predecessors": [
+                              {
+                                "version": 1743644621,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 918014505,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 955269,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 993,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 0,
+                                                "subversion": 0,
+                                                "type": "INITIAL",
+                                                "predecessors": [
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "rhv": {
+                  "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                  },
+                  "opcode": "*",
+                  "lhv": {
+                    "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                    "value": -1
+                  },
+                  "rhv": {
+                    "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                    },
+                    "field": {
+                      "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                      "ownerClass": {
+                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                      },
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexReference",
+                        "reference": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        }
+                      },
+                      "owner": {
+                        "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                          "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                          "memspace": 1
+                        },
+                        "index": 0
+                      },
+                      "fieldName": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                          "class": "java/lang/String"
+                        },
+                        "value": "clsFieldA"
+                      }
+                    },
+                    "memoryVersion": {
+                      "version": 1424239289,
+                      "subversion": 0,
+                      "type": "MERGE",
+                      "predecessors": [
+                        {
+                          "version": 1811535893,
+                          "subversion": 0,
+                          "type": "MERGE",
+                          "predecessors": [
+                            {
+                              "version": 605236337,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 1743644621,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 918014505,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 955269,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 993,
+                                              "subversion": 0,
+                                              "type": "MERGE",
+                                              "predecessors": [
+                                                {
+                                                  "version": 0,
+                                                  "subversion": 0,
+                                                  "type": "INITIAL",
+                                                  "predecessors": [
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "rhv": {
+                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                "value": 5
+              }
+            },
+            "rhv": {
+              "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+              "value": false
+            },
+            "type": {
+              "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+              "name": "P"
+            },
+            "location": {
+              "package": "/*",
+              "file": "unknown",
+              "line": -1
+            }
+          }
+        ]
+      }
+    },
+    "curr": {
+      "className": "org.jetbrains.research.kex.state.ChoiceState",
+      "simplified": true,
+      "choices": [
+        {
+          "className": "org.jetbrains.research.kex.state.BasicState",
+          "predicates": [
+            {
+              "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+              "lhv": {
+                "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                "type": {
+                  "className": "org.jetbrains.research.kex.ktype.KexBool"
+                },
+                "opcode": ">=",
+                "lhv": {
+                  "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                  },
+                  "index": 1
+                },
+                "rhv": {
+                  "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                  "value": 3
+                }
+              },
+              "rhv": {
+                "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                "value": false
+              },
+              "type": {
+                "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                "name": "P"
+              },
+              "location": {
+                "package": "/*",
+                "file": "unknown",
+                "line": -1
+              }
+            }
+          ]
+        },
+        {
+          "className": "org.jetbrains.research.kex.state.BasicState",
+          "predicates": [
+            {
+              "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+              "lhv": {
+                "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+                "type": {
+                  "className": "org.jetbrains.research.kex.ktype.KexBool"
+                },
+                "opcode": ">=",
+                "lhv": {
+                  "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                  },
+                  "opcode": "+",
+                  "lhv": {
+                    "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                    },
+                    "field": {
+                      "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                      "ownerClass": {
+                        "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                      },
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexReference",
+                        "reference": {
+                          "className": "org.jetbrains.research.kex.ktype.KexInt"
+                        }
+                      },
+                      "owner": {
+                        "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                          "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                          "memspace": 1
+                        },
+                        "index": 0
+                      },
+                      "fieldName": {
+                        "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexClass",
+                          "class": "java/lang/String"
+                        },
+                        "value": "clsFieldA"
+                      }
+                    },
+                    "memoryVersion": {
+                      "version": 1424239289,
+                      "subversion": 0,
+                      "type": "MERGE",
+                      "predecessors": [
+                        {
+                          "version": 1811535893,
+                          "subversion": 0,
+                          "type": "MERGE",
+                          "predecessors": [
+                            {
+                              "version": 605236337,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 1743644621,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 918014505,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 955269,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 993,
+                                              "subversion": 0,
+                                              "type": "MERGE",
+                                              "predecessors": [
+                                                {
+                                                  "version": 0,
+                                                  "subversion": 0,
+                                                  "type": "INITIAL",
+                                                  "predecessors": [
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "rhv": {
+                    "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                    },
+                    "opcode": "*",
+                    "lhv": {
+                      "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                      "value": -1
+                    },
+                    "rhv": {
+                      "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                      "type": {
+                        "className": "org.jetbrains.research.kex.ktype.KexInt"
+                      },
+                      "field": {
+                        "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                        "ownerClass": {
+                          "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                        },
+                        "type": {
+                          "className": "org.jetbrains.research.kex.ktype.KexReference",
+                          "reference": {
+                            "className": "org.jetbrains.research.kex.ktype.KexInt"
+                          }
+                        },
+                        "owner": {
+                          "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexClass",
+                            "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                            "memspace": 1
+                          },
+                          "index": 0
+                        },
+                        "fieldName": {
+                          "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                          "type": {
+                            "className": "org.jetbrains.research.kex.ktype.KexClass",
+                            "class": "java/lang/String"
+                          },
+                          "value": "clsFieldB"
+                        }
+                      },
+                      "memoryVersion": {
+                        "version": 1424239289,
+                        "subversion": 0,
+                        "type": "MERGE",
+                        "predecessors": [
+                          {
+                            "version": 1811535893,
+                            "subversion": 0,
+                            "type": "MERGE",
+                            "predecessors": [
+                              {
+                                "version": 605236337,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 1743644621,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 918014505,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 955269,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 993,
+                                                "subversion": 0,
+                                                "type": "MERGE",
+                                                "predecessors": [
+                                                  {
+                                                    "version": 0,
+                                                    "subversion": 0,
+                                                    "type": "INITIAL",
+                                                    "predecessors": [
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "rhv": {
+                  "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                  "value": -3
+                }
+              },
+              "rhv": {
+                "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+                "value": false
+              },
+              "type": {
+                "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+                "name": "P"
+              },
+              "location": {
+                "package": "/*",
+                "file": "unknown",
+                "line": -1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "curr": {
+    "className": "org.jetbrains.research.kex.state.BasicState",
+    "simplified": true,
+    "predicates": [
+      {
+        "className": "org.jetbrains.research.kex.state.predicate.EqualityPredicate",
+        "lhv": {
+          "className": "org.jetbrains.research.kex.state.term.CmpTerm",
+          "type": {
+            "className": "org.jetbrains.research.kex.ktype.KexBool"
+          },
+          "opcode": "<=",
+          "lhv": {
+            "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+            "type": {
+              "className": "org.jetbrains.research.kex.ktype.KexInt"
+            },
+            "opcode": "+",
+            "lhv": {
+              "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+              "type": {
+                "className": "org.jetbrains.research.kex.ktype.KexInt"
+              },
+              "field": {
+                "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                "ownerClass": {
+                  "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                },
+                "type": {
+                  "className": "org.jetbrains.research.kex.ktype.KexReference",
+                  "reference": {
+                    "className": "org.jetbrains.research.kex.ktype.KexInt"
+                  }
+                },
+                "owner": {
+                  "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                    "memspace": 1
+                  },
+                  "index": 0
+                },
+                "fieldName": {
+                  "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexClass",
+                    "class": "java/lang/String"
+                  },
+                  "value": "clsFieldA"
+                }
+              },
+              "memoryVersion": {
+                "version": -1400609699,
+                "subversion": 0,
+                "type": "MERGE",
+                "predecessors": [
+                  {
+                    "version": 1424239289,
+                    "subversion": 0,
+                    "type": "MERGE",
+                    "predecessors": [
+                      {
+                        "version": 1811535893,
+                        "subversion": 0,
+                        "type": "MERGE",
+                        "predecessors": [
+                          {
+                            "version": 605236337,
+                            "subversion": 0,
+                            "type": "MERGE",
+                            "predecessors": [
+                              {
+                                "version": 1743644621,
+                                "subversion": 0,
+                                "type": "MERGE",
+                                "predecessors": [
+                                  {
+                                    "version": 918014505,
+                                    "subversion": 0,
+                                    "type": "MERGE",
+                                    "predecessors": [
+                                      {
+                                        "version": 955269,
+                                        "subversion": 0,
+                                        "type": "MERGE",
+                                        "predecessors": [
+                                          {
+                                            "version": 993,
+                                            "subversion": 0,
+                                            "type": "MERGE",
+                                            "predecessors": [
+                                              {
+                                                "version": 0,
+                                                "subversion": 0,
+                                                "type": "INITIAL",
+                                                "predecessors": [
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "rhv": {
+              "className": "org.jetbrains.research.kex.state.term.BinaryTerm",
+              "type": {
+                "className": "org.jetbrains.research.kex.ktype.KexInt"
+              },
+              "opcode": "*",
+              "lhv": {
+                "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+                "value": -1
+              },
+              "rhv": {
+                "className": "org.jetbrains.research.kex.state.term.FieldLoadTerm",
+                "type": {
+                  "className": "org.jetbrains.research.kex.ktype.KexInt"
+                },
+                "field": {
+                  "className": "org.jetbrains.research.kex.state.term.FieldTerm",
+                  "ownerClass": {
+                    "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls"
+                  },
+                  "type": {
+                    "className": "org.jetbrains.research.kex.ktype.KexReference",
+                    "reference": {
+                      "className": "org.jetbrains.research.kex.ktype.KexInt"
+                    }
+                  },
+                  "owner": {
+                    "className": "org.jetbrains.research.kex.state.term.ArgumentTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                      "class": "org/jetbrains/research/kex/test/refinements/Cycles$XCls",
+                      "memspace": 1
+                    },
+                    "index": 0
+                  },
+                  "fieldName": {
+                    "className": "org.jetbrains.research.kex.state.term.ConstStringTerm",
+                    "type": {
+                      "className": "org.jetbrains.research.kex.ktype.KexClass",
+                      "class": "java/lang/String"
+                    },
+                    "value": "clsFieldB"
+                  }
+                },
+                "memoryVersion": {
+                  "version": -1400609699,
+                  "subversion": 0,
+                  "type": "MERGE",
+                  "predecessors": [
+                    {
+                      "version": 1424239289,
+                      "subversion": 0,
+                      "type": "MERGE",
+                      "predecessors": [
+                        {
+                          "version": 1811535893,
+                          "subversion": 0,
+                          "type": "MERGE",
+                          "predecessors": [
+                            {
+                              "version": 605236337,
+                              "subversion": 0,
+                              "type": "MERGE",
+                              "predecessors": [
+                                {
+                                  "version": 1743644621,
+                                  "subversion": 0,
+                                  "type": "MERGE",
+                                  "predecessors": [
+                                    {
+                                      "version": 918014505,
+                                      "subversion": 0,
+                                      "type": "MERGE",
+                                      "predecessors": [
+                                        {
+                                          "version": 955269,
+                                          "subversion": 0,
+                                          "type": "MERGE",
+                                          "predecessors": [
+                                            {
+                                              "version": 993,
+                                              "subversion": 0,
+                                              "type": "MERGE",
+                                              "predecessors": [
+                                                {
+                                                  "version": 0,
+                                                  "subversion": 0,
+                                                  "type": "INITIAL",
+                                                  "predecessors": [
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "rhv": {
+            "className": "org.jetbrains.research.kex.state.term.ConstIntTerm",
+            "value": 0
+          }
+        },
+        "rhv": {
+          "className": "org.jetbrains.research.kex.state.term.ConstBoolTerm",
+          "value": true
+        },
+        "type": {
+          "className": "org.jetbrains.research.kex.state.predicate.PredicateType.Path",
+          "name": "P"
+        },
+        "location": {
+          "package": "/*",
+          "file": "unknown",
+          "line": -1
+        }
+      }
+    ]
+  }
+}
