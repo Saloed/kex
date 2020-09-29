@@ -40,7 +40,7 @@ class InliningRefinementTest : RefinementTest("Inlining") {
 
     @Test
     fun testExceptionSourceInlining() = run("inlineExceptionSource") {
-        refinement(null) {
+        refinement(SpecialExceptions.NOTHING) {
             trueState()
         }
         refinement(IllegalStateException()) {

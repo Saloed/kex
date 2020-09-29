@@ -142,6 +142,7 @@ class CallInliner(
         private fun isKotlinInlineable(cls: Class): Boolean {
             if (cls.`package` != KOTLIN_PACKAGE) return false
             if (cls.name == "Any") return true
+            if (cls.name.endsWith("Exception")) return true
             return false
         }
 
@@ -172,8 +173,8 @@ private fun Refinement.createPathVariable(currentBuilder: StateBuilder, varGener
         preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
         preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue -> {
             log.warn("Inline call refinement which is always true")
-            currentBuilder += preparedState.negate().toPredicateState()
-            PathConditions(emptyMap())
+            currentBuilder += preparedState.state
+            PathConditions(mapOf(criteria to preparedState.path))
         }
         else -> {
             currentBuilder += preparedState.state

@@ -7,6 +7,7 @@ import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.transformer.PredicateCollector
 
 @Serializable
 data class MemoryVersionInfo(val initial: Map<MemoryDescriptor, MemoryVersion>, val final: Map<MemoryDescriptor, MemoryVersion>) {
@@ -88,7 +89,8 @@ class MemoryVersioner : MemoryVersionTransformer {
 
     override fun apply(ps: PredicateState): PredicateState {
         val accesses = MemoryAccessCollector.collect(ps)
-        if (accesses.isEmpty()) {
+        val calls = PredicateCollector.collectIsInstance<CallPredicate>(ps)
+        if (accesses.isEmpty() && calls.isEmpty()) {
             unsafeMemoryInfo = MemoryVersionInfo(emptyMap(), emptyMap())
             return ps
         }

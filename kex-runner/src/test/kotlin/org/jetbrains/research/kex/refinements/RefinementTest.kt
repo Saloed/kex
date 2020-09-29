@@ -91,11 +91,24 @@ abstract class RefinementTest(
         return refinements.getOrComputeRefinement(method)
     }
 
+    enum class SpecialExceptions {
+        NULL, NOTHING
+    }
+
     inner class RefinementBuilder(val method: Method) {
         val values = arrayListOf<Refinement>()
 
-        fun refinement(exception: Exception?, psBuilder: StateBuilder.() -> PredicateState) {
+        fun refinement(exception: SpecialExceptions, psBuilder: StateBuilder.() -> PredicateState) {
             val criteria = criteriaForException(exception)
+            refinement(criteria, psBuilder)
+        }
+
+        fun refinement(exception: Exception, psBuilder: StateBuilder.() -> PredicateState) {
+            val criteria = criteriaForException(exception)
+            refinement(criteria, psBuilder)
+        }
+
+        fun refinement(criteria: RefinementCriteria, psBuilder: StateBuilder.() -> PredicateState) {
             val ps = StateBuilder().psBuilder()
             values.add(Refinement.create(criteria, PredicateStateWithPath(emptyState(), ps)))
         }
@@ -116,6 +129,11 @@ abstract class RefinementTest(
             val cls = cm[exception::class.java.name.replace('.', '/')]
             val kfgType = ClassType(cls)
             return RefinementCriteria(kfgType)
+        }
+
+        private fun criteriaForException(exception: SpecialExceptions) = when (exception) {
+            SpecialExceptions.NULL -> RefinementCriteria(NullType)
+            SpecialExceptions.NOTHING -> RefinementCriteria(ClassType(cm["kotlin/KotlinNothingValueException"]))
         }
 
     }
