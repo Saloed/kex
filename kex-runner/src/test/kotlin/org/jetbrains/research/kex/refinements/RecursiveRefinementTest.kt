@@ -9,7 +9,7 @@ import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
 
 class RecursiveRefinementTest : RefinementTest("Recursive") {
-    private val xcls = nestedClass("XCls")
+    private val xcls = KexClass(nestedClass("XCls"))
 
     @Test
     fun testRecursiveSimple() = run("recursiveSimple") {
@@ -70,22 +70,22 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
             val choices = listOf(
                     basic {
                         path {
-                            arg(KexClass(xcls), 0).field(KexInt(), "clsFieldB").load() lt const(0) equality const(true)
+                            arg(xcls, 0).field(KexInt(), "clsFieldB", xcls).load() lt const(0) equality const(true)
                         }
                     },
                     basic {
                         path {
-                            arg(KexClass(xcls), 1).field(KexInt(), "clsFieldA").load() lt const(0) equality const(true)
+                            arg(xcls, 1).field(KexInt(), "clsFieldA", xcls).load() lt const(0) equality const(true)
                         }
                     },
                     basic {
                         path {
-                            arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() lt const(17) equality const(true)
+                            arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() lt const(17) equality const(true)
                         }
                     },
                     basic {
                         path {
-                            arg(KexClass(xcls), 1).field(KexInt(), "clsFieldB").load() le arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() equality const(true)
+                            arg(xcls, 1).field(KexInt(), "clsFieldB", xcls).load() le arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() equality const(true)
                         }
                     }
             )

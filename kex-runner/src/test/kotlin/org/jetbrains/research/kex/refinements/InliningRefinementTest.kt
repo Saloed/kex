@@ -25,11 +25,11 @@ class InliningRefinementTest : RefinementTest("Inlining") {
         refinement(IllegalStateException()) {
             choice({
                 path {
-                    firstArg - secondArg.field(KexInt(), "x").load() gt const(1) equality true
+                    firstArg - secondArg.field(KexInt(), "x", sampleCls).load() gt const(1) equality true
                 }
             }, {
                 path {
-                    firstArg - secondArg.field(KexInt(), "x").load() lt const(1) equality true
+                    firstArg - secondArg.field(KexInt(), "x", sampleCls).load() lt const(1) equality true
                 }
                 path {
                     firstArg gt const(6) equality true

@@ -184,7 +184,7 @@ private fun Refinement.createPathVariable(currentBuilder: StateBuilder, varGener
 
 private fun forceThisTerm(term: Term, mapping: Map<Term, Term>): Term? {
     if (term !is ValueTerm || term.name != "this") return null
-    return mapping.filterKeys { it.name == "this" }.entries.firstOrNull()?.value
+    error("This term is not mapped")
 }
 
 private class ForceThisTermMapper(

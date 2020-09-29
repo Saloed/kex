@@ -152,7 +152,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     private fun expandProperties(obj: Term) = when (val type = obj.type) {
         is KexClass -> {
             val fields = type.getKfgClass(cm.type).fields.toList()
-            val fieldTerms = fields.map { term { obj.field(it.type.kexType, it.name) } }
+            val fieldTerms = fields.map { term { obj.field(it.type.kexType, it) } }
             val loads = fieldTerms.map { term { it.load() } as FieldLoadTerm }
             fields.zip(loads)
         }

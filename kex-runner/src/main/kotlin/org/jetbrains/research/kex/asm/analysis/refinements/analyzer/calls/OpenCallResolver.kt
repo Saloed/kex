@@ -7,13 +7,17 @@ import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplem
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.TermDependency
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.PredicateStateWithPath
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.chain
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
 import org.jetbrains.research.kex.state.term.InstanceOfTerm
 import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kex.util.VariableGenerator
 import org.jetbrains.research.kfg.ir.Method
 
@@ -52,20 +56,24 @@ class OpenCallResolver(
         if (!checkOwnerTypes(method, resolvingCallTerm.owner)) {
             return RecoveredModel.error()
         }
+        val newOwner = currentCallContext.variableGenerator.createNestedGenerator("call_owner").unique().createUniqueVar(method.`class`.kexType)
         val newCall = CallTerm(
-                resolvingCallTerm.type, resolvingCallTerm.owner,
+                resolvingCallTerm.type, newOwner,
                 method, resolvingCallTerm.instruction,
                 resolvingCallTerm.arguments, resolvingCallTerm.memoryVersion
         )
         val newCallPredicate = CallPredicate(resolvingCall.lhvUnsafe, newCall, resolvingCall.type, resolvingCall.location)
-        val newDependencies = dependencies.map {
-            when (it) {
-                is TermDependency.CallResultDependency -> TermDependency.CallResultDependency(it.term, it.callIdx, newCallPredicate)
-                is TermDependency.MemoryDependency -> TermDependency.MemoryDependency(it.memoryAccess, it.callIdx, newCallPredicate)
-            }
-        }
+        val newDependencies = dependencies.map { it.updateCallPredicate(newCallPredicate) }
         val resolver = ImplementationResolver(method, newCallPredicate)
-        return resolver.resolve(state, newDependencies, pathVariables, tmpVariables)
+        val resolvedPreconditions = resolver.resolve(state, newDependencies, pathVariables, tmpVariables)
+        return resolvedPreconditions.copy(state = updateCallOwner(resolvedPreconditions.state, newOwner, resolvingCallTerm.owner))
+    }
+
+    private fun updateCallOwner(stateWithPath: PredicateStateWithPath, ownerPlaceholder: Term, owner: Term): PredicateStateWithPath {
+        val ownerBinding = basic {
+            state { ownerPlaceholder equality owner }
+        }
+        return stateWithPath.copy(state = chain(ownerBinding, stateWithPath.state))
     }
 
     private fun checkOwnerTypes(method: Method, owner: Term): Boolean {

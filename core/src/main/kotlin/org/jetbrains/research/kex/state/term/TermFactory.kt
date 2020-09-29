@@ -4,6 +4,7 @@ import com.abdullin.kthelper.assert.unreachable
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kfg.ir.Class
+import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.*
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
@@ -132,8 +133,8 @@ object TermFactory {
 
     fun getCmp(type: KexType, opcode: CmpOpcode, lhv: Term, rhv: Term) = CmpTerm(type, opcode, lhv, rhv)
 
-    fun getField(type: KexType, owner: Term, name: Term) = FieldTerm(type, owner, name)
-    fun getField(type: KexType, classType: Class, name: Term) = FieldTerm(type, getClass(classType), name)
+    fun getField(type: KexType, owner: Term, name: Term, ownerClass: KexClass) = FieldTerm(type, owner, name, ownerClass)
+    fun getField(type: KexType, classType: Class, name: Term) = FieldTerm(type, getClass(classType), name, classType.kexType)
 
     fun getInstanceOf(checkedType: KexType, operand: Term) = InstanceOfTerm(checkedType, operand)
 
@@ -261,10 +262,11 @@ abstract class TermBuilder {
 
     fun Term.call(method: Method, instruction: Instruction, arguments: List<Term>) = tf.getCall(method, instruction, this, arguments)
 
-    fun Term.field(type: KexReference, name: Term) = tf.getField(type, this, name)
-    fun Term.field(type: KexReference, name: String) = tf.getField(type, this, const(name))
-    fun Term.field(type: KexType, name: Term) = tf.getField(KexReference(type), this, name)
-    fun Term.field(type: KexType, name: String) = tf.getField(KexReference(type), this, const(name))
+    fun Term.field(type: KexReference, name: Term, ownerClass: KexClass) = tf.getField(type, this, name, ownerClass)
+    fun Term.field(type: KexReference, name: String, ownerClass: KexClass) = tf.getField(type, this, const(name), ownerClass)
+    fun Term.field(type: KexType, name: Term, ownerClass: KexClass) = tf.getField(KexReference(type), this, name, ownerClass)
+    fun Term.field(type: KexType, name: String, ownerClass: KexClass) = tf.getField(KexReference(type), this, const(name), ownerClass)
+    fun Term.field(type: KexType, field: Field) = tf.getField(KexReference(type), this, const(field.name), field.`class`.kexType)
 
     infix fun Term.primitiveAs(type: KexType) = tf.getPrimitiveCast(type, this)
     infix fun Term.`is`(type: KexType) = tf.getInstanceOf(type, this)

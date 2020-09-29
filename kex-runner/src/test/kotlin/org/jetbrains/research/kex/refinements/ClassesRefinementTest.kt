@@ -10,14 +10,14 @@ import kotlin.test.Test
 
 class ClassesRefinementTest : RefinementTest("Classes") {
 
-    private val xcls = nestedClass("XCls")
+    private val xcls = KexClass(nestedClass("XCls"))
 
     @Test
     fun testMutablePropertyAndLocalObject() = run("mutablePropertyAndLocalObject") {
         refinement(IllegalArgumentException()) {
             basic {
                 path {
-                    arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() add const(2) equality arg(KexInt(), 1)
+                    arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() add const(2) equality arg(KexInt(), 1)
                 }
             }.withMemoryVersions()
         }
@@ -28,7 +28,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
         refinement(IllegalArgumentException()) {
             basic {
                 path {
-                    arg(KexClass(xcls), 0).field(KexInt(), "clsFieldB").load() add const(2) equality arg(KexInt(), 1)
+                    arg(xcls, 0).field(KexInt(), "clsFieldB", xcls).load() add const(2) equality arg(KexInt(), 1)
                 }
             }.withMemoryVersions()
         }
@@ -39,7 +39,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
         refinement(IllegalArgumentException()) {
             basic {
                 path {
-                    arg(KexClass(xcls), 0).field(KexInt(), "clsFieldA").load() add const(2) equality arg(KexInt(), 1)
+                    arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() add const(2) equality arg(KexInt(), 1)
                 }
             }.withMemoryVersions()
         }
@@ -55,7 +55,7 @@ class ClassesRefinementTest : RefinementTest("Classes") {
         refinement(IllegalArgumentException()) {
             basic {
                 path {
-                    arg(KexClass(xcls), 0).field(KexInt(), "clsFieldB").load() gt const(0) equality const(true)
+                    arg(xcls, 0).field(KexInt(), "clsFieldB", xcls).load() gt const(0) equality const(true)
                 }
             }.withMemoryVersions()
         }
@@ -73,10 +73,10 @@ class ClassesRefinementTest : RefinementTest("Classes") {
         }
 
         refinement(IllegalStateException()) {
-            val arg0 = term { arg(KexClass(xcls), 0) }
-            val arg1 = term { arg(KexClass(xcls), 1) }
-            fun Term.fieldA() = term { field(KexInt(), "clsFieldA").load() }
-            fun Term.fieldB() = term { field(KexInt(), "clsFieldB").load() }
+            val arg0 = term { arg(xcls, 0) }
+            val arg1 = term { arg(xcls, 1) }
+            fun Term.fieldA() = term { field(KexInt(), "clsFieldA", xcls).load() }
+            fun Term.fieldB() = term { field(KexInt(), "clsFieldB", xcls).load() }
             ChainState(
                     choice({
                         path {

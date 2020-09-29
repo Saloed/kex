@@ -215,7 +215,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
                 inst.isStatic -> `class`(inst.field.`class`)
                 else -> mkValue(inst.owner)
             }
-            val field = owner.field(inst.type.kexType, inst.field.name)
+            val field = owner.field(inst.type.kexType, inst.field)
             val rhv = field.load()
 
             lhv equality rhv
@@ -229,7 +229,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
                 else -> mkValue(inst.owner)
             }
             val value = mkValue(inst.value)
-            val field = owner.field(inst.field.type.kexType, inst.field.name)
+            val field = owner.field(inst.field.type.kexType, inst.field)
 
             field.store(value)
         }

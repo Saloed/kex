@@ -288,22 +288,30 @@ class FixpointModelConverter(
         val (fields, fieldType) = cls.property(fieldName)
         if (fields.size == 1) {
             val field = fields.first()
-            return term { owner.field(fieldType, field.name).load().withMemoryVersion(version).withScopeInfo(scope) }
+            return term { owner.field(fieldType, field).load().withMemoryVersion(version).withScopeInfo(scope) }
         }
-        val resultFiledLoad = converterContext.tmpVariable(fieldType)
+        val typeChecks = fields.map {
+            val typeCheck = converterContext.tmpVariable(KexBool())
+            converterContext.stateBuilder += state { typeCheck equality owner.instanceOf(it.`class`, version, scope) }
+            typeCheck
+        }
+        val allTypesAssumption = basic {
+            assume { typeChecks.combine { t1, t2 -> t1 or t2 } equality true }
+        }
         // todo: maybe add default type choice
-        val axioms = fields.map {
-            val type = it.`class`.kexType
-            val tmpVar = converterContext.tmpVariable(type)
+        val resultFiledLoad = converterContext.tmpVariable(fieldType)
+        val axioms = fields.zip(typeChecks).map { (field, typeCheck) ->
+            val tmpVar = converterContext.tmpVariable(field.`class`.kexType)
             basic {
-                path { owner.instanceOf(it.`class`, version, scope) equality const(true) }
+                path { typeCheck equality const(true) }
                 state { tmpVar equality owner }
                 state {
-                    resultFiledLoad equality tmpVar.field(it.type.kexType, it.name).load().withMemoryVersion(version).withScopeInfo(scope)
+                    val fieldDecl = tmpVar.field(field.type.kexType, field)
+                    resultFiledLoad equality fieldDecl.load().withMemoryVersion(version).withScopeInfo(scope)
                 }
             }
         }
-        converterContext.stateBuilder += ChoiceState(axioms)
+        converterContext.stateBuilder += chain(allTypesAssumption, ChoiceState(axioms))
         return resultFiledLoad
     }
 

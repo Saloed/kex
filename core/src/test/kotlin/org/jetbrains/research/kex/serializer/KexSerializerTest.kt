@@ -47,7 +47,7 @@ class KexSerializerTest : KexTest() {
         val valueTerm = term { value(klassType, "testValue") }
         val arrayType = KexArray(KexDouble(), memspace = 42)
         val fieldName = term { const("mySuperAwesomeField") }
-        val fieldTerm = term { valueTerm.field(arrayType, fieldName) }
+        val fieldTerm = term { valueTerm.field(arrayType, fieldName, klassType) }
         val fieldLoadTerm = term { fieldTerm.load() }
 
         val serializedBool = serializer.toJson<Term>(boolTerm)

@@ -122,11 +122,11 @@ class ${Context} : ${SMTContext} {
     }
 
     fun < T : Dynamic_ > readMemory(ptr: Ptr_, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >): T {
-        log.debug("Read memory ${ memoryAccess }")
+        // log.debug("Read memory ${ memoryAccess }")
         return getMemory(memoryAccess).load< T >(ptr, type)
     }
     fun < T : Dynamic_ > writeMemory(ptr: Ptr_, value: T, memoryAccess: MemoryAccess< * >, type: KClass< out Dynamic_ >) {
-        log.debug("Write memory ${ memoryAccess }")
+        // log.debug("Write memory ${ memoryAccess }")
         setMemory(memoryAccess, getMemory(memoryAccess).store(ptr, value, type))
     }
 
@@ -184,7 +184,7 @@ class ${Context} : ${SMTContext} {
             }
             updateArchive(descriptor, defaultMemory)
             defaultMemory.merge(name, alternatives).also {
-                log.debug("Merge memory ${ it.version } ${ descriptor }")
+                // log.debug("Merge memory ${ it.version } ${ descriptor }")
             }
         }.toMutableMap()
         mergeArchiveMemories(contexts)
@@ -200,7 +200,7 @@ class ${Context} : ${SMTContext} {
     private fun setMemory(memoryAccess: MemoryAccess< * >, memory: VersionedMemory) = setMemory(memoryAccess.descriptor(), memory.version, memory)
 
     private fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
-        log.debug("Get memory: ${ version } ${ descriptor }")
+        // log.debug("Get memory: ${ version } ${ descriptor }")
         check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
         val activeMemory = activeMemories[descriptor]
         if (activeMemory != null && activeMemory.version == version) return activeMemory
@@ -212,7 +212,7 @@ class ${Context} : ${SMTContext} {
     }
 
     private fun setMemory(descriptor: MemoryDescriptor, version: MemoryVersion, memory: VersionedMemory) {
-        log.debug("Set memory: ${ version } ${ descriptor }")
+        // log.debug("Set memory: ${ version } ${ descriptor }")
         check(!lockedForWrite) { "Try to write at locked memory" }
         check(version == memory.version) { "Memory access and memory versions are different" }
         val currentMemory = activeMemories[descriptor]

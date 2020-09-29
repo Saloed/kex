@@ -25,6 +25,13 @@ sealed class TermDependency {
     abstract val callIdx: Int
     abstract val call: CallPredicate
 
-    data class CallResultDependency(val term: Term, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
-    data class MemoryDependency(val memoryAccess: MemoryAccess<*>, override val callIdx: Int, override val call: CallPredicate) : TermDependency()
+    data class CallResultDependency(val term: Term, override val callIdx: Int, override val call: CallPredicate) : TermDependency() {
+        override fun updateCallPredicate(predicate: CallPredicate) = copy(call = predicate)
+    }
+
+    data class MemoryDependency(val memoryAccess: MemoryAccess<*>, override val callIdx: Int, override val call: CallPredicate) : TermDependency() {
+        override fun updateCallPredicate(predicate: CallPredicate) = copy(call = predicate)
+    }
+
+    abstract fun updateCallPredicate(predicate: CallPredicate): TermDependency
 }

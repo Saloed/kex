@@ -72,7 +72,7 @@ data class FieldDescriptor(
         val value: Descriptor
 ) : Descriptor() {
     override val type = kfgType.kexType
-    override val term = term { owner.term.field(type, name) }
+    override val term = term { owner.term.field(type, name, owner.type as KexClass) }
 
     override fun toState(ps: PredicateState): PredicateState {
         var state = ps

@@ -73,7 +73,7 @@ interface MemoryAccess<T> : ElementWithMemoryVersion<T> {
 
     fun descriptor() = MemoryDescriptor(memoryType, memoryName, memorySpace, scopeInfo)
     fun withScopeInfo(scopeInfo: MemoryAccessScope): T
-    fun memoryPrint() = memoryVersion.humanReadableName //+ descriptor().humanReadableName
+    fun memoryPrint() = memoryVersion.humanReadableName + descriptor().humanReadableName
 
     fun memoryHash() = defaultHashCode(memoryType, memorySpace, memoryName, accessType, memoryVersion, memoryValueType, scopeInfo)
     fun memoryEquals(other: Any?): Boolean = when (other) {

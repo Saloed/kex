@@ -102,7 +102,7 @@ class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
                 inst.isStatic -> `class`(inst.field.`class`)
                 else -> value(inst.owner)
             }
-            val field = owner.field(inst.type.kexType, inst.field.name)
+            val field = owner.field(inst.type.kexType, inst.field)
             val rhv = field.load()
 
             lhv equality rhv
@@ -116,7 +116,7 @@ class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
                 else -> value(inst.owner)
             }
             val value = value(inst.value)
-            val field = owner.field(inst.field.type.kexType, inst.field.name)
+            val field = owner.field(inst.field.type.kexType, inst.field)
 
             field.store(value)
         }
