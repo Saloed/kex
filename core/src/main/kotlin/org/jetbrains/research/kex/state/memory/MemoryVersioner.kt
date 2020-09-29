@@ -21,9 +21,11 @@ data class MemoryVersionInfo(val initial: Map<MemoryDescriptor, MemoryVersion>, 
 }
 
 class MemoryVersioner : MemoryVersionTransformer {
+    internal val callDescriptor = MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17, MemoryAccessScope.RootScope)
     private lateinit var memory: MutableMap<MemoryDescriptor, MemoryVersionSource>
     private lateinit var unsafeMemoryInfo: MemoryVersionInfo
-    internal val callDescriptor = MemoryDescriptor(MemoryType.SPECIAL, "__CALL__", 17, MemoryAccessScope.RootScope)
+    private var newMemoryIndex = 0
+    private val newMemoryIds = hashMapOf<Any, Int>()
 
     override fun transformChoice(ps: ChoiceState): PredicateState {
         val currentMemory = memory
@@ -52,7 +54,7 @@ class MemoryVersioner : MemoryVersionTransformer {
     }.toMemoryMap()
 
     private fun newMemory(currentMemory: Map<MemoryDescriptor, MemoryVersionSource>, condition: Any) = currentMemory.map { (descriptor, memory) ->
-        val newMemory = MemoryVersionNew(descriptor, memory, condition)
+        val newMemory = MemoryVersionNew(descriptor, memory, condition, newMemoryIds.getOrPut(condition) { ++newMemoryIndex })
         memory.children += newMemory
         descriptor to newMemory
     }.toMemoryMap()
@@ -83,7 +85,8 @@ class MemoryVersioner : MemoryVersionTransformer {
 
     private fun normalizeMemory(memory: Map<MemoryDescriptor, MemoryVersionSource>, versionMappings: Map<MemoryDescriptor, Map<MemoryVersion, MemoryVersion>>) = memory
             .mapValues { (descriptor, mvs) ->
-                val mapping = versionMappings[descriptor] ?: error("No memory mapping for $descriptor")
+                val mapping = versionMappings[descriptor]
+                        ?: error("No memory mapping for $descriptor")
                 mapping[mvs.version] ?: error("No mapping for version ${mvs.version}")
             }
 
@@ -111,7 +114,6 @@ class MemoryVersioner : MemoryVersionTransformer {
     private fun memoryVersionNormalizer(initialMemory: Map<MemoryDescriptor, MemoryVersionSource>) = initialMemory.mapValues { (_, memory) -> memoryVersionNormalizer(memory) }
 
     private fun memoryVersionNormalizer(root: MemoryVersionSource): Map<MemoryVersion, MemoryVersion> {
-        var memoryVersionIdx = 0
         val versionMapping: MutableMap<MemoryVersion, MemoryVersion> = hashMapOf()
         val queue = dequeOf(root)
         while (queue.isNotEmpty()) {
@@ -119,8 +121,6 @@ class MemoryVersioner : MemoryVersionTransformer {
             if (node.version in versionMapping) continue
             val newVersion = when (node) {
                 is MemoryVersionInitial -> {
-                    check(memoryVersionIdx == 0) { "Initial memory is not first" }
-                    memoryVersionIdx++
                     MemoryVersion.initial()
                 }
                 is MemoryVersionNew -> {
@@ -130,7 +130,7 @@ class MemoryVersioner : MemoryVersionTransformer {
                         queue += node
                         continue
                     }
-                    parentVersion.resetToVersion(memoryVersionIdx++)
+                    parentVersion.resetToVersion(node.idx)
                 }
                 is MemoryVersionNormal -> {
                     val parentVersion = versionMapping[node.parent.version]

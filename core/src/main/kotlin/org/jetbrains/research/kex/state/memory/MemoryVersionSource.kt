@@ -40,11 +40,11 @@ internal data class MemoryVersionInitial(override val descriptor: MemoryDescript
     override fun hashCode(): Int = hash
 }
 
-internal data class MemoryVersionNew(override val descriptor: MemoryDescriptor, val parent: MemoryVersionSource, val condition: Any) : MemoryVersionSource() {
-    override val version: MemoryVersion = MemoryVersion(parent.hashCode() * 17 + condition.hashCode(), 0, MemoryVersionType.NEW, emptySet())
+internal data class MemoryVersionNew(override val descriptor: MemoryDescriptor, val parent: MemoryVersionSource, val condition: Any, val idx: Int) : MemoryVersionSource() {
+    override val version: MemoryVersion = MemoryVersion(31 * idx + parent.hashCode() * 17 + condition.hashCode(), 0, MemoryVersionType.NEW, emptySet())
     override val graphNode: GraphView
-        get() = GraphView("$version", "New $version: $condition")
-    private val hash = defaultHashCode(descriptor, parent, condition)
+        get() = GraphView("$version", "New $idx $version: $condition")
+    private val hash = defaultHashCode(descriptor, parent, condition, idx)
     override fun hashCode(): Int = hash
 }
 
