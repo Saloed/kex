@@ -18,7 +18,7 @@ import org.jetbrains.research.kex.state.transformer.PredicateCollector
 
 open class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : RefinementSourcesAnalyzer(methodAnalyzer) {
     override fun createRefinements(refinements: List<Refinement>): Refinements = when {
-        refinements.any { !refinementIsCorrect(it) } -> throw IllegalStateException("Incorrect refinement")
+        refinements.any { !refinementIsCorrect(it) } -> error("Incorrect refinement")
         else -> super.createRefinements(refinements)
     }
 
@@ -42,7 +42,7 @@ open class CallResolvingRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer
         extendedNormals to extendedSource
     }
 
-    fun refinementIsCorrect(refinement: Refinement): Boolean {
+    private fun refinementIsCorrect(refinement: Refinement): Boolean {
         if (PredicateCollector.collectIsInstance<CallPredicate>(refinement.state.state).isNotEmpty()) return false
         // todo: maybe more checks
         return true

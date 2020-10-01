@@ -7,7 +7,6 @@ import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplementationMerge
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodImplementations
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
-import org.jetbrains.research.kex.state.transformer.MethodFunctionalInliner
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
 
@@ -16,7 +15,7 @@ class OpenMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Meth
         val implementations = MethodImplementations(cm, refinementsManager).collectImplementations(method)
         val refinements = implementations.map {
             when (it) {
-                method -> NoInliningSimpleMethodAnalyzer(cm, psa, refinementsManager, it).analyze()
+                method -> SimpleMethodAnalyzer(cm, psa, refinementsManager, it).analyze()
                 else -> findRefinement(it)
             }
         }
@@ -38,5 +37,4 @@ class OpenMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Meth
             .mapValues { Refinement.create(it.key, it.value) }
             .let { Refinements.create(method, it.values.toList()) }
 
-    override fun MethodFunctionalInliner.TransformationState.getMethodStateAndRefinement() = error("Unavailable")
 }

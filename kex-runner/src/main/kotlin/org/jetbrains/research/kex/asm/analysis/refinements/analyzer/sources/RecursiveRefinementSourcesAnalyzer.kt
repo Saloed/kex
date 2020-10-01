@@ -8,6 +8,7 @@ import org.jetbrains.research.kex.asm.analysis.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.query.RecursionFixpointSolverQuery
 import org.jetbrains.research.kex.state.PredicateState
+import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.FieldLoadTerm
 import org.jetbrains.research.kfg.ir.Field
@@ -31,4 +32,7 @@ class RecursiveRefinementSourcesAnalyzer(methodAnalyzer: MethodAnalyzer) : Refin
         }
         return createRefinements(refinements)
     }
+
+    override fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources, memoryVersionInfo: MemoryVersionInfo): Refinements =
+            error("Use analyze of recursive analyzer")
 }
