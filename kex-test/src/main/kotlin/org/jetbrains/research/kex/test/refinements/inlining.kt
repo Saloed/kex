@@ -86,4 +86,10 @@ object Inlining {
         if (res == 0) throw IllegalStateException("Zero")
         return res
     }
+
+    fun inlineWithoutResultDependency(a: Int): Int{
+        exceptionSource(a)
+        if (a < 0) throw IllegalStateException("bad result")
+        return 0
+    }
 }

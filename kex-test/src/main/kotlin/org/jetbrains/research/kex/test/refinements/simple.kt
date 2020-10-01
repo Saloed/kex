@@ -67,4 +67,12 @@ object Simple {
         return 0
     }
 
+    fun forceValue(a: Int) = a
+
+    fun simpleManyExceptionSources(a: Int): Int {
+        val x = if (a > 0) throw IllegalStateException("exception") else 17
+        forceValue(x)
+        if (x == 17 && a < 0) throw IllegalStateException("bad result")
+        return 0
+    }
 }
