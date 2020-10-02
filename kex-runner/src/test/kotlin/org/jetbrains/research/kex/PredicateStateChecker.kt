@@ -24,17 +24,20 @@ class PredicateStateChecker(private val tf: TypeFactory) {
         log.debug("Actual: $actualWithCorrectedVariables")
         log.debug("Expected: $expectedWithCorrectedVariables")
 
-        if (!checkFormulaPossible(expectedWithCorrectedVariables)) {
-            log.debug("Expected formula is not possible")
-            return false
+        val expectedPossible = checkFormulaPossible(expectedWithCorrectedVariables)
+        val actualPossible = checkFormulaPossible(actualWithCorrectedVariables)
+        return when {
+            !expectedPossible && !actualPossible -> true
+            !expectedPossible -> {
+                log.debug("Expected formula is not possible")
+                false
+            }
+            !actualPossible -> {
+                log.debug("Actual formula is not possible")
+                false
+            }
+            else -> checkFormulaEquality(actualWithCorrectedVariables, expectedWithCorrectedVariables)
         }
-
-        if (!checkFormulaPossible(actualWithCorrectedVariables)) {
-            log.debug("Actual formula is not possible")
-            return false
-        }
-
-        return checkFormulaEquality(actualWithCorrectedVariables, expectedWithCorrectedVariables)
     }
 
     private fun checkFormulaPossible(formula: PredicateStateWithPath): Boolean {

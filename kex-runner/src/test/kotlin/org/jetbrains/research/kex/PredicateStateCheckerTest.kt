@@ -2,13 +2,11 @@ package org.jetbrains.research.kex
 
 import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.PredicateStateWithPath
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.emptyState
-import org.jetbrains.research.kex.state.falseState
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.term.term
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PredicateStateCheckerTest : KexTest() {
@@ -53,5 +51,13 @@ class PredicateStateCheckerTest : KexTest() {
         })
         val second = PredicateStateWithPath(falseState(), falseState())
         assertFalse(run(first, second))
+    }
+
+    @Test
+    fun `test actual and expected impossible`() {
+        val first = PredicateStateWithPath(falseState(), falseState())
+        val second = PredicateStateWithPath(falseState(), trueState())
+        assertNotEquals(first, second)
+        assertTrue(run(first, second))
     }
 }

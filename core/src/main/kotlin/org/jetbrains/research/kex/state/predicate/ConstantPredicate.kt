@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.state.predicate
 
 
+import com.abdullin.kthelper.defaultHashCode
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
@@ -19,7 +20,10 @@ class ConstantPredicate(
 
     override fun print() = "$value"
 
-    override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate {
-        return this
-    }
+    override fun equals(other: Any?) = super.equals(other)
+            && value == (other as ConstantPredicate).value
+
+    override fun hashCode() = defaultHashCode(super.hashCode(), value)
+
+    override fun <T : Transformer<T>> accept(t: Transformer<T>): Predicate = this
 }
