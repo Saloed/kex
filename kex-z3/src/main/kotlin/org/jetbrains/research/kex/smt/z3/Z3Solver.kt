@@ -63,6 +63,22 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
         }
     }
 
+    fun isPossible(formula: PredicateStateWithPath): Result {
+        val ctx = Z3Context.createInitialized(ef, formula.state, formula.path)
+        val converter = Z3Converter(tf)
+        val z3State = converter.convertWithMemoryReset(formula.state, ef, ctx)
+        val z3Path = converter.convert(formula.path, ef, ctx)
+        val result = check(z3State, z3Path)
+        return when (result.first) {
+            Status.UNSATISFIABLE -> Result.UnsatResult
+            Status.UNKNOWN -> Result.UnknownResult(result.second as String)
+            Status.SATISFIABLE -> {
+                val model = collectModel(ctx, result.second as Model, formula.state, formula.path, evaluateAllTerms = true)
+                Result.SatResult(model)
+            }
+        }
+    }
+
     fun isAlwaysEqual(first: PredicateStateWithPath, second: PredicateStateWithPath): Result {
         val ctx = Z3Context.createInitialized(ef, first.state, first.path, second.state, second.path)
         val converter = Z3Converter(tf)
@@ -107,7 +123,8 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
 
         return when (result) {
             Status.SATISFIABLE -> {
-                val model = solver.model ?: unreachable { log.error("Solver result does not contain model") }
+                val model = solver.model
+                        ?: unreachable { log.error("Solver result does not contain model") }
                 if (logFormulae) log.debug(model)
                 result to model
             }
@@ -200,7 +217,7 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                             ?: unreachable { log.error("Non-ptr expr for pointer $ptr") }
 
                     val startMem = ctx.getInitialMemory(MemoryType.ARRAY, ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, ptr.type)
-                    val endMem = ctx.getMemory(MemoryType.ARRAY,  ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, ptr.type)
+                    val endMem = ctx.getMemory(MemoryType.ARRAY, ArrayLoadTerm.ARRAY_MEMORY_NAME, memspace, ptr.type)
 
                     val startV = startMem.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(ptr.type))
                     val endV = endMem.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(ptr.type))
@@ -214,8 +231,8 @@ class Z3Solver(val tf: TypeFactory) : AbstractSMTSolver {
                     memories.getValue(memspace).second[modelPtr] = modelEndV
 
                     if (ptr.type is KexArray) {
-                        val startProp = ctx.getInitialMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
-                        val endProp = ctx.getMemory( MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
+                        val startProp = ctx.getInitialMemory(MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
+                        val endProp = ctx.getMemory(MemoryType.SPECIAL, ArrayLengthTerm.ARRAY_LENGTH_MEMORY_NAME, memspace, KexInt())
 
                         val startLength = startProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(KexInt()))
                         val endLength = endProp.load<Z3ValueExpr>(ptrExpr, Z3ExprFactory.getType(KexInt()))

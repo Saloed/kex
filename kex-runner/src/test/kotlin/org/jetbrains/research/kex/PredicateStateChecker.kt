@@ -42,7 +42,7 @@ class PredicateStateChecker(private val tf: TypeFactory) {
 
     private fun checkFormulaPossible(formula: PredicateStateWithPath): Boolean {
         val solver = Z3Solver(tf)
-        val solution = solver.isPathPossible(formula.state, formula.path)
+        val solution = solver.isPossible(formula)
         return when (solution) {
             is Result.SatResult -> true
             is Result.UnsatResult -> false

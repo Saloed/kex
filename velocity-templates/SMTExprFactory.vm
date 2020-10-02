@@ -24,8 +24,7 @@ open class ${Factory} : ${SMTFactory}() {
             is KexIntegral -> Int_::class
             is KexFloat -> Float_::class
             is KexDouble -> Double_::class
-            is KexClass -> Ptr_::class
-            is KexArray -> Ptr_::class
+            is KexPointer -> Ptr_::class
             else -> unreachable { log.error("Unable to get ${solver} type for ${ type }") }
         }
 
