@@ -48,10 +48,9 @@ class DebugStatementOperation(
     fun stateSmtLibDefinition() = defineFun(stateDeclaration, state)
 
     private fun defineFun(decl: FuncDecl, body: BoolExpr): String {
-        val forall = ctx.build { body.forall(declarations) } as Quantifier
-        val sortedVars = forall.boundVariableNames.zip(forall.boundVariableSorts)
-                .joinToString(separator = " ") { (name, sort) -> "($name $sort)" }
-        return "(define-fun ${decl.name} (${sortedVars}) ${decl.range} ${body})"
+        val forall = ctx.build { ctx.context.mkTrue().forall(declarations) } as Quantifier
+        val sortedVars = "$forall".removePrefix("(forall").removeSuffix("(! true :weight 0))")
+        return "(define-fun ${decl.name} $sortedVars ${decl.range} ${body})"
     }
 }
 
