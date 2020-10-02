@@ -24,8 +24,39 @@ class PredicateStateChecker(private val tf: TypeFactory) {
         log.debug("Actual: $actualWithCorrectedVariables")
         log.debug("Expected: $expectedWithCorrectedVariables")
 
+        if (!checkFormulaPossible(expectedWithCorrectedVariables)) {
+            log.debug("Expected formula is not possible")
+            return false
+        }
+
+        if (!checkFormulaPossible(actualWithCorrectedVariables)) {
+            log.debug("Actual formula is not possible")
+            return false
+        }
+
+        return checkFormulaEquality(actualWithCorrectedVariables, expectedWithCorrectedVariables)
+    }
+
+    private fun checkFormulaPossible(formula: PredicateStateWithPath): Boolean {
         val solver = Z3Solver(tf)
-        val solution = solver.isAlwaysEqual(actualWithCorrectedVariables, expectedWithCorrectedVariables)
+        val solution = solver.isPathPossible(formula.state, formula.path)
+        return when (solution) {
+            is Result.SatResult -> true
+            is Result.UnsatResult -> false
+            is Result.UnknownResult -> {
+                log.debug("Check failed: $solution")
+                log.debug(solution.reason)
+                false
+            }
+        }
+    }
+
+    private fun checkFormulaEquality(
+            actual: PredicateStateWithPath,
+            expected: PredicateStateWithPath
+    ): Boolean {
+        val solver = Z3Solver(tf)
+        val solution = solver.isAlwaysEqual(actual, expected)
         return when (solution) {
             is Result.UnsatResult -> true
             is Result.SatResult -> {

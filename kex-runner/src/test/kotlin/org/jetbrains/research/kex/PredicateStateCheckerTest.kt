@@ -5,6 +5,7 @@ import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.emptyState
+import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.term.term
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -41,6 +42,16 @@ class PredicateStateCheckerTest : KexTest() {
         }, basic {
             path { x equality true }
         })
+        assertFalse(run(first, second))
+    }
+
+    @Test
+    fun `test false state not equal`() {
+        val a = term { value(KexInt(), "a") }
+        val first = PredicateStateWithPath(emptyState(), basic {
+            path { a ge const(0) equality true }
+        })
+        val second = PredicateStateWithPath(falseState(), falseState())
         assertFalse(run(first, second))
     }
 }
