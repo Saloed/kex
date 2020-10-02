@@ -5,8 +5,6 @@ import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.basic
 import org.jetbrains.research.kex.state.choice
 import org.jetbrains.research.kex.state.emptyState
-import org.jetbrains.research.kex.state.term.Term
-import org.jetbrains.research.kex.state.transformer.withMemspace
 import kotlin.test.Ignore
 import kotlin.test.Test
 
@@ -107,7 +105,29 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
     @Test
     fun testManyExceptionsSource() = run("first") {
         refinement(IllegalArgumentException()) {
-            emptyState()
+            val argument = arg(myList, 0)
+            choice({
+                path {
+                    (argument `is` myListA) or (argument `is` myListA1) or (argument `is` myListA2) equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "size", myListA).load() equality const(0)
+                }
+            }, {
+                path {
+                    argument `is` myListB1 equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "amount", myListB1).load() equality const(0)
+                }
+            }, {
+                path {
+                    argument `is` myListB2 equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "size", myListB2).load() equality const(0)
+                }
+            }).withMemoryVersions()
         }
         refinement(IllegalStateException()) {
             emptyState()
@@ -117,7 +137,29 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
     @Test
     fun testManyInterfaceImplsManyExceptions() = run("manyInterfaceImpls1") {
         refinement(IllegalArgumentException()) {
-            emptyState()
+            val argument = arg(myList, 0)
+            choice({
+                path {
+                    (argument `is` myListA) or (argument `is` myListA1) or (argument `is` myListA2) equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "size", myListA).load() equality const(0)
+                }
+            }, {
+                path {
+                    argument `is` myListB1 equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "amount", myListB1).load() equality const(0)
+                }
+            }, {
+                path {
+                    argument `is` myListB2 equality const(true)
+                }
+                path {
+                    argument.field(KexInt(), "size", myListB2).load() equality const(0)
+                }
+            }).withMemoryVersions()
         }
         refinement(IllegalStateException()) {
             emptyState()

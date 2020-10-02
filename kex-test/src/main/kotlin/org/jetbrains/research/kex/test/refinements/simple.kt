@@ -75,4 +75,20 @@ object Simple {
         if (x == 17 && a < 0) throw IllegalStateException("bad result")
         return 0
     }
+
+    fun alwaysException(): Int = throw IllegalStateException("Exception")
+
+    fun shadowedExceptions(x: Int): Int {
+        val a = if (x > 0) 1 else 0
+        throw IllegalStateException("Exception")
+        val b = a + 1
+        throw IllegalArgumentException("Shadowed")
+    }
+
+    fun shadowedExceptionWithCall(x: Int): Int {
+        val a = if (x > 0) 1 else 0
+        alwaysException()
+        val b = a + 1
+        throw IllegalArgumentException("Shadowed")
+    }
 }

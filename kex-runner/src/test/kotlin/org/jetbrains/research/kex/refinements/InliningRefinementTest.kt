@@ -2,11 +2,8 @@ package org.jetbrains.research.kex.refinements
 
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.choice
-import org.jetbrains.research.kex.state.emptyState
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.term.term
-import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
 
 class InliningRefinementTest : RefinementTest("Inlining") {
@@ -41,7 +38,7 @@ class InliningRefinementTest : RefinementTest("Inlining") {
     @Test
     fun testExceptionSourceInlining() = run("inlineExceptionSource") {
         refinement(SpecialExceptions.NOTHING) {
-            trueState()
+            falseState()
         }
         refinement(IllegalStateException()) {
             trueState()
