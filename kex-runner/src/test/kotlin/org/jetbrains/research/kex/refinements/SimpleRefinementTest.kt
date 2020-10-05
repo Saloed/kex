@@ -101,9 +101,6 @@ class SimpleRefinementTest : RefinementTest("Simple") {
         refinement(IllegalStateException()) {
             trueState()
         }
-        refinement(IllegalArgumentException()) {
-            falseState() // shadowed
-        }
     }
 
     @Test
