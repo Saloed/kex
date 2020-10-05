@@ -169,18 +169,12 @@ private fun Refinements.createPathVariables(argumentMapping: Map<Term, Term>, ge
 private fun Refinement.createPathVariable(currentBuilder: StateBuilder, varGenerator: VariableGenerator, argumentMapping: Map<Term, Term>): PathConditions {
     val argumentMapper = ForceThisTermMapper(varGenerator.createNestedGenerator("var"), argumentMapping)
     val preparedState = state.accept(argumentMapper::apply)
-    return when {
-        preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse -> PathConditions(emptyMap())
-        preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue -> {
-            log.warn("Inline call refinement which is always true")
-            currentBuilder += preparedState.state
-            PathConditions(mapOf(criteria to preparedState.path))
-        }
-        else -> {
-            currentBuilder += preparedState.state
-            PathConditions(mapOf(criteria to preparedState.path))
-        }
+    if (preparedState.state.evaluatesToFalse || preparedState.path.evaluatesToFalse) return PathConditions(emptyMap())
+    if (preparedState.state.evaluatesToTrue || preparedState.path.evaluatesToTrue) {
+        log.warn("Inline call refinement which is always true")
     }
+    currentBuilder += preparedState.state
+    return PathConditions(mapOf(criteria to preparedState.path))
 }
 
 private fun forceThisTerm(term: Term, mapping: Map<Term, Term>): Term? {

@@ -5,6 +5,7 @@ import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
 
 @InheritorOf("State")
@@ -48,6 +49,11 @@ class BasicState(@Required val predicates: List<Predicate> = listOf()) : Predica
     override fun iterator() = predicates.iterator()
 
     override fun performSimplify(): PredicateState = BasicState(predicates.distinct())
-    override fun checkEvaluationToTrue(): Boolean = predicates.all { it is ConstantPredicate && it.value }
+    override fun checkEvaluationToTrue(): Boolean = predicates.all { it.evaluatesToTrue() }
     override fun checkEvaluationToFalse(): Boolean = predicates.any { it is ConstantPredicate && !it.value }
+    private fun Predicate.evaluatesToTrue() = when (this) {
+        is ConstantPredicate -> value
+        is EqualityPredicate -> lhv == rhv
+        else -> false
+    }
 }

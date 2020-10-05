@@ -108,6 +108,9 @@ class SimpleRefinementTest : RefinementTest("Simple") {
         refinement(IllegalStateException()) {
             trueState()
         }
+        refinement(IndexOutOfBoundsException()) {
+            falseState() // shadowed
+        }
         refinement(IllegalArgumentException()) {
             falseState() // shadowed
         }

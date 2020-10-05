@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.asm.analysis.refinements.analyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementCriteria
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSource
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.exceptions.ExceptionSource
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
@@ -35,18 +36,16 @@ class MethodExecutionPathsAnalyzer(override val cm: ClassManager, val psa: Predi
         throwInstructions.add(inst)
     }
 
-    private fun getThrowType(inst: ThrowInst): Type = when {
-        inst.throwable is CastInst -> (inst.throwable as CastInst).operand.type
-        else -> inst.throwable.type
-    }
-
     private fun getRefinementCriteria(inst: Instruction) = when (inst) {
-        is ThrowInst -> RefinementCriteria(getThrowType(inst))
+        is ThrowInst -> ExceptionSource.MethodException(inst).refinementCriteria
         else -> TODO("Unsupported refinement criteria: $inst")
     }
 
     val isEmpty: Boolean
         get() = returnInstructions.isEmpty() && throwInstructions.isEmpty()
+
+    val throws: List<ThrowInst>
+        get() = throwInstructions
 
     val normalExecutionPaths: PredicateState by lazy {
         returnInstructions

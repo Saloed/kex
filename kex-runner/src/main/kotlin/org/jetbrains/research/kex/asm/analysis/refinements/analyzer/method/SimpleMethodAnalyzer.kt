@@ -7,6 +7,8 @@ import org.jetbrains.research.kex.asm.analysis.refinements.PathConditions
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSource
 import org.jetbrains.research.kex.asm.analysis.refinements.RefinementSources
 import org.jetbrains.research.kex.asm.analysis.refinements.Refinements
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.exceptions.ExceptionSource
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.exceptions.ExceptionSourceBuilder
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.calls.CallInliner
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.CallResolvingRefinementSourcesAnalyzer
@@ -33,6 +35,12 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         val versioner = MemoryVersioner()
         val state = versioner.apply(statePrepared)
         val memoryVersionInfo = versioner.memoryInfo()
+
+        val throwSources = methodPaths.throws.map { ExceptionSource.MethodException(it) }
+        val callSources = inliner.callPathConditions.map { (call, pc) -> ExceptionSource.CallException(call, pc) }
+        val sourceBuilder = ExceptionSourceBuilder(method, throwSources + callSources)
+        sourceBuilder.build()
+
         val (nestedNormal, nestedSources) = buildRefinementSources(inliner.callPathConditions)
         val allSources = methodPaths.exceptionalExecutionPaths.merge(nestedSources).fmap { it.optimize() }
         val allNormal = ChainState(methodPaths.normalExecutionPaths, nestedNormal).optimize()
@@ -41,6 +49,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
         log.debug("State:\n$state\nExceptions:\n$allSources\nNormal:\n$allNormal")
 
         return CallResolvingRefinementSourcesAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
+//        return CallResolvingRefinementSourcesSingleAnalyzer(this).analyze(state, allNormal, allSources, memoryVersionInfo)
     }
 
     private fun buildRefinementSources(callPathConditions: Map<CallPredicate, PathConditions>): Pair<PredicateState, RefinementSources> {

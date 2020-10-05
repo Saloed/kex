@@ -4,27 +4,23 @@ import com.abdullin.kthelper.algorithm.DominatorTree
 import com.abdullin.kthelper.algorithm.DominatorTreeBuilder
 import com.abdullin.kthelper.algorithm.GraphTraversal
 import com.abdullin.kthelper.collection.queueOf
-import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.emptyState
-import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kfg.ir.BasicBlock
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.PhiInst
 import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
-import org.jetbrains.research.kfg.ir.value.instruction.UnreachableInst
-import java.util.*
 
 class InvalidPredicateStateError(msg: String) : Exception(msg)
 
-class PredicateStateBuilder(val method: Method) {
+open class PredicateStateBuilder(val method: Method) {
     private val blockStates = hashMapOf<BasicBlock, PredicateState>()
     private val instructionStates = hashMapOf<Instruction, PredicateState>()
 
     private val order = arrayListOf<BasicBlock>()
     private val domTree = DominatorTree<BasicBlock>()
-    private val predicateBuilder = PredicateBuilder(method.cm)
+    open val predicateBuilder = PredicateBuilder(method.cm)
 
     fun init() {
         predicateBuilder.visit(method)
@@ -112,7 +108,4 @@ class PredicateStateBuilder(val method: Method) {
             else -> base + choices
         }
     }
-
-    fun findPredicateForInstruction(inst: Instruction): Predicate? =
-            predicateBuilder.predicateMap[inst]
 }

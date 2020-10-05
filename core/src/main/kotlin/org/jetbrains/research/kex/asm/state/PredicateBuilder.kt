@@ -13,7 +13,7 @@ import org.jetbrains.research.kfg.visitor.MethodVisitor
 
 class InvalidInstructionError(message: String) : Exception(message)
 
-class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
+open class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
     val predicateMap = hashMapOf<Instruction, Predicate>()
     val phiPredicateMap = hashMapOf<Pair<BasicBlock, Instruction>, Predicate>()
     val terminatorPredicateMap = hashMapOf<Pair<BasicBlock, TerminateInst>, Predicate>()

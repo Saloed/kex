@@ -89,6 +89,7 @@ object Simple {
         val a = if (x > 0) 1 else 0
         alwaysException()
         val b = a + 1
+        if (b > 10) throw IndexOutOfBoundsException("One more exception")
         throw IllegalArgumentException("Shadowed")
     }
 }

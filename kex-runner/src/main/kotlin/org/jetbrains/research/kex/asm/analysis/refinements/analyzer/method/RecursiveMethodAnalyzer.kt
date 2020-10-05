@@ -5,6 +5,7 @@ import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.refinements.*
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodCallCollector
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
 import org.jetbrains.research.kex.asm.analysis.refinements.analyzer.sources.RecursiveRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
@@ -291,9 +292,9 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
     }
 
     private fun buildNormalPaths(calls: List<CallInst>, refinements: List<Refinements>): PredicateState {
-        val builder = psa.builder(method)
+        val builder = PredicateStateBuilderWithThrows.forMethod(method)
         val predicates = calls.map {
-            builder.findPredicateForInstruction(it) ?: throw IllegalStateException("No predicate for call $it")
+            builder.findPredicateForInstruction(it)
         }
         val allInlined = zip(predicates, refinements).map { (predicate, refinement) ->
             val inliner = MethodFunctionalInliner(psa) { inline(refinement.allStates()) }
