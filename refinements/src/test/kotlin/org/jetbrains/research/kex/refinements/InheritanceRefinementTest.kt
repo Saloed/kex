@@ -130,7 +130,12 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
             }).withMemoryVersions()
         }
         refinement(IllegalStateException()) {
-            emptyState()
+            val argument = arg(myList, 0)
+            choice({
+                path { argument `is` myListA1 equality true }
+            }, {
+                path { argument `is` myListB1 equality true }
+            })
         }
     }
 
@@ -162,7 +167,12 @@ class InheritanceRefinementTest : RefinementTest("Inheritance") {
             }).withMemoryVersions()
         }
         refinement(IllegalStateException()) {
-            emptyState()
+            val argument = arg(myList, 0)
+            choice({
+                path { argument `is` myListA1 equality true }
+            }, {
+                path { argument `is` myListB1 equality true }
+            })
         }
     }
 
