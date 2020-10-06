@@ -4,7 +4,6 @@ import com.abdullin.kthelper.logging.debug
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.Failure
 import org.jetbrains.research.kex.asm.analysis.MethodChecker
-import org.jetbrains.research.kex.asm.analysis.MethodRefinements
 import org.jetbrains.research.kex.asm.analysis.RandomChecker
 import org.jetbrains.research.kex.asm.analysis.concolic.ConcolicChecker
 import org.jetbrains.research.kex.asm.manager.CoverageCounter
@@ -42,7 +41,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.system.exitProcess
 
-class Kex(args: Array<String>) {
+open class Kex(args: Array<String>) {
     val cmd = CmdConfig(args)
     val properties = cmd.getCmdValue("config", "kex.ini")
     val logName = cmd.getCmdValue("log", "kex.log")
@@ -133,7 +132,7 @@ class Kex(args: Array<String>) {
                 ?: Files.createTempDirectory(Paths.get("."), "kex-instrumented")).toAbsolutePath()
     }
 
-    private fun updateClassPath(loader: URLClassLoader) {
+    fun updateClassPath(loader: URLClassLoader) {
         val urlClassPath = loader.urLs.joinToString(separator = ":") { "${it.path}." }
         System.setProperty("java.class.path", "$classPath:$urlClassPath")
     }
@@ -172,7 +171,8 @@ class Kex(args: Array<String>) {
     fun debug(analysisContext: ExecutionContext) {
         val psa = PredicateStateAnalysis(analysisContext.cm)
 
-        val psFile = cmd.getCmdValue("ps") ?: throw IllegalArgumentException("Specify PS file to debug")
+        val psFile = cmd.getCmdValue("ps")
+                ?: throw IllegalArgumentException("Specify PS file to debug")
         val failure = KexSerializer(analysisContext.cm).fromJson<Failure>(File(psFile).readText())
 
         val method = failure.method
@@ -188,18 +188,7 @@ class Kex(args: Array<String>) {
         clearClassPath()
     }
 
-    private fun refinements(analysisContext: ExecutionContext) {
-        val debugMethods = cmd.getCmdValue("debugMethods")
-                ?.let { it.split(",").map { it.trim() } } ?: emptyList()
-        val psa = PredicateStateAnalysis(analysisContext.cm)
-        updateClassPath(analysisContext.loader as URLClassLoader)
-        runPipeline(analysisContext) {
-            +LoopSimplifier(analysisContext.cm)
-            +LoopDeroller(analysisContext.cm)
-            +psa
-            +MethodRefinements(analysisContext, psa, debugMethods)
-        }
-    }
+    open fun refinements(analysisContext: ExecutionContext): Unit = error("No implementation provided for refinements")
 
     private fun bmc(originalContext: ExecutionContext, analysisContext: ExecutionContext) {
         val traceManager = ObjectTraceManager()
@@ -240,10 +229,10 @@ class Kex(args: Array<String>) {
                 "full coverage: ${String.format("%.2f", coverage.fullCoverage)}%")
     }
 
-    private fun runPipeline(context: ExecutionContext, target: Package, init: Pipeline.() -> Unit) =
+    fun runPipeline(context: ExecutionContext, target: Package, init: Pipeline.() -> Unit) =
             executePipeline(context.cm, target, init)
 
-    private fun runPipeline(context: ExecutionContext, init: Pipeline.() -> Unit) = when {
+    fun runPipeline(context: ExecutionContext, init: Pipeline.() -> Unit) = when {
         methods != null -> executePipeline(context.cm, methods!!, init)
         klass != null -> executePipeline(context.cm, klass!!, init)
         else -> executePipeline(context.cm, `package`, init)

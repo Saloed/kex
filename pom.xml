@@ -14,6 +14,7 @@
         <module>kex-annotation-processor</module>
         <module>kex-test</module>
         <module>kex-runner</module>
+        <module>refinements</module>
     </modules>
 
     <properties>
