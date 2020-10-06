@@ -18,7 +18,7 @@ open class PredicateStateBuilder(val method: Method) {
     private val blockStates = hashMapOf<BasicBlock, PredicateState>()
     private val instructionStates = hashMapOf<Instruction, PredicateState>()
 
-    private val order = arrayListOf<BasicBlock>()
+    val order = arrayListOf<BasicBlock>()
     private val domTree = DominatorTree<BasicBlock>()
     open val predicateBuilder = PredicateBuilder(method.cm)
 

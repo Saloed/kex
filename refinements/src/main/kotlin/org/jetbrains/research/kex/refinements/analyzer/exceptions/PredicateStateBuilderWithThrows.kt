@@ -10,6 +10,8 @@ class PredicateStateBuilderWithThrows(method: Method) : PredicateStateBuilder(me
     fun findPredicateForInstruction(inst: Instruction): Predicate =
             predicateBuilder.predicateMap[inst] ?: error("No predicate for instruction: $inst")
 
+    fun blocksBeforeInstruction(inst: Instruction) = order.dropLastWhile { inst !in it }.dropLast(1)
+
     companion object {
         fun forMethod(method: Method) = PredicateStateBuilderWithThrows(method).apply { init() }
     }

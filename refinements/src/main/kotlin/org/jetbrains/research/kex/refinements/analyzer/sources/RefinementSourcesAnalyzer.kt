@@ -45,12 +45,9 @@ abstract class RefinementSourcesAnalyzer(val methodAnalyzer: MethodAnalyzer) {
     private fun analyzeForDummyResult(normalPaths: PredicateState, exceptionPaths: PredicateState): PredicateStateWithPath? = when {
         normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToFalse -> PredicateStateWithPath(emptyState(), falseState())
         normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToTrue -> PredicateStateWithPath(emptyState(), trueState())
+        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToFalse -> PredicateStateWithPath(emptyState(), falseState())
         normalPaths.evaluatesToTrue && exceptionPaths.evaluatesToTrue -> {
             log.error("Normal and Exception paths are always true")
-            PredicateStateWithPath(emptyState(), falseState())
-        }
-        normalPaths.evaluatesToFalse && exceptionPaths.evaluatesToFalse -> {
-            log.error("Normal and Exception paths are always false")
             PredicateStateWithPath(emptyState(), falseState())
         }
         else -> null

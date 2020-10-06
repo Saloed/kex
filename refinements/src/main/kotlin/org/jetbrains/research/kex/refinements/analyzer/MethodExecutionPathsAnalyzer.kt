@@ -33,33 +33,14 @@ class MethodExecutionPathsAnalyzer(override val cm: ClassManager, val psa: Predi
         throwInstructions.add(inst)
     }
 
-    private fun getRefinementCriteria(inst: Instruction) = when (inst) {
-        is ThrowInst -> ExceptionSource.MethodException(inst).refinementCriteria
-        else -> TODO("Unsupported refinement criteria: $inst")
-    }
-
     val isEmpty: Boolean
         get() = returnInstructions.isEmpty() && throwInstructions.isEmpty()
 
     val throws: List<ThrowInst>
         get() = throwInstructions
 
-    val normalExecutionPaths: PredicateState by lazy {
-        returnInstructions
-                .mapNotNull { builder.getInstructionState(it) }
-                .map { it.path }
-                .let { ChoiceState(it) }
-    }
-
-    val exceptionalExecutionPaths: RefinementSources by lazy {
-        throwInstructions
-                .map { getRefinementCriteria(it) to builder.getInstructionState(it) }
-                .filter { it.second != null }
-                .map { it.first to it.second!!.path }
-                .map { RefinementSource.create(it.first, it.second) }
-                .let { RefinementSources.create(it) }
-                .simplify()
-    }
+    val returns: List<ReturnInst>
+        get() = returnInstructions
 
     fun methodRawFullState(): PredicateState = (returnInstructions + throwInstructions)
             .mapNotNull { builder.getInstructionState(it) }

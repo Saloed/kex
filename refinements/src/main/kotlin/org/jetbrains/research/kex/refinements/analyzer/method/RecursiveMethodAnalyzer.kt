@@ -2,17 +2,18 @@ package org.jetbrains.research.kex.refinements.analyzer.method
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.MethodRefinements
-import org.jetbrains.research.kex.refinements.*
-import org.jetbrains.research.kex.refinements.analyzer.MethodCallCollector
-import org.jetbrains.research.kex.refinements.analyzer.MethodExecutionPathsAnalyzer
-import org.jetbrains.research.kex.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
-import org.jetbrains.research.kex.refinements.analyzer.sources.RecursiveRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
 import org.jetbrains.research.kex.ktype.KexArray
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
+import org.jetbrains.research.kex.refinements.*
+import org.jetbrains.research.kex.refinements.analyzer.MethodCallCollector
+import org.jetbrains.research.kex.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
+import org.jetbrains.research.kex.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
+import org.jetbrains.research.kex.refinements.analyzer.sources.RecursiveRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -29,6 +30,8 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.StringName
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 import org.jetbrains.research.kfg.ir.value.instruction.CallOpcode
+import org.jetbrains.research.kfg.ir.value.instruction.Instruction
+import org.jetbrains.research.kfg.ir.value.instruction.ThrowInst
 import ru.spbstu.ktuples.zip
 
 class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: MethodRefinements, method: Method) : MethodAnalyzer(cm, psa, mr, method) {
@@ -313,5 +316,25 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         }
         val callMap = callPredicates.zip(callInstructions).toMap()
         return state to callMap
+    }
+
+    private val MethodExecutionPathsAnalyzer.exceptionalExecutionPaths
+        get() = throws
+                .map { getRefinementCriteria(it) to builder.getInstructionState(it) }
+                .filter { it.second != null }
+                .map { it.first to it.second!!.path }
+                .map { RefinementSource.create(it.first, it.second) }
+                .let { RefinementSources.create(it) }
+                .simplify()
+
+    private val MethodExecutionPathsAnalyzer.normalExecutionPaths
+        get() = returns
+                .mapNotNull { builder.getInstructionState(it) }
+                .map { it.path }
+                .let { ChoiceState(it) }
+
+    private fun MethodExecutionPathsAnalyzer.getRefinementCriteria(inst: Instruction) = when (inst) {
+        is ThrowInst -> ExceptionSource.MethodException(inst).refinementCriteria
+        else -> TODO("Unsupported refinement criteria: $inst")
     }
 }
