@@ -16,12 +16,13 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
 
-class ExceptionSourceBuilder(val method: Method, val sources: List<ExceptionSource>) {
+class RefinementSourceBuilder(val method: Method, val sources: List<ExceptionSource>) {
     private val stateBuilder = PredicateStateBuilderWithThrows.forMethod(method)
     private val sourceByInstruction = sources.associateBy { it.instruction }
 
+
     fun buildExceptionSources(): RefinementSources {
-        val nonEmptySources = sources.filterNot { it.path.pc.isEmpty() }
+        val nonEmptySources = sources.filterNot { it.criteria().isEmpty() }
         if (nonEmptySources.isEmpty()) return RefinementSources.empty()
         val refinementSources = nonEmptySources.map { buildExceptionPathsForSource(it) }
                 .fold(RefinementSources.empty()) { res, source -> res.merge(source) }
@@ -38,7 +39,7 @@ class ExceptionSourceBuilder(val method: Method, val sources: List<ExceptionSour
     }
 
     private fun normalsForNoReturns(): PredicateState {
-        val noExceptionsConditions = sources.filterNot { it.path.pc.isEmpty() }
+        val noExceptionsConditions = sources.filterNot { it.criteria().isEmpty() }
                 .map { buildNormalPathForSource(it) }
         return chain(noExceptionsConditions)
     }
@@ -57,7 +58,7 @@ class ExceptionSourceBuilder(val method: Method, val sources: List<ExceptionSour
 
     private fun buildExceptionPathsForSource(source: ExceptionSource): RefinementSources {
         val state = stateForSource(source.instruction)
-        val refinementSources = source.path.pc.keys.map { criteria ->
+        val refinementSources = source.criteria().map { criteria ->
             val inliner = ExecutionConditionInliner(source, criteria)
             val executionPath = inliner.apply(state)
             RefinementSource.create(criteria, executionPath)

@@ -7,7 +7,7 @@ import org.jetbrains.research.kex.refinements.Refinements
 import org.jetbrains.research.kex.refinements.analyzer.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.refinements.analyzer.calls.CallInliner
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
-import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSourceBuilder
+import org.jetbrains.research.kex.refinements.analyzer.exceptions.RefinementSourceBuilder
 import org.jetbrains.research.kex.refinements.analyzer.sources.CallResolvingRefinementSourcesAnalyzer
 import org.jetbrains.research.kex.state.memory.MemoryVersioner
 import org.jetbrains.research.kex.state.transformer.optimize
@@ -26,7 +26,7 @@ class SimpleMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr: Me
 
         val throwSources = methodPaths.throws.map { ExceptionSource.MethodException(it) }
         val callSources = inliner.callPathConditions.map { (call, pc) -> ExceptionSource.CallException(call, pc) }
-        val sourceBuilder = ExceptionSourceBuilder(method, throwSources + callSources)
+        val sourceBuilder = RefinementSourceBuilder(method, throwSources + callSources)
         val allSources = sourceBuilder.buildExceptionSources()
         val allNormal = sourceBuilder.buildNormals(methodPaths.returns)
 
