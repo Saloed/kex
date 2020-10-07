@@ -18,7 +18,12 @@ abstract class RefinementSourcesAnalyzer(val methodAnalyzer: MethodAnalyzer) {
         return createRefinements(trivialRefinements.value + otherRefinements.value)
     }
 
-    abstract fun queryRefinementSources(state: PredicateState, normals: PredicateState, sources: RefinementSources, memoryVersionInfo: MemoryVersionInfo): Refinements
+    abstract fun queryRefinementSources(
+            state: PredicateState,
+            normals: PredicateState,
+            sources: RefinementSources,
+            memoryVersionInfo: MemoryVersionInfo
+    ): Refinements
 
     open fun createRefinements(refinements: List<Refinement>): Refinements =
             Refinements.create(methodAnalyzer.method, refinements)
