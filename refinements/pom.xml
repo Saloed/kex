@@ -12,9 +12,6 @@
     <artifactId>refinements</artifactId>
 
     <properties>
-        <serialization.version>1.0.0-RC</serialization.version>
-        <logback.version>1.2.3</logback.version>
-        <slf4j.version>1.7.25</slf4j.version>
         <exec.main>org.jetbrains.research.kex.RefinementsKt</exec.main>
     </properties>
 
@@ -104,8 +101,8 @@
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-serialization-core</artifactId>
-            <version>${serialization.version}</version>
+            <artifactId>kotlinx-serialization-json-jvm</artifactId>
+            <version>1.0.0</version>
         </dependency>
         <dependency>
             <groupId>ru.spbstu</groupId>
