@@ -3,12 +3,9 @@ package org.jetbrains.research.kex
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.refinements.Refinements
-import org.jetbrains.research.kex.refinements.analyzer.method.MethodAnalyzer
-import org.jetbrains.research.kex.refinements.analyzer.method.OpenMethodAnalyzer
-import org.jetbrains.research.kex.refinements.analyzer.method.RecursiveMethodAnalyzer
-import org.jetbrains.research.kex.refinements.analyzer.method.SimpleMethodAnalyzer
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.config.kexConfig
+import org.jetbrains.research.kex.refinements.analyzer.method.*
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Class
@@ -78,7 +75,7 @@ class MethodRefinements(
         log.info("Start analysis: $method")
         when {
             method in methodAnalysisStack && method == methodAnalysisStack.last -> {
-                knownRefinements[method] = RecursiveMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
+                knownRefinements[method] = NewRecursiveMethodAnalyzer(cm, psa, this, method).analyzeAndTrackRecursion()
                 throw SkipRecursion(method)
             }
             method in methodAnalysisStack -> {

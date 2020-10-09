@@ -122,7 +122,7 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         fun call(ctx: CallCtx, arguments: ArgumentDeclarations) = ctx.build {
             val argumentsSorts = arguments.declarations.map { it.sort }
             val callArguments = arguments.declarations.map { it.expr }
-            val predicate = boolFunction(name, argumentsSorts)
+            val predicate = ctx.boolFunction(name, argumentsSorts)
             boolFunctionApp(predicate, callArguments)
         }
 

@@ -4,8 +4,8 @@ import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kex.refinements.Refinement
 import org.jetbrains.research.kex.refinements.Refinements
-import org.jetbrains.research.kex.refinements.analyzer.MethodImplementationMerge
-import org.jetbrains.research.kex.refinements.analyzer.MethodImplementations
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementationMerge
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementations
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method

@@ -142,6 +142,9 @@ class ${Context} : ${SMTContext} {
         return factory.makePtrConst(ptr)
     }
 
+    fun getInitials() = initialMemories.toMap()
+    fun getActive() = activeMemories.toMap()
+
     fun getTypeIdx(type: KexType) = typeMap.getOrPut(type) { typeIndex.addAndGet(TYPE_IDX_MULTIPLIER) }
     fun getTypeByIdx(idx: Int): KexType? = typeMap.entries.firstOrNull { it.value == idx }?.key
     fun getTypeMapping(): Map< KexType, Int > = typeMap.toMap()

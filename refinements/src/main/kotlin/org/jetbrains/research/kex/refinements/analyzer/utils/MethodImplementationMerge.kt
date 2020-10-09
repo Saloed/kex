@@ -1,19 +1,17 @@
-package org.jetbrains.research.kex.refinements.analyzer
+package org.jetbrains.research.kex.refinements.analyzer.utils
 
-import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kex.ktype.KexBool
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.*
-import org.jetbrains.research.kex.state.predicate.*
+import org.jetbrains.research.kex.state.predicate.ConstantPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kex.state.transformer.TermMapper
 import org.jetbrains.research.kex.util.VariableGenerator
-import org.jetbrains.research.kfg.ClassManager
-import org.jetbrains.research.kfg.UnknownInstance
-import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.OuterClass
 
 open class MethodImplementationMerge(val method: Method) {
     open val baseGenerator: VariableGenerator = VariableGenerator("inheritance")
@@ -22,7 +20,7 @@ open class MethodImplementationMerge(val method: Method) {
     open val owner: Term by lazy { term { `this`(method.`class`.kexType) } }
 
     open fun mapUnmappedTerm(method: Method, term: Term): Term? = if (term is ArgumentTerm) term else null
-    open fun createInstanceOf(term: Term, type: KexType) = term { tf.getInstanceOf(type, term) }
+    open fun createInstanceOf(term: Term, type: KexType) = term { TermFactory.getInstanceOf(type, term) }
 
     fun mergeImplementations(
             implementations: List<Pair<PredicateStateWithPath, Method>>
@@ -71,7 +69,7 @@ open class MethodImplementationMerge(val method: Method) {
             otherTypeVariables: List<Term>,
             generator: VariableGenerator): PredicateState {
         val thisTerm = generator.generatorFor("this").createVar(type)
-        val oldThisTerm = term { tf.getThis(type) }
+        val oldThisTerm = term { TermFactory.getThis(type) }
         val mapper = TermMapper(generator, mapOf(oldThisTerm to thisTerm)) {
             mapUnmappedTerm(method, it)
         }
@@ -110,32 +108,5 @@ open class MethodImplementationMerge(val method: Method) {
 
     private fun List<Term>.combine(default: Boolean, operation: TermBuilder.(Term, Term) -> Term) =
             reduceOrNull { acc, term -> term { operation(acc, term) } } ?: term { const(default) }
-
-}
-
-class MethodImplementations(private val cm: ClassManager, private val methodRefinements: MethodRefinements) {
-    fun collectImplementations(method: Method): Set<Method> =
-            collectInheritors(method.`class`)
-                    .mapNotNull { it.getMethodOrNull(method) }
-                    .toSet()
-
-    private fun collectInheritors(cls: Class): Set<Class> = when (cls) {
-        is OuterClass -> emptySet()
-        else -> cm.concreteClasses
-                .filter { it.isInheritorOf(cls) }
-                .filterNot { methodRefinements.isExcluded(it) }
-                .toSet()
-    }
-
-    private fun Class.getMethodOrNull(method: Method) = try {
-        getMethod(method.name, method.desc)
-    } catch (ex: UnknownInstance) {
-        null
-    }?.let {
-        when {
-            it.isEmpty() -> null
-            else -> it
-        }
-    }
 
 }

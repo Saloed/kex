@@ -15,7 +15,7 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kfg.type.TypeFactory
 
-class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVersionInfo) : Z3Converter(tf) {
+open class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVersionInfo) : Z3Converter(tf) {
     private var callCounter = 1
 
     data class CallInfo(
@@ -67,7 +67,7 @@ class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: MemoryVe
         return argumentsAxioms.fold(callInfo.result) { res, ax -> res.withAxiom(ax) }
     }
 
-    private fun processCall(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): CallInfo {
+    internal fun processCall(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): CallInfo {
         val callIdx = callCounter++
         val callType = when {
             call.hasLhv -> call.lhv.type

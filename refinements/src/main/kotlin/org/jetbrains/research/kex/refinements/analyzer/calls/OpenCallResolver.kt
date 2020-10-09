@@ -2,8 +2,8 @@ package org.jetbrains.research.kex.refinements.analyzer.calls
 
 import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.refinements.MethodApproximationManager
-import org.jetbrains.research.kex.refinements.analyzer.MethodImplementationMerge
-import org.jetbrains.research.kex.refinements.analyzer.MethodImplementations
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementationMerge
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementations
 import org.jetbrains.research.kex.refinements.analyzer.method.MethodAnalyzer
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexType

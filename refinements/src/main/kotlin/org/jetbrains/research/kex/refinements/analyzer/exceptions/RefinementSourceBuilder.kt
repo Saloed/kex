@@ -20,7 +20,6 @@ class RefinementSourceBuilder(val method: Method, val sources: List<ExceptionSou
     private val stateBuilder = PredicateStateBuilderWithThrows.forMethod(method)
     private val sourceByInstruction = sources.associateBy { it.instruction }
 
-
     fun buildExceptionSources(): RefinementSources {
         val nonEmptySources = sources.filterNot { it.criteria().isEmpty() }
         if (nonEmptySources.isEmpty()) return RefinementSources.empty()

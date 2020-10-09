@@ -1,15 +1,11 @@
-package org.jetbrains.research.kex.refinements.analyzer
+package org.jetbrains.research.kex.refinements.analyzer.utils
 
-import org.jetbrains.research.kex.refinements.RefinementSource
-import org.jetbrains.research.kex.refinements.RefinementSources
-import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.state.ChoiceState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.transformer.IntrinsicAdapter
 import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Method
-import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
 import org.jetbrains.research.kfg.ir.value.instruction.ThrowInst
 import org.jetbrains.research.kfg.visitor.MethodVisitor

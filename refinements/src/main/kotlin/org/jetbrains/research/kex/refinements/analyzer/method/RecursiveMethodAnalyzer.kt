@@ -9,8 +9,8 @@ import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.refinements.*
-import org.jetbrains.research.kex.refinements.analyzer.MethodCallCollector
-import org.jetbrains.research.kex.refinements.analyzer.MethodExecutionPathsAnalyzer
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodCallCollector
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
 import org.jetbrains.research.kex.refinements.analyzer.sources.RecursiveRefinementSourcesAnalyzer

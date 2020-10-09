@@ -2,14 +2,13 @@ package org.jetbrains.research.kex.refinements.analyzer.calls
 
 import com.abdullin.kthelper.collection.dequeOf
 import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kex.asm.manager.MethodManager
+import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.refinements.PathConditions
 import org.jetbrains.research.kex.refinements.Refinement
 import org.jetbrains.research.kex.refinements.RefinementProvider
 import org.jetbrains.research.kex.refinements.Refinements
-import org.jetbrains.research.kex.refinements.analyzer.MethodExecutionPathsAnalyzer
-import org.jetbrains.research.kex.state.transformer.TermMapper
-import org.jetbrains.research.kex.asm.manager.MethodManager
-import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.StateBuilder
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -23,13 +22,15 @@ import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
+import org.jetbrains.research.kfg.ir.value.instruction.CallInst
 
 class CallInliner(
         val cm: ClassManager,
         val psa: PredicateStateAnalysis,
         val refinementProvider: RefinementProvider,
         val forceDeepInline: Boolean = false,
-        val forceMethodInlining: Method? = null
+        val forceMethodInlining: Method? = null,
+        val ignoreCalls: Set<CallInst> = emptySet()
 ) : RecollectingTransformer<CallInliner> {
     override val builders = dequeOf(StateBuilder())
     private val refinementVariableGenerator = VariableGenerator("refinement")
@@ -38,6 +39,7 @@ class CallInliner(
     val callPathConditionState = StateBuilder()
 
     override fun transformCall(predicate: CallPredicate): Predicate {
+        if (predicate.callTerm.instruction in ignoreCalls) return predicate
         val argumentMapping = MethodManager.InlineManager.methodArguments(predicate)
         val refinement = refinementProvider.findRefinement(predicate.method())
         val (pathConditions, pathVarState) = refinement.createPathVariables(argumentMapping, refinementVariableGenerator.generatorFor(predicate))
@@ -48,6 +50,7 @@ class CallInliner(
     }
 
     override fun transformCallPredicate(predicate: CallPredicate): Predicate {
+        if (predicate.callTerm.instruction in ignoreCalls) return predicate
         val varGenerator = methodVariableGenerator.generatorFor(predicate)
         val method = predicate.method()
         val inlineStatus = MethodManager.InlineManager.isInlinable(method)
@@ -101,7 +104,7 @@ class CallInliner(
             varGenerator: VariableGenerator,
             argumentMapping: Map<Term, Term>
     ): Predicate {
-        val inliner = CallInliner(cm, psa, refinementProvider, forceDeepInline = false)
+        val inliner = CallInliner(cm, psa, refinementProvider, forceDeepInline = false, ignoreCalls = ignoreCalls)
         val stateResolved = inliner.apply(methodState)
         val refinementVarGenerator = refinementVariableGenerator.generatorFor(predicate).createNestedGenerator("${prefix}_pc")
         val pcVarMapping = hashMapOf<Term, Term>()

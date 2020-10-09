@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.refinements.analyzer
+package org.jetbrains.research.kex.refinements.analyzer.utils
 
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kfg.ClassManager
@@ -15,6 +15,7 @@ class MethodCallCollector(override val cm: ClassManager) : MethodVisitor {
         super.visitCallInst(inst)
         when (inst.method) {
             im.checkNotNull(cm) -> return
+            im.checkNotNullNew(cm) -> return
             im.areEqual(cm) -> return
             else -> calls.add(inst)
         }
