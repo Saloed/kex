@@ -18,5 +18,6 @@ data class ArgumentDeclarations private constructor(val declarations: List<Decla
 
     companion object {
         fun create(declarations: List<Declaration>) = ArgumentDeclarations(declarations.sortedBy { "$it" })
+        fun createFromOrdered(declarations: List<Declaration>) = ArgumentDeclarations(declarations)
     }
 }

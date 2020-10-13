@@ -27,8 +27,8 @@ class NewRecursiveFixpointQuery(
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
         }
-        val (rootPredicateApp, updatedMemoryInfo) = ctx.psConverter.buildRootPredicateApp(ctx.declarationTracker, ctx.ef, ctx.z3Context)
-        val rootPredicateAppExpr = rootPredicateApp.asAxiom() as BoolExpr
+        val rootPredicate = ctx.psConverter.buildRootPredicateApp(ctx.declarationTracker, ctx.ef, ctx.z3Context)
+        val rootPredicateAppExpr = rootPredicate.predicate.asAxiom() as BoolExpr
 
         val z3positive = ctx.build {
             convert(positivePath).asAxiom() as BoolExpr
@@ -39,16 +39,14 @@ class NewRecursiveFixpointQuery(
 
         val calls = ctx.psConverter.getCallsInfo()
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
-        val argumentDeclarations = ctx.knownDeclarations
-                .filter { it.isValuable() }
-                .let { ArgumentDeclarations.create(it) }
         val declarationMapping = ModelDeclarationMapping.create(
-                argumentDeclarations, updatedMemoryInfo,
+                rootPredicate.arguments, rootPredicate.memoryVersionInfo,
                 state, positivePath, query
         )
         declarationMapping.initializeCalls(calls)
 
         return FixpointSolverCall(listOf(recursionPredicate), declarationMapping, object : StatementBuilder(ctx, z3State, declarationExprs) {
+            override fun declaredPredicates() = listOf(rootPredicateAppExpr.funcDecl)
             override fun StatementOperation.positiveStatement(): List<BoolExpr> {
                 val statement = ctx.build {
                     val statement = (getState() and z3positive) implies rootPredicateAppExpr

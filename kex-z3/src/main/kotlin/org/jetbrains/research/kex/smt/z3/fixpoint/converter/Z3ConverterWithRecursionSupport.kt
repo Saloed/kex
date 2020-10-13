@@ -7,6 +7,7 @@ import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.DeclarationTracker
 import org.jetbrains.research.kex.state.CallApproximationState
@@ -105,11 +106,22 @@ class Z3ConverterWithRecursionSupport(
             return Bool_(ef.ctx, predicateApp)
         }
 
+        fun argumentDeclarations(
+                owner: Declaration, arguments: List<Declaration>, returnValue: Declaration,
+                inputMemory: List<Declaration>, outputMemory: List<Declaration>
+        ): ArgumentDeclarations {
+            val inputs = listOf(owner) + arguments + inputMemory
+            val outputs = listOf(returnValue) + outputMemory
+            return ArgumentDeclarations.createFromOrdered(inputs + outputs)
+        }
+
         private fun Dynamic_.expr() = expr
         private fun List<Dynamic_>.expr() = map { it.expr() }
         private fun Array_<Dynamic_, Ptr_>.arrayExpr() = expr
         private fun List<Array_<Dynamic_, Ptr_>>.arrayExpr() = map { it.arrayExpr() }
     }
+
+    data class RootPredicate(val predicate: Bool_, val memoryVersionInfo: MemoryVersionInfo, val arguments: ArgumentDeclarations)
 
     private fun KexType.z3Sort(ef: Z3ExprFactory) = Dynamic_.getStaticSort(ef.ctx, Z3ExprFactory.getType(this))
     private fun MemoryDescriptor.z3Sort(ctx: Z3Context): Sort {
@@ -117,27 +129,30 @@ class Z3ConverterWithRecursionSupport(
         return memory.memory.inner.expr.sort
     }
 
-    fun buildRootPredicateApp(declarationTracker: DeclarationTracker, ef: Z3ExprFactory, ctx: Z3Context): Pair<Bool_, MemoryVersionInfo> {
+    fun buildRootPredicateApp(declarationTracker: DeclarationTracker, ef: Z3ExprFactory, ctx: Z3Context): RootPredicate {
         val z3RecursionPredicate = buildPredicate(ef, ctx)
         val memoryVersionInfo = memoryVersionForRootPredicate()
-        val outputMemory = outputMemoryDeclarations(declarationTracker, memoryVersionInfo, ctx)
-        val inputMemory = inputMemoryDeclarations(declarationTracker, memoryVersionInfo)
+        val allOutputMemory = outputMemoryDeclarations(declarationTracker, memoryVersionInfo, ctx)
+        val allInputMemory = inputMemoryDeclarations(declarationTracker, memoryVersionInfo)
+        val outputMemory = z3RecursionPredicate.memoryDescriptors.map {
+            allOutputMemory[it] ?: error("No memory for descriptor $it")
+        }
+        val inputMemory = z3RecursionPredicate.memoryDescriptors.map {
+            allInputMemory[it] ?: error("No memory for descriptor $it")
+        }
         val owner = declarationTracker.findThis()
         val arguments = declarationTracker.arguments()
         val returnValue = returnValueDeclaration(declarationTracker, ef, z3RecursionPredicate.returnValueType)
+        val predicateArgDeclarations = z3RecursionPredicate.argumentDeclarations(owner, arguments, returnValue, inputMemory, outputMemory)
 
         val ownerExpr = owner.expr
         val argumentExprs = arguments.map { it.expr }
         val returnValueExpr = returnValue.expr
-        val inputMemoryExprs = z3RecursionPredicate.memoryDescriptors
-                .map { inputMemory[it] ?: error("No memory for descriptor $it") }
-                .map { it.expr }
-        val outputMemoryExprs = z3RecursionPredicate.memoryDescriptors
-                .map { outputMemory[it] ?: error("No memory for descriptor $it") }
-                .map { it.expr }
+        val inputMemoryExprs = inputMemory.map { it.expr }
+        val outputMemoryExprs = outputMemory.map { it.expr }
 
         val predicateApp = z3RecursionPredicate.apply(ef, ownerExpr, argumentExprs, returnValueExpr, inputMemoryExprs, outputMemoryExprs)
-        return predicateApp to memoryVersionInfo
+        return RootPredicate(predicateApp, memoryVersionInfo, predicateArgDeclarations)
     }
 
     private fun memoryVersionForRootPredicate(): MemoryVersionInfo {

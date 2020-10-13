@@ -3,6 +3,7 @@ package org.jetbrains.research.kex.refinements.analyzer.method
 import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.refinements.MethodApproximationManager
+import org.jetbrains.research.kex.refinements.Refinement
 import org.jetbrains.research.kex.refinements.Refinements
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.RefinementSourceBuilder
@@ -63,8 +64,8 @@ class NewRecursiveMethodAnalyzer(
                 )
             }
         }
-
-        return Refinements.unknown(method)
+        val finalResult = result.finalStateOrException()
+        val refinement = Refinement.create(singleRefinementSource.criteria, finalResult)
+        return Refinements.create(method, listOf(refinement))
     }
-
 }

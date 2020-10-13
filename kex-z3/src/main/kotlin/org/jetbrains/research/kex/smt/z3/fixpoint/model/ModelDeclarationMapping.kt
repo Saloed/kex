@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
+import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithCallMemory
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
-import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithCallMemory
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryVersion
@@ -51,14 +51,14 @@ class ModelDeclarationMapping(val arguments: ArgumentDeclarations) {
         val declaration = arguments[idx]
         if (declaration is Declaration.CallResult) {
             val callInfo = calls[declaration.index]
-                    ?: throw IllegalStateException("No info about call $declaration")
+                    ?: error("No info about call $declaration")
             val term = callInfo.predicate.lhv
             callDependencies.add(TermDependency.CallResultDependency(term, callInfo.index, callInfo.predicate))
             return term
         }
         val term = terms[declaration]
-                ?: throw IllegalArgumentException("No term for declaration $idx: ${arguments[idx]}")
-        if (term is CallTerm) throw IllegalStateException("Unexpected CallTerm")
+                ?: error("No term for declaration $idx: ${arguments[idx]}")
+        if (term is CallTerm) error("Unexpected CallTerm")
         return term
     }
 
