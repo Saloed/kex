@@ -2,6 +2,8 @@ package org.jetbrains.research.kex.test.refinements
 
 object Recursive {
     data class XCls(var clsFieldA: Int, var clsFieldB: Int)
+    data class ImmutableIntWrapper(val value: Int)
+    data class MutableIntWrapper(var value: Int)
 
     fun isPositive(i: Int) {
         if (i < 0) throw IllegalArgumentException("Not positive")
@@ -81,4 +83,23 @@ object Recursive {
         return res
     }
 
+    fun simpleRecursionWithImmutableMemory(x: ImmutableIntWrapper, y: Int): Int = when {
+        y < 0 -> throw IllegalStateException("Stop iteration")
+        y == 0 -> 1
+        else -> {
+            if (x.value >= 20) throw IllegalStateException("Overflow")
+            val xCopy = ImmutableIntWrapper(x.value + 1)
+            simpleRecursionWithImmutableMemory(xCopy, y - 1)
+        }
+    }
+
+    fun simpleRecursionWithMutableMemory(x: MutableIntWrapper, y: Int): Int = when {
+        y < 0 -> throw IllegalStateException("Stop iteration")
+        y == 0 -> 1
+        else -> {
+            if (x.value >= 20) throw IllegalStateException("Overflow")
+            x.value += 1
+            simpleRecursionWithMutableMemory(x, y - 1)
+        }
+    }
 }

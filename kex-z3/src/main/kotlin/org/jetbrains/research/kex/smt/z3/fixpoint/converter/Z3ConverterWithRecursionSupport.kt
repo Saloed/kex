@@ -14,7 +14,6 @@ import org.jetbrains.research.kex.state.CallApproximationState
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor
 import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
-import org.jetbrains.research.kex.state.memory.MemoryVersionType
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kfg.type.TypeFactory
 
@@ -107,12 +106,9 @@ class Z3ConverterWithRecursionSupport(
         }
 
         fun argumentDeclarations(
-                owner: Declaration, arguments: List<Declaration>, returnValue: Declaration,
-                inputMemory: List<Declaration>, outputMemory: List<Declaration>
+                owner: Declaration, arguments: List<Declaration>, inputMemory: List<Declaration>
         ): ArgumentDeclarations {
-            val inputs = listOf(owner) + arguments + inputMemory
-            val outputs = listOf(returnValue) + outputMemory
-            return ArgumentDeclarations.createFromOrdered(inputs + outputs)
+            return ArgumentDeclarations.createFromOrdered(listOf(owner) + arguments + inputMemory)
         }
 
         private fun Dynamic_.expr() = expr
@@ -121,7 +117,7 @@ class Z3ConverterWithRecursionSupport(
         private fun List<Array_<Dynamic_, Ptr_>>.arrayExpr() = map { it.arrayExpr() }
     }
 
-    data class RootPredicate(val predicate: Bool_, val memoryVersionInfo: MemoryVersionInfo, val arguments: ArgumentDeclarations)
+    data class RootPredicate(val predicate: Bool_, val arguments: ArgumentDeclarations)
 
     private fun KexType.z3Sort(ef: Z3ExprFactory) = Dynamic_.getStaticSort(ef.ctx, Z3ExprFactory.getType(this))
     private fun MemoryDescriptor.z3Sort(ctx: Z3Context): Sort {
@@ -131,71 +127,46 @@ class Z3ConverterWithRecursionSupport(
 
     fun buildRootPredicateApp(declarationTracker: DeclarationTracker, ef: Z3ExprFactory, ctx: Z3Context): RootPredicate {
         val z3RecursionPredicate = buildPredicate(ef, ctx)
-        val memoryVersionInfo = memoryVersionForRootPredicate()
-        val allOutputMemory = outputMemoryDeclarations(declarationTracker, memoryVersionInfo, ctx)
-        val allInputMemory = inputMemoryDeclarations(declarationTracker, memoryVersionInfo)
-        val outputMemory = z3RecursionPredicate.memoryDescriptors.map {
-            allOutputMemory[it] ?: error("No memory for descriptor $it")
-        }
+        val allInputMemory = inputMemoryDeclarations(declarationTracker)
         val inputMemory = z3RecursionPredicate.memoryDescriptors.map {
             allInputMemory[it] ?: error("No memory for descriptor $it")
         }
         val owner = declarationTracker.findThis()
         val arguments = declarationTracker.arguments()
-        val returnValue = returnValueDeclaration(declarationTracker, ef, z3RecursionPredicate.returnValueType)
-        val predicateArgDeclarations = z3RecursionPredicate.argumentDeclarations(owner, arguments, returnValue, inputMemory, outputMemory)
+        val predicateArgDeclarations = z3RecursionPredicate.argumentDeclarations(owner, arguments, inputMemory)
 
         val ownerExpr = owner.expr
         val argumentExprs = arguments.map { it.expr }
-        val returnValueExpr = returnValue.expr
         val inputMemoryExprs = inputMemory.map { it.expr }
-        val outputMemoryExprs = outputMemory.map { it.expr }
+        val returnValueExpr = returnValueExpr(ef, z3RecursionPredicate.returnValueType)
+        val outputMemoryExprs = outputMemoryExpr(ctx)
 
         val predicateApp = z3RecursionPredicate.apply(ef, ownerExpr, argumentExprs, returnValueExpr, inputMemoryExprs, outputMemoryExprs)
-        return RootPredicate(predicateApp, memoryVersionInfo, predicateArgDeclarations)
-    }
-
-    private fun memoryVersionForRootPredicate(): MemoryVersionInfo {
-        val finalVersion = memoryVersionInfo.allMemoryVersions.values.flatMap { it.values }
-                .filter { it.type == MemoryVersionType.NEW || it.type == MemoryVersionType.INITIAL }
-                .map { it.version }
-                .maxOrNull() ?: 0
-        val afterFinalVersion = finalVersion + 1
-        val afterVersions = memoryVersionInfo.final.mapValues { (_, currVersion) -> currVersion.resetToVersion(afterFinalVersion) }
-        return MemoryVersionInfo(memoryVersionInfo.initial, afterVersions)
-    }
-
-    private fun outputMemoryDeclarations(
-            tracker: DeclarationTracker,
-            memoryVersionInfo: MemoryVersionInfo,
-            ctx: Z3Context
-    ): Map<MemoryDescriptor, Declaration.Memory> {
-        val finalVersion = memoryVersionInfo.final.values.firstOrNull() ?: MemoryVersion.default()
-        ctx.resetMemoryToVersion(finalVersion, memoryVersionInfo)
-        val memoryDeclarations = tracker.memories(finalVersion)
-        check(memoryVersionInfo.final.size == memoryDeclarations.size) { "Missed declarations" }
-        return memoryDeclarations
+        return RootPredicate(predicateApp, predicateArgDeclarations)
     }
 
     private fun inputMemoryDeclarations(
             tracker: DeclarationTracker,
-            memoryVersionInfo: MemoryVersionInfo
     ): Map<MemoryDescriptor, Declaration.Memory> {
-        val memoryDeclarations = tracker.memories(MemoryVersion.initial())
+        val memoryDeclarations = tracker.memories(memoryVersionInfo.initial)
         check(memoryVersionInfo.initial.size == memoryDeclarations.size) { "Missed declarations" }
         return memoryDeclarations
     }
 
-    private fun returnValueDeclaration(tracker: DeclarationTracker, ef: Z3ExprFactory, type: KexType): Declaration {
-        val stubName = "recursion_return_value_stub"
-        ef.getVarByTypeAndName(type, stubName)
-        return tracker.declarations.first { it.name == stubName }
-    }
+    private fun outputMemoryExpr(
+            ctx: Z3Context,
+    ) = memoryVersionInfo.final
+            .map { (descriptor, version) -> ctx.getMemory(descriptor, version) }
+            .map { it.memory.inner.expr }
+
+    private fun returnValueExpr(ef: Z3ExprFactory, type: KexType) =
+            ef.getVarByTypeAndName(type, "recursion_return_value_stub").expr
 
     private fun DeclarationTracker.findThis() = declarations.filterIsInstance<Declaration.This>().first()
     private fun DeclarationTracker.arguments() = declarations.filterIsInstance<Declaration.Argument>().sortedBy { it.index }
-    private fun DeclarationTracker.memories(version: MemoryVersion) = declarations.filterIsInstance<Declaration.Memory>()
-            .filter { it.version == version }
+    private fun DeclarationTracker.memories(versions: Map<MemoryDescriptor, MemoryVersion>) = declarations
+            .filterIsInstance<Declaration.Memory>()
+            .filter { it.version == versions[it.descriptor] }
             .associateBy { it.descriptor }
 
 }

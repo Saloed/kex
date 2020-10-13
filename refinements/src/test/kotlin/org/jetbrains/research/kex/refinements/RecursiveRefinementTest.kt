@@ -2,14 +2,14 @@ package org.jetbrains.research.kex.refinements
 
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.ChoiceState
-import org.jetbrains.research.kex.state.basic
-import org.jetbrains.research.kex.state.choice
-import org.jetbrains.research.kex.state.trueState
+import org.jetbrains.research.kex.state.*
 import kotlin.test.Test
 
 class RecursiveRefinementTest : RefinementTest("Recursive") {
     private val xcls = KexClass(nestedClass("XCls"))
+    private val immutableIntWrapper = KexClass(nestedClass("ImmutableIntWrapper"))
+    private val mutableIntWrapper = KexClass(nestedClass("MutableIntWrapper"))
+
 
     @Test
     fun testRecursiveSimple() = run("recursiveSimple") {
@@ -93,4 +93,25 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
         }
     }
 
+    @Test
+    fun `recursion with mutable memory simple`() = run("simpleRecursionWithMutableMemory") {
+        refinement(IllegalStateException()) {
+            choice({
+                path { arg(KexInt(), 1) lt 0 equality true }
+            }, {
+                path { arg(mutableIntWrapper, 0).field(KexInt(), "value", mutableIntWrapper).load() + arg(KexInt(), 1) ge 20 equality true }
+            }).withMemoryVersions()
+        }
+    }
+
+    @Test
+    fun `recursion with immutable memory simple`() = run("simpleRecursionWithImmutableMemory") {
+        refinement(IllegalStateException()) {
+            choice({
+                path { arg(KexInt(), 1) lt 0 equality true }
+            }, {
+                path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() + arg(KexInt(), 1) ge 20 equality true }
+            }).withMemoryVersions()
+        }
+    }
 } 

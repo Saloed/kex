@@ -202,7 +202,7 @@ class ${Context} : ${SMTContext} {
     private fun getMemory(memoryAccess: MemoryAccess< * >) = getMemory(memoryAccess.descriptor(), memoryAccess.memoryVersion)
     private fun setMemory(memoryAccess: MemoryAccess< * >, memory: VersionedMemory) = setMemory(memoryAccess.descriptor(), memory.version, memory)
 
-    private fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
+    fun getMemory(descriptor: MemoryDescriptor, version: MemoryVersion): VersionedMemory {
         // log.debug("Get memory: ${ version } ${ descriptor }")
         check(version.type != MemoryVersionType.DEFAULT) { "Default memory" }
         val activeMemory = activeMemories[descriptor]

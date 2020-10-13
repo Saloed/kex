@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.method
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.refinements.MethodApproximationManager
@@ -50,6 +51,8 @@ class NewRecursiveMethodAnalyzer(
                 .toSet()
 
         check(allSources.value.size == 1) { "TODO: sources" }
+
+        log.debug("State:\n$correctedStateWithApproximations\nSources:\n$allSources\nNormals:\n$allNormal")
 
         val singleRefinementSource = allSources.value.first()
         val solver = FixpointSolver(cm)
