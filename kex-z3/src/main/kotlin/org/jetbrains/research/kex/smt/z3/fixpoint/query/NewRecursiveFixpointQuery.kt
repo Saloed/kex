@@ -44,6 +44,7 @@ class NewRecursiveFixpointQuery(
         declarationMapping.initializeCalls(calls)
 
         return FixpointSolverCall(listOf(recursionPredicate), declarationMapping, object : StatementBuilder(ctx, z3State, declarationExprs) {
+            override val definePredicateApps = false
             override fun complicatedPredicates() = listOf(rootPredicate.predicate.asAxiom() as BoolExpr)
             override fun StatementOperation.positiveStatement(): List<BoolExpr> {
                 val statement = ctx.build {

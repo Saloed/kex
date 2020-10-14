@@ -26,46 +26,42 @@ class DebugStatementOperation(
         private val ctx: Z3FixpointSolver.CallCtx,
         private val state: BoolExpr,
         private val declarations: List<Expr>,
-        private val complicatedPredicates: List<BoolExpr>
+        private val complicatedPredicates: List<BoolExpr>,
+        private val definePredicateApps: Boolean
 ) : StatementOperation {
     private val stateDeclaration by lazy {
         val argSorts = declarations.map { it.sort }.toTypedArray()
         ctx.context.mkFuncDecl("state_predicate", argSorts, ctx.context.mkBoolSort())
     }
-    private val predicateAppBindings = arrayListOf<Triple<FuncDecl, Z3FixpointSolver.Predicate, ArgumentDeclarations>>()
-    private val complicatedBindings = arrayListOf<Pair<FuncDecl, BoolExpr>>()
+
     private val predicateAppDeclarations = hashMapOf<String, FuncDecl>()
+    private val predicatesToDefine = hashSetOf<FuncDecl>()
+    private val predicateBindings = arrayListOf<Pair<FuncDecl, BoolExpr>>()
 
     override fun getState() =
             ctx.context.mkApp(stateDeclaration, *declarations.toTypedArray()) as BoolExpr
 
-    override fun applyPredicate(predicate: Z3FixpointSolver.Predicate, arguments: ArgumentDeclarations): BoolExpr {
-        val declaration = predicateAppDeclarations.getOrPut(predicate.name) {
-            val argSorts = declarations.map { it.sort }.toTypedArray()
-            val decl = ctx.context.mkFuncDecl("${predicate.name}_app", argSorts, ctx.context.mkBoolSort())
-            predicateAppBindings += Triple(decl, predicate, arguments)
-            decl
-        }
-        return ctx.context.mkApp(declaration, *declarations.toTypedArray()) as BoolExpr
-    }
+    override fun applyPredicate(predicate: Z3FixpointSolver.Predicate, arguments: ArgumentDeclarations) =
+            wrapPredicateApp(predicate.call(ctx, arguments), predicate.name)
 
-    override fun getComplicatedPredicate(idx: Int): BoolExpr {
-        val predicate = complicatedPredicates[idx]
-        val name = "${predicate.funcDecl.name}"
+    override fun getComplicatedPredicate(idx: Int) =
+            wrapPredicateApp(complicatedPredicates[idx], "${complicatedPredicates[idx].funcDecl.name}")
+
+    private fun wrapPredicateApp(predicateApp: BoolExpr, name: String): BoolExpr {
+        predicatesToDefine += predicateApp.funcDecl
+        if (!definePredicateApps) return predicateApp
         val declaration = predicateAppDeclarations.getOrPut(name) {
             val argSorts = declarations.map { it.sort }.toTypedArray()
-            val decl = ctx.context.mkFuncDecl("${name}_app", argSorts, ctx.context.mkBoolSort())
-            complicatedBindings += decl to predicate
-            decl
+            ctx.context.mkFuncDecl("${name}_app", argSorts, ctx.context.mkBoolSort())
         }
+        predicateBindings += declaration to predicateApp
         return ctx.context.mkApp(declaration, *declarations.toTypedArray()) as BoolExpr
     }
 
-    fun predicatesSmtLibDefinition() = predicateAppBindings.map { (decl, predicate, args) ->
-        val predicateApp = predicate.call(ctx, args)
-        "${predicateApp.funcDecl}\n${defineFun(decl, predicateApp)}"
-    } + complicatedBindings.map { (decl, predicateApp) ->
-        "${predicateApp.funcDecl}\n${defineFun(decl, predicateApp)}"
+    fun predicatesSmtLibDefinition(): List<String> {
+        val predicateDecls = predicatesToDefine.map { "$it" }
+        val bindingDefs = predicateBindings.map { (decl, predicateApp) -> defineFun(decl, predicateApp) }
+        return predicateDecls + bindingDefs
     }
 
     fun stateSmtLibDefinition() = defineFun(stateDeclaration, state)
@@ -79,11 +75,12 @@ class DebugStatementOperation(
 
 abstract class StatementBuilder(private val ctx: Z3FixpointSolver.CallCtx, private val stateInternal: BoolExpr, val declarations: List<Expr>) {
     open fun complicatedPredicates() = emptyList<BoolExpr>()
+    open val definePredicateApps = true
     abstract fun StatementOperation.positiveStatement(): List<BoolExpr>
     abstract fun StatementOperation.queryStatement(): BoolExpr
 
     fun normal() = StatementBuilderExecutor(NormalStatementOperation(ctx, stateInternal, complicatedPredicates()), this)
-    fun debug() = StatementBuilderExecutor(DebugStatementOperation(ctx, stateInternal, declarations, complicatedPredicates()), this)
+    fun debug() = StatementBuilderExecutor(DebugStatementOperation(ctx, stateInternal, declarations, complicatedPredicates(), definePredicateApps), this)
 }
 
 class StatementBuilderExecutor(val statementOp: StatementOperation, val stateOp: StatementBuilder) {
