@@ -51,14 +51,14 @@ class RecursionFixpointSolverQuery(
             override fun StatementOperation.positiveStatement(): List<BoolExpr> {
                 val statement = ctx.build {
                     val statement = (getState() and z3Positive) implies rootPredicate
-                    statement.forall(declarations).optimize()
+                    statement.forall(declarations).typedSimplify()
                 }
                 return listOf(statement)
             }
 
             override fun StatementOperation.queryStatement() = ctx.build {
                 val statement = (getState() and z3Query and rootPredicate) implies context.mkFalse()
-                statement.forall(declarations).optimize()
+                statement.forall(declarations).typedSimplify()
             }
         })
     }

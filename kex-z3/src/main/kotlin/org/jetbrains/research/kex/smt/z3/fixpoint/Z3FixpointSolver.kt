@@ -5,7 +5,6 @@ import com.microsoft.z3.*
 import org.jetbrains.research.kex.smt.z3.Bool_
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3OptionBuilder
-import org.jetbrains.research.kex.smt.z3.expr.Optimizer
 import org.jetbrains.research.kex.smt.z3.fixpoint.converter.FixpointExprFactory
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
@@ -38,19 +37,8 @@ class Z3FixpointSolver(val tf: TypeFactory) {
                 .timeout(100 * 1000)
                 .produceUnsatCores(true)
                 .fp.engine("spacer")
-                .fp.generateProofTrace(true)
-
                 .fp.xform.inlineEager(false)
                 .fp.xform.inlineLinear(false)
-                .fp.xform.compressUnbound(false)
-
-                .fp.datalog.generateExplanations(false)
-                .fp.datalog.similarityCompressor(false)
-                .fp.datalog.unboundCompressor(false)
-                .fp.datalog.subsumption(false)
-
-                .fp.spacer.iuc.debugProof(false)
-                .fp.spacer.q3(false)
                 .fp.spacer.simplifyPob(true)
 
         val fixpointSolver: Solver
@@ -95,10 +83,6 @@ class Z3FixpointSolver(val tf: TypeFactory) {
         operator fun IntExpr.plus(other: IntExpr) = context.mkAdd(this, other) as IntExpr
         operator fun IntExpr.minus(other: IntExpr) = context.mkSub(this, other) as IntExpr
         operator fun IntExpr.rem(other: IntExpr) = context.mkMod(this, other) as IntExpr
-
-        inline fun <reified T : Expr> T.withContext() = translate(context) as T
-
-        fun BoolExpr.optimize(): BoolExpr = Optimizer(context).apply(typedSimplify())
 
         fun BoolExpr.typedSimplify(): BoolExpr = simplify() as BoolExpr
 
