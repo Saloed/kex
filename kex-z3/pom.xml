@@ -13,8 +13,16 @@
 
     <properties>
         <klaxon.version>3.0.6</klaxon.version>
-        <z3.version>4.8.6</z3.version>
+        <z3.version>4.8.9</z3.version>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>bintray-saloed-z3</id>
+            <name>bintray</name>
+            <url>https://dl.bintray.com/saloed/z3</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>
