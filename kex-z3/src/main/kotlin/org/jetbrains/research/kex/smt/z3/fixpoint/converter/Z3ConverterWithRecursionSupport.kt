@@ -40,10 +40,12 @@ class Z3ConverterWithRecursionSupport(
         val (memoryBeforeCall, memoryAfterCall) = updateCallMemory(callApproximation, ef, ctx)
 
         val returnValue = convert(callInfo.resultTerm, ef, ctx)
-        val predicateApp = z3RecursionPredicate.apply(ef, callArguments.first(), callArguments.drop(1), returnValue, memoryBeforeCall, memoryAfterCall)
-        val callAxiom = callArguments.map { it.axiomExpr() }
-                .fold(callInfo.result) { res, ax -> res.withAxiom(ax) }
-        return predicateApp and callAxiom
+        val predicateApp = z3RecursionPredicate.apply(
+                ef,
+                callArguments.first(), callArguments.drop(1), returnValue,
+                memoryBeforeCall, memoryAfterCall
+        )
+        return predicateApp and callInfo.result
     }
 
     private fun updateCallMemory(
@@ -87,11 +89,14 @@ class Z3ConverterWithRecursionSupport(
         ): Bool_ {
             val inputMemoryArrays = memoryDescriptors.map { inputMemory.getValue(it) }.map { it.memory.inner }
             val outputMemoryArrays = memoryDescriptors.map { outputMemory.getValue(it) }.map { it.memory.inner }
+            val axiomSources = listOf(owner, returnValue) + arguments + inputMemoryArrays + outputMemoryArrays
+            val axioms = axiomSources.map { it.axiomExpr() }
+                    .reduceOrNull { acc, ax -> acc.withAxiom(ax) } ?: ef.makeTrue()
             return apply(
                     ef,
                     owner.expr(), arguments.expr(), returnValue.expr(),
                     inputMemoryArrays.arrayExpr(), outputMemoryArrays.arrayExpr()
-            )
+            ).withAxiom(axioms)
         }
 
         fun apply(
@@ -134,15 +139,18 @@ class Z3ConverterWithRecursionSupport(
         val owner = declarationTracker.findThis()
         val arguments = declarationTracker.arguments()
         val predicateArgDeclarations = z3RecursionPredicate.argumentDeclarations(owner, arguments, inputMemory)
+        val outputMemory = outputMemory(ctx)
+        val returnValue = returnValue(ef, z3RecursionPredicate.returnValueType)
 
         val ownerExpr = owner.expr
         val argumentExprs = arguments.map { it.expr }
         val inputMemoryExprs = inputMemory.map { it.expr }
-        val returnValueExpr = returnValueExpr(ef, z3RecursionPredicate.returnValueType)
-        val outputMemoryExprs = outputMemoryExpr(ctx)
-
+        val returnValueExpr = returnValue.expr
+        val outputMemoryExprs = outputMemory.map { it.expr }
         val predicateApp = z3RecursionPredicate.apply(ef, ownerExpr, argumentExprs, returnValueExpr, inputMemoryExprs, outputMemoryExprs)
-        return RootPredicate(predicateApp, predicateArgDeclarations)
+
+        val axiom = outputMemory.fold(returnValue.axiomExpr()) { acc, mem -> acc.withAxiom(mem.axiomExpr()) }
+        return RootPredicate(predicateApp.withAxiom(axiom), predicateArgDeclarations)
     }
 
     private fun inputMemoryDeclarations(
@@ -153,14 +161,14 @@ class Z3ConverterWithRecursionSupport(
         return memoryDeclarations
     }
 
-    private fun outputMemoryExpr(
+    private fun outputMemory(
             ctx: Z3Context,
     ) = memoryVersionInfo.final
             .map { (descriptor, version) -> ctx.getMemory(descriptor, version) }
-            .map { it.memory.inner.expr }
+            .map { it.memory.inner }
 
-    private fun returnValueExpr(ef: Z3ExprFactory, type: KexType) =
-            ef.getVarByTypeAndName(type, "recursion_return_value_stub").expr
+    private fun returnValue(ef: Z3ExprFactory, type: KexType) =
+            ef.getVarByTypeAndName(type, "recursion_return_value_stub")
 
     private fun DeclarationTracker.findThis() = declarations.filterIsInstance<Declaration.This>().first()
     private fun DeclarationTracker.arguments() = declarations.filterIsInstance<Declaration.Argument>().sortedBy { it.index }
