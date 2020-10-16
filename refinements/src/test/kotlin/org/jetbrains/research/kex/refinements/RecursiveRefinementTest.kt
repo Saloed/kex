@@ -2,7 +2,10 @@ package org.jetbrains.research.kex.refinements
 
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.ChoiceState
+import org.jetbrains.research.kex.state.basic
+import org.jetbrains.research.kex.state.choice
+import org.jetbrains.research.kex.state.trueState
 import kotlin.test.Test
 
 class RecursiveRefinementTest : RefinementTest("Recursive") {
@@ -112,6 +115,15 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
             }, {
                 path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() + arg(KexInt(), 1) ge 20 equality true }
             }).withMemoryVersions()
+        }
+    }
+
+    @Test
+    fun `recursive with mutable memory and single class argument`() = run("mutableMemoryOnlyClsArg") {
+        refinement(IllegalStateException()) {
+            basic {
+                path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() le 17 equality true }
+            }
         }
     }
 } 

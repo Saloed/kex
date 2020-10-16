@@ -102,4 +102,12 @@ object Recursive {
             simpleRecursionWithMutableMemory(x, y - 1)
         }
     }
+
+    fun mutableMemoryOnlyClsArg(x: MutableIntWrapper): Int {
+        if (x.value < 0) throw IllegalStateException("1")
+        if (x.value == 17) throw IllegalStateException("2")
+        if (x.value > 100) return 0
+        x.value += 1
+        return mutableMemoryOnlyClsArg(x)
+    }
 }

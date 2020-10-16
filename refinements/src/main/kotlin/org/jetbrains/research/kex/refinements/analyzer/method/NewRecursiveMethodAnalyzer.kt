@@ -7,6 +7,7 @@ import org.jetbrains.research.kex.refinements.MethodApproximationManager
 import org.jetbrains.research.kex.refinements.Refinement
 import org.jetbrains.research.kex.refinements.Refinements
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
+import org.jetbrains.research.kex.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.RefinementSourceBuilder
 import org.jetbrains.research.kex.refinements.analyzer.utils.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.refinements.analyzer.utils.RecursiveCallsAnalyzer
@@ -37,7 +38,9 @@ class NewRecursiveMethodAnalyzer(
         val throwSources = methodPaths.throws.map { ExceptionSource.MethodException(it) }
         val callSources = callPathConditions.map { (call, pc) -> ExceptionSource.CallException(call, pc) }
         val allCriteria = (throwSources + callSources).flatMap { it.criteria() }.toSet()
-        val recursiveSources = recursiveCallInstructions.map { ExceptionSource.RecursiveCallException(it, allCriteria) }
+        val predicateFinder = PredicateStateBuilderWithThrows.forMethod(method)
+        val recursiveSources = recursiveCallInstructions.map { predicateFinder.findPredicateForInstruction(it) as CallPredicate }
+                .map { ExceptionSource.RecursiveCallException(it, allCriteria) }
         val sourceBuilder = RefinementSourceBuilder(method, throwSources + callSources + recursiveSources)
         val allSources = sourceBuilder.buildExceptionSources()
         val allNormal = sourceBuilder.buildNormals(methodPaths.returns)

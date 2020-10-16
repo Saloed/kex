@@ -21,13 +21,17 @@ class Z3ConverterWithRecursionSupport(
         tf: TypeFactory,
         memoryVersionInfo: MemoryVersionInfo,
         private val recursiveCalls: Set<CallPredicate>,
-        val recursionPredicate: Z3FixpointSolver.Predicate
+        val recursionPredicate: Z3FixpointSolver.Predicate,
+        val recursionPathPredicate: Z3FixpointSolver.Predicate
 ) : Z3ConverterWithCallMemory(tf, memoryVersionInfo) {
+    private val recursiveCallTerms = recursiveCalls.map { it.callTerm }.toSet()
+    private val callMemoryInfo = arrayListOf<CallMemoryInfo>()
 
-    private lateinit var z3RecursionPredicateUnsafe: Predicate
+    private lateinit var z3RecursionPredicateUnsafe: RecursionPredicate
+    private lateinit var z3RecursionPathPredicateUnsafe: RecursionPathPredicate
 
     override fun convert(callApproximation: CallApproximationState, ef: Z3ExprFactory, ctx: Z3Context, extractPath: Boolean): Bool_ {
-        if (callApproximation.call !in recursiveCalls) return super.convert(callApproximation, ef, ctx, extractPath)
+        if (callApproximation.call.callTerm !in recursiveCallTerms) return super.convert(callApproximation, ef, ctx, extractPath)
         check(callApproximation.preconditions.isEmpty()) { "Recursive call with preconditions" }
         val call = callApproximation.call
         val z3RecursionPredicate = buildPredicate(ef, ctx)
@@ -59,10 +63,11 @@ class Z3ConverterWithRecursionSupport(
         val memoryAfterCall = ctx.getActive()
         convert(callApproximation.defaultPostcondition.state, ef, ctx)
         convertChoices(listOf(callApproximation.defaultPostcondition.path), ef, ctx)
+        callMemoryInfo += CallMemoryInfo(callApproximation.call, memoryBeforeCall, memoryAfterCall)
         return memoryBeforeCall to memoryAfterCall
     }
 
-    private fun buildPredicate(ef: Z3ExprFactory, ctx: Z3Context): Predicate {
+    private fun buildPredicate(ef: Z3ExprFactory, ctx: Z3Context): RecursionPredicate {
         if (::z3RecursionPredicateUnsafe.isInitialized) return z3RecursionPredicateUnsafe
         val callPrototype = recursiveCalls.first().callTerm
         val ownerSort = callPrototype.owner.type.z3Sort(ef)
@@ -73,11 +78,11 @@ class Z3ConverterWithRecursionSupport(
         val memorySorts = memoryDescriptors.map { it.z3Sort(ctx) }
         val allArgumentSorts = listOf(ownerSort) + argumentSorts + memorySorts + listOf(returnSort) + memorySorts
         val funDecl = ef.ctx.mkFuncDecl(recursionPredicate.name, allArgumentSorts.toTypedArray(), ef.ctx.mkBoolSort())
-        z3RecursionPredicateUnsafe = Predicate(funDecl, memoryDescriptors, returnType)
+        z3RecursionPredicateUnsafe = RecursionPredicate(funDecl, memoryDescriptors, returnType)
         return z3RecursionPredicateUnsafe
     }
 
-    data class Predicate(
+    data class RecursionPredicate(
             val decl: FuncDecl,
             val memoryDescriptors: List<MemoryDescriptor>,
             val returnValueType: KexType
@@ -94,8 +99,8 @@ class Z3ConverterWithRecursionSupport(
                     .reduceOrNull { acc, ax -> acc.withAxiom(ax) } ?: ef.makeTrue()
             return apply(
                     ef,
-                    owner.expr(), arguments.expr(), returnValue.expr(),
-                    inputMemoryArrays.arrayExpr(), outputMemoryArrays.arrayExpr()
+                    owner.expr, arguments.map { it.expr }, returnValue.expr,
+                    inputMemoryArrays.map { it.expr }, outputMemoryArrays.map { it.expr }
             ).withAxiom(axioms)
         }
 
@@ -112,15 +117,63 @@ class Z3ConverterWithRecursionSupport(
 
         fun argumentDeclarations(
                 owner: Declaration, arguments: List<Declaration>, inputMemory: List<Declaration>
-        ): ArgumentDeclarations {
-            return ArgumentDeclarations.createFromOrdered(listOf(owner) + arguments + inputMemory)
+        ) = ArgumentDeclarations.createFromOrdered(listOf(owner) + arguments + inputMemory)
+    }
+
+    override fun convert(call: CallPredicate, ef: Z3ExprFactory, ctx: Z3Context): Bool_ {
+        // in case of different memory versions compare by instructions
+        val recursiveTermInstructions = recursiveCallTerms.map { it.instruction }.toSet()
+        if (call.callTerm.instruction !in recursiveTermInstructions) return super.convert(call, ef, ctx)
+
+        val pathPredicate = buildRecursionPathPredicate(ef, ctx)
+        val callArguments = call.callTerm.subterms.map { convert(it, ef, ctx) }
+        val memory = callMemoryInfo.filter { it.call.callTerm.instruction == call.callTerm.instruction }
+                .distinct()
+                .singleOrNull()?.memoryBefore ?: error("To many memories")
+        return pathPredicate.apply(ef, callArguments.first(), callArguments.drop(1), memory)
+    }
+
+    private fun buildRecursionPathPredicate(ef: Z3ExprFactory, ctx: Z3Context): RecursionPathPredicate {
+        if (::z3RecursionPathPredicateUnsafe.isInitialized) return z3RecursionPathPredicateUnsafe
+        val callPrototype = recursiveCalls.first().callTerm
+        val ownerSort = callPrototype.owner.type.z3Sort(ef)
+        val argumentSorts = callPrototype.arguments.map { it.type.z3Sort(ef) }
+        val memoryDescriptors = memoryVersionInfo.allMemoryVersions.keys.toList()
+        val memorySorts = memoryDescriptors.map { it.z3Sort(ctx) }
+        val allArgumentSorts = listOf(ownerSort) + argumentSorts + memorySorts
+        val funDecl = ef.ctx.mkFuncDecl(recursionPathPredicate.name, allArgumentSorts.toTypedArray(), ef.ctx.mkBoolSort())
+        z3RecursionPathPredicateUnsafe = RecursionPathPredicate(funDecl, memoryDescriptors)
+        return z3RecursionPathPredicateUnsafe
+    }
+
+    data class RecursionPathPredicate(
+            val decl: FuncDecl,
+            val memoryDescriptors: List<MemoryDescriptor>
+    ) {
+        fun apply(ef: Z3ExprFactory, owner: Dynamic_, arguments: List<Dynamic_>, inputMemory: Map<MemoryDescriptor, VersionedMemory>): Bool_ {
+            val inputMemoryArrays = memoryDescriptors.map { inputMemory.getValue(it) }.map { it.memory.inner }
+            val axiomSources = listOf(owner) + arguments + inputMemoryArrays
+            val axioms = axiomSources.map { it.axiomExpr() }
+                    .reduceOrNull { acc, ax -> acc.withAxiom(ax) } ?: ef.makeTrue()
+            return apply(ef, owner.expr, arguments.map { it.expr }, inputMemoryArrays.map { it.expr }).withAxiom(axioms)
         }
 
-        private fun Dynamic_.expr() = expr
-        private fun List<Dynamic_>.expr() = map { it.expr() }
-        private fun Array_<Dynamic_, Ptr_>.arrayExpr() = expr
-        private fun List<Array_<Dynamic_, Ptr_>>.arrayExpr() = map { it.arrayExpr() }
+        fun apply(ef: Z3ExprFactory, owner: Expr, arguments: List<Expr>, inputMemory: List<Expr>): Bool_ {
+            val inputs = listOf(owner) + arguments + inputMemory
+            val predicateApp = ef.ctx.mkApp(decl, *inputs.toTypedArray())
+            return Bool_(ef.ctx, predicateApp)
+        }
+
+        fun argumentDeclarations(
+                owner: Declaration, arguments: List<Declaration>, inputMemory: List<Declaration>
+        ) = ArgumentDeclarations.createFromOrdered(listOf(owner) + arguments + inputMemory)
     }
+
+    data class CallMemoryInfo(
+            val call: CallPredicate,
+            val memoryBefore: Map<MemoryDescriptor, VersionedMemory>,
+            val memoryAfter: Map<MemoryDescriptor, VersionedMemory>
+    )
 
     data class RootPredicate(val predicate: Bool_, val arguments: ArgumentDeclarations)
 
@@ -151,6 +204,23 @@ class Z3ConverterWithRecursionSupport(
 
         val axiom = outputMemory.fold(returnValue.axiomExpr()) { acc, mem -> acc.withAxiom(mem.axiomExpr()) }
         return RootPredicate(predicateApp.withAxiom(axiom), predicateArgDeclarations)
+    }
+
+    fun buildRootPathPredicateApp(declarationTracker: DeclarationTracker, ef: Z3ExprFactory, ctx: Z3Context): RootPredicate {
+        val pathPredicate = buildRecursionPathPredicate(ef, ctx)
+        val allInputMemory = inputMemoryDeclarations(declarationTracker)
+        val inputMemory = pathPredicate.memoryDescriptors.map {
+            allInputMemory[it] ?: error("No memory for descriptor $it")
+        }
+        val owner = declarationTracker.findThis()
+        val arguments = declarationTracker.arguments()
+        val predicateArgDeclarations = pathPredicate.argumentDeclarations(owner, arguments, inputMemory)
+
+        val ownerExpr = owner.expr
+        val argumentExprs = arguments.map { it.expr }
+        val inputMemoryExprs = inputMemory.map { it.expr }
+        val predicateApp = pathPredicate.apply(ef, ownerExpr, argumentExprs, inputMemoryExprs)
+        return RootPredicate(predicateApp, predicateArgDeclarations)
     }
 
     private fun inputMemoryDeclarations(
