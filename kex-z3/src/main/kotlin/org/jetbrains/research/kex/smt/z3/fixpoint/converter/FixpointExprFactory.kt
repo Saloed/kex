@@ -1,22 +1,38 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.converter
 
-import com.microsoft.z3.Sort
-import org.jetbrains.research.kex.smt.z3.*
+import org.jetbrains.research.kex.smt.z3.Z3EngineContext
+import org.jetbrains.research.kex.smt.z3.Z3ExprFactory
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.DeclarationTracker
 
-class FixpointExprFactory private constructor(override val ctx: ContextWithIntSortSizeInfo) : Z3ExprFactory() {
+class FixpointExprFactory private constructor(override val ctx: Z3EngineContext) : Z3ExprFactory() {
     companion object {
-        fun original() = FixpointExprFactory(createContext())
-        fun withDeclarationsTracking(tracker: DeclarationTracker) = FixpointExprFactory(DeclarationTrackingContext(tracker))
-    }
-}
+        class FixpointExprFactoryBuilder {
+            private var ctx: Z3EngineContext? = null
 
-open class DeclarationTrackingContext(val tracker: DeclarationTracker) : ContextWithIntSortSizeInfo() {
-    override fun mkConst(p0: String?, p1: Sort?) = super.mkConst(p0, p1).apply {
-        tracker.add("$this", sort, this)
-    }
+            fun normal(): FixpointExprFactoryBuilder {
+                if (ctx != null) error("Context type already selected")
+                ctx = Z3EngineContext.normal()
+                return this
+            }
 
-    override fun mkFreshConst(p0: String?, p1: Sort?) = super.mkFreshConst(p0, p1).apply {
-        tracker.add("$this", sort, this)
+            fun withFunctionCallSupport(): FixpointExprFactoryBuilder {
+                if (ctx != null) error("Context type already selected")
+                ctx = Z3EngineContext.withFunctionCallSupport()
+                return this
+            }
+
+            fun withDeclarationsTracking(tracker: DeclarationTracker): FixpointExprFactoryBuilder {
+                if (ctx == null) error("Context type is not selected")
+                ctx?.installDeclarationTracker(tracker)
+                return this
+            }
+
+            fun build(): FixpointExprFactory {
+                val engineCtx = ctx ?: error("Context is not set up")
+                return FixpointExprFactory(engineCtx)
+            }
+        }
+
+        fun builder() = FixpointExprFactoryBuilder()
     }
 }

@@ -7,8 +7,8 @@ import org.jetbrains.research.kex.smt.SMTEngine
 
 object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
 
-    private val Context.intSortSize: MutableMap<IntSort, Int>
-        get() = (this as ContextWithIntSortSizeInfo).intSortSize
+    private val Context.intSortSize: MutableMap<Int, Int>
+        get() = (this as Z3EngineContext).intSortSize
 
     override fun makeBound(ctx: Context, size: Int, sort: Sort): Expr = ctx.mkBound(size, sort)
     override fun makePattern(ctx: Context, expr: Expr): Pattern = ctx.mkPattern(expr)
@@ -16,8 +16,8 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     override fun getSort(ctx: Context, expr: Expr): Sort = expr.sort
     override fun getBoolSort(ctx: Context): Sort = ctx.boolSort
     override fun getBVSort(ctx: Context, size: Int): Sort = when (size) {
-        WORD -> ctx.mkIntSort().also { ctx.intSortSize[it] = WORD }
-        DWORD -> ctx.mkIntSort().also { ctx.intSortSize[it] = DWORD }
+        WORD -> ctx.mkIntSort().also { ctx.intSortSize[it.id] = WORD }
+        DWORD -> ctx.mkIntSort().also { ctx.intSortSize[it.id] = DWORD }
         else -> throw IllegalStateException("Unexpected BV size $size")
     }
     override fun getFloatSort(ctx: Context): Sort = ctx.mkFPSortSingle()
@@ -33,7 +33,7 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
     override fun isDoubleSort(ctx: Context, sort: Sort): Boolean = sort is FPSort && sort == ctx.mkFPSortDouble()
 
     override fun bvBitsize(ctx: Context, sort: Sort): Int = when (sort) {
-        is IntSort -> ctx.intSortSize[sort] ?: WORD
+        is IntSort -> ctx.intSortSize[sort.id] ?: WORD
         is BitVecSort -> sort.size
         else -> throw IllegalStateException("Unexpected sort $sort")
     }
@@ -336,5 +336,5 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
 
     override fun isRawBVSort(ctx: Context, sort: Sort): Boolean = sort is BitVecSort
     override fun rawBv2bv(ctx: Context, expr: Expr): Expr =
-            ctx.mkBV2Int(expr as BitVecExpr, true).also { ctx.intSortSize[it.sort as IntSort] = expr.sortSize }
+            ctx.mkBV2Int(expr as BitVecExpr, true).also { ctx.intSortSize[it.sort.id] = expr.sortSize }
 }

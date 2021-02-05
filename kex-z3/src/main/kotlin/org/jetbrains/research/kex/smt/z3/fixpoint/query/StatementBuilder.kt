@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query
 
 import com.microsoft.z3.*
+import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtx
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
 
@@ -11,9 +12,9 @@ interface StatementOperation {
 }
 
 class NormalStatementOperation(
-        private val ctx: Z3FixpointSolver.CallCtx,
-        private val state: BoolExpr,
-        private val complicatedPredicates: List<BoolExpr>
+    private val ctx: FixpointCallCtx,
+    private val state: BoolExpr,
+    private val complicatedPredicates: List<BoolExpr>
 ) : StatementOperation {
     override fun getState() = state
     override fun applyPredicate(predicate: Z3FixpointSolver.Predicate, arguments: ArgumentDeclarations) =
@@ -23,11 +24,11 @@ class NormalStatementOperation(
 }
 
 class DebugStatementOperation(
-        private val ctx: Z3FixpointSolver.CallCtx,
-        private val state: BoolExpr,
-        private val declarations: List<Expr>,
-        private val complicatedPredicates: List<BoolExpr>,
-        private val definePredicateApps: Boolean
+    private val ctx: FixpointCallCtx,
+    private val state: BoolExpr,
+    private val declarations: List<Expr>,
+    private val complicatedPredicates: List<BoolExpr>,
+    private val definePredicateApps: Boolean
 ) : StatementOperation {
     private val stateDeclaration by lazy {
         val argSorts = declarations.map { it.sort }.toTypedArray()
@@ -73,7 +74,7 @@ class DebugStatementOperation(
     }
 }
 
-abstract class StatementBuilder(private val ctx: Z3FixpointSolver.CallCtx, private val stateInternal: BoolExpr, val declarations: List<Expr>) {
+abstract class StatementBuilder(private val ctx: FixpointCallCtx, private val stateInternal: BoolExpr, val declarations: List<Expr>) {
     open fun complicatedPredicates() = emptyList<BoolExpr>()
     open val definePredicateApps = true
     abstract fun StatementOperation.positiveStatement(): List<BoolExpr>

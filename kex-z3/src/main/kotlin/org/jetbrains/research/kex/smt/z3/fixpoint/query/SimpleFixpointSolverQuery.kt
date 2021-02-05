@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.smt.z3.fixpoint.query
 
 import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.BoolExpr
+import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtx
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithCallMemory
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
@@ -19,12 +20,12 @@ class SimpleFixpointSolverQuery(
         val ignoredCalls: Set<CallPredicate>,
         val memoryVersionInfo: MemoryVersionInfo
 ) : FixpointSolverQuery() {
-    override val Z3FixpointSolver.CallCtx.psConverter: Z3ConverterWithCallMemory
+    override val FixpointCallCtx.psConverter: Z3ConverterWithCallMemory
         get() = converter as Z3ConverterWithCallMemory
 
     override fun makeConverter(tf: TypeFactory) = Z3ConverterWithCallMemory(tf, memoryVersionInfo)
     override fun allStatesForMemoryInitialization() = listOf(state, query) + positivePaths
-    override fun makeQuery(ctx: Z3FixpointSolver.CallCtx): FixpointSolverCall {
+    override fun makeQuery(ctx: FixpointCallCtx): FixpointSolverCall {
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
         }

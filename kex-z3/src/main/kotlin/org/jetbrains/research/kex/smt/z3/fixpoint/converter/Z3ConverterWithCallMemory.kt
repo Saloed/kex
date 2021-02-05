@@ -27,7 +27,7 @@ open class Z3ConverterWithCallMemory(tf: TypeFactory, val memoryVersionInfo: Mem
 
     val callInfo = hashMapOf<CallPredicate, CallInfo>()
     fun getCallsInfo(): List<CallInfo> = callInfo.values.toList()
-    private val callStack = dequeOf<CallPredicate>()
+    protected val callStack = dequeOf<CallPredicate>()
 
     override fun convert(callApproximation: CallApproximationState, ef: Z3ExprFactory, ctx: Z3Context, extractPath: Boolean): Bool_ {
         if (extractPath) return ef.makeTrue()

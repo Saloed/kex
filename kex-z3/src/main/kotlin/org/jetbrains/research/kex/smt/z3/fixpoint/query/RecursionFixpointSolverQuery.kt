@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query
 
 import com.microsoft.z3.BoolExpr
+import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtx
 import org.jetbrains.research.kex.smt.z3.fixpoint.UnknownCallsProcessor
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithRecursion
@@ -21,10 +22,10 @@ class RecursionFixpointSolverQuery(
     private val recursionPredicate = Z3FixpointSolver.Predicate(0)
     override fun allStatesForMemoryInitialization() = listOf(state, positive, query, recursionPath)
     override fun makeConverter(tf: TypeFactory) = Z3ConverterWithRecursion(recursiveCalls, rootCall, recursionPredicate.name, tf)
-    override val Z3FixpointSolver.CallCtx.psConverter: Z3ConverterWithRecursion
+    override val FixpointCallCtx.psConverter: Z3ConverterWithRecursion
         get() = converter as Z3ConverterWithRecursion
 
-    override fun makeQuery(ctx: Z3FixpointSolver.CallCtx): FixpointSolverCall {
+    override fun makeQuery(ctx: FixpointCallCtx): FixpointSolverCall {
         val unknownCallsProcessor = UnknownCallsProcessor(ignore = recursiveCalls.keys, replaceWithArray = false) + state + recursionPath + positive + query
         if (unknownCallsProcessor.hasUnknownCalls()) throw IllegalArgumentException("Recursive with unknowns")
 

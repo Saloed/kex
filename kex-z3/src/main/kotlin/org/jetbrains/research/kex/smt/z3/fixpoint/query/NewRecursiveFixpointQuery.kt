@@ -1,28 +1,40 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query
 
 import com.microsoft.z3.BoolExpr
+import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtx
+import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtxWithFunctionCalls
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithRecursionSupport
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.transformer.PredicateCollector
 import org.jetbrains.research.kfg.type.TypeFactory
 
 class NewRecursiveFixpointQuery(
-        val state: PredicateState,
-        val positivePath: PredicateState,
-        val query: PredicateState,
-        val memoryVersionInfo: MemoryVersionInfo,
-        val recursiveCallPredicates: Set<CallPredicate>
+    val state: PredicateState,
+    val positivePath: PredicateState,
+    val query: PredicateState,
+    val memoryVersionInfo: MemoryVersionInfo,
+    val recursiveCallPredicates: Set<CallPredicate>
 ) : FixpointSolverQuery() {
+
+    override fun mkContext(tf: TypeFactory): FixpointCallCtx {
+        val stateCalls = PredicateCollector.collectIsInstance<CallPredicate>(state)
+        if (stateCalls.all { it in recursiveCallPredicates }) return super.mkContext(tf)
+        return FixpointCallCtxWithFunctionCalls(tf, this)
+    }
+
     private val recursionPredicate = Z3FixpointSolver.Predicate(0)
-    override val Z3FixpointSolver.CallCtx.psConverter: Z3ConverterWithRecursionSupport
+    override val FixpointCallCtx.psConverter: Z3ConverterWithRecursionSupport
         get() = converter as Z3ConverterWithRecursionSupport
 
-    override fun makeConverter(tf: TypeFactory) = Z3ConverterWithRecursionSupport(tf, memoryVersionInfo, recursiveCallPredicates, recursionPredicate)
+    override fun makeConverter(tf: TypeFactory) =
+        Z3ConverterWithRecursionSupport(tf, memoryVersionInfo, recursiveCallPredicates, recursionPredicate)
+
     override fun allStatesForMemoryInitialization() = listOf(state, query, positivePath)
-    override fun makeQuery(ctx: Z3FixpointSolver.CallCtx): FixpointSolverCall {
+    override fun makeQuery(ctx: FixpointCallCtx): FixpointSolverCall {
         val z3State = ctx.build {
             convert(state).asAxiom() as BoolExpr
         }
@@ -38,26 +50,29 @@ class NewRecursiveFixpointQuery(
         val calls = ctx.psConverter.getCallsInfo()
         val declarationExprs = ctx.knownDeclarations.map { it.expr }
         val declarationMapping = ModelDeclarationMapping.create(
-                rootPredicate.arguments, memoryVersionInfo,
-                state, positivePath, query
+            rootPredicate.arguments, memoryVersionInfo,
+            state, positivePath, query
         )
         declarationMapping.initializeCalls(calls)
 
-        return FixpointSolverCall(listOf(recursionPredicate), declarationMapping, object : StatementBuilder(ctx, z3State, declarationExprs) {
-            override val definePredicateApps = false
-            override fun complicatedPredicates() = listOf(rootPredicate.predicate.asAxiom() as BoolExpr)
-            override fun StatementOperation.positiveStatement(): List<BoolExpr> {
-                val statement = ctx.build {
-                    val statement = (getState() and z3positive) implies getComplicatedPredicate(0)
+        return FixpointSolverCall(
+            listOf(recursionPredicate),
+            declarationMapping,
+            object : StatementBuilder(ctx, z3State, declarationExprs) {
+                override val definePredicateApps = false
+                override fun complicatedPredicates() = listOf(rootPredicate.predicate.asAxiom() as BoolExpr)
+                override fun StatementOperation.positiveStatement(): List<BoolExpr> {
+                    val statement = ctx.build {
+                        val statement = (getState() and z3positive) implies getComplicatedPredicate(0)
+                        statement.forall(declarations).typedSimplify()
+                    }
+                    return listOf(statement)
+                }
+
+                override fun StatementOperation.queryStatement() = ctx.build {
+                    val statement = (getState() and z3query and getComplicatedPredicate(0)) implies context.mkFalse()
                     statement.forall(declarations).typedSimplify()
                 }
-                return listOf(statement)
-            }
-
-            override fun StatementOperation.queryStatement() = ctx.build {
-                val statement = (getState() and z3query and getComplicatedPredicate(0)) implies context.mkFalse()
-                statement.forall(declarations).typedSimplify()
-            }
-        })
+            })
     }
 }
