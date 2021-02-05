@@ -102,4 +102,60 @@ object Recursive {
             simpleRecursionWithMutableMemory(x, y - 1)
         }
     }
+
+    fun mutableMemoryOnlyClsArg(x: MutableIntWrapper): Int {
+        if (x.value < 0) throw IllegalStateException("1")
+        if (x.value == 17) throw IllegalStateException("2")
+        if (x.value > 100) return 0
+        x.value += 1
+        return mutableMemoryOnlyClsArg(x)
+    }
+
+    fun mutableMemoryDependency(x: MutableIntWrapper, depth: Int): Int {
+        x.value -= 1
+        if (x.value < 0) return 0
+        if (depth > 100) return 1
+        mutableMemoryDependency(x, depth + 1)
+        if (x.value != 0) throw IllegalStateException("2")
+        return 0
+    }
+
+    fun mutableMemoryDependencyCounter(x: MutableIntWrapper): Int {
+        if (x.value > 100) return 100
+        val valueBefore = x.value
+        x.value += 1
+        mutableMemoryDependencyCounter(x)
+        x.value -= 1
+        if (x.value != valueBefore) throw IllegalStateException("Counter failed")
+        return 0
+    }
+
+    fun mutableMemoryDependencyCounterWithDepth(x: MutableIntWrapper, depth: Int): Int {
+        if (depth <= 0) return 0
+        x.value += 1
+        mutableMemoryDependencyCounterWithDepth(x, depth - 1)
+        if (x.value == 17) throw IllegalStateException("Counter failed")
+        return 0
+    }
+
+    fun preventFromInlining() {}
+
+    fun someNonRecursiveFunction(x: MutableIntWrapper): Int {
+        preventFromInlining()
+        if (x.value > 17) {
+            throw IllegalArgumentException("Bad argument")
+        }
+        val oldValue = x.value
+        x.value += 3
+        return oldValue
+    }
+
+    fun recursiveWithFunctionCalls(x: MutableIntWrapper): Int {
+        x.value += 2
+        if (x.value > 19) return 0
+        val oldX = someNonRecursiveFunction(x)
+        if (oldX == 15) throw IllegalArgumentException("More exceptions")
+        return recursiveWithFunctionCalls(x)
+    }
 }
+

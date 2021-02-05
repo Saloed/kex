@@ -114,4 +114,41 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
             }).withMemoryVersions()
         }
     }
-} 
+
+    @Test
+    fun `recursive with mutable memory and single class argument`() = run("mutableMemoryOnlyClsArg") {
+        refinement(IllegalStateException()) {
+            basic {
+                path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() le 17 equality true }
+            }
+        }
+    }
+
+    @Test
+    fun `recursive with dependency on mutable memory`() = run("mutableMemoryDependency") {
+        refinement(IllegalStateException()) {
+            emptyState()
+        }
+    }
+
+    @Test
+    fun `recursive mutable counter`() = run("mutableMemoryDependencyCounter") {
+        refinement(IllegalStateException()) {
+            falseState()
+        }
+    }
+
+    @Test
+    fun `recursive mutable counter with depth`() = run("mutableMemoryDependencyCounterWithDepth") {
+        refinement(IllegalStateException()) {
+            emptyState()
+        }
+    }
+
+    @Test
+    fun `recursive with memory dependency on function call`() = run("recursiveWithFunctionCalls") {
+        refinement(IllegalArgumentException()) {
+            emptyState()
+        }
+    }
+}

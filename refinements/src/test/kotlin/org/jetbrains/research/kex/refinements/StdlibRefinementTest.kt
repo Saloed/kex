@@ -5,7 +5,7 @@ import kotlin.test.Ignore
 import kotlin.test.Test
 
 @Ignore
-class StdlibRefinementTest : RefinementTest("Stdlib", includeStdlib = true, failOnError = false) {
+class StdlibRefinementTest : RefinementTest("Stdlib", includeStdlib = false, failOnError = false) {
     @Test
     fun testUnsafeFirstInt() = run("unsafeFirstInt") {
         refinement(NoSuchElementException()) {

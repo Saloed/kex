@@ -3,7 +3,7 @@
 import kotlin.math.min
 import kotlin.reflect.KClass
 
-class ${Memory}< in Index : PtrBase_, Element : Dynamic_ >(val ctx: ContextWithIntSortSizeInfo, val type: KClass< out Element >, val inner: Array_< Element, Index >) : ${SMTMemory}() {
+class ${Memory}< in Index : PtrBase_, Element : Dynamic_ >(val ctx: SolverContext_, val type: KClass< out Element >, val inner: Array_< Element, Index >) : ${SMTMemory}() {
     fun < T : Dynamic_> load(index: Index, type: KClass< out Element >) = Dynamic_.forceCast(inner.load(index), type) as T
     fun store(index: Index, element: Element): Memory_< Index, Element> = Memory_(ctx, type, inner.store(index, element))
     operator fun set(index: Index, value: Element) = store(index, value)
@@ -17,12 +17,12 @@ class ${Memory}< in Index : PtrBase_, Element : Dynamic_ >(val ctx: ContextWithI
     }
 
     companion object {
-        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeDefault(ctx: ContextWithIntSortSizeInfo, name: String, default: Element, type: KClass< out Element >): Memory_< Index, Element > {
+        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeDefault(ctx: SolverContext_, name: String, default: Element, type: KClass< out Element >): Memory_< Index, Element > {
             val array = Array_.makeDefault< Element, Index>(ctx, name, default)
             return Memory_(ctx, type, array)
         }
 
-        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeFree(ctx: ContextWithIntSortSizeInfo, name: String, type: KClass< out Element >): Memory_< Index, Element> {
+        inline fun < reified Index : PtrBase_, Element : Dynamic_> makeFree(ctx: SolverContext_, name: String, type: KClass< out Element >): Memory_< Index, Element> {
             val elSort = Dynamic_.getStaticSort(ctx, type)
             val idxSort = Dynamic_.getStaticSort< Index>(ctx)
             val array = Array_.makeFree< Element, Index>(ctx, name, elSort, idxSort)
