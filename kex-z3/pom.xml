@@ -18,9 +18,9 @@
 
     <repositories>
         <repository>
-            <id>bintray-saloed-z3</id>
-            <name>bintray</name>
-            <url>https://dl.bintray.com/saloed/z3</url>
+          <id>github</id>
+          <name>GitHub Saloed z3</name>
+          <url>https://maven.pkg.github.com/saloed/z3</url>
         </repository>
     </repositories>
 
