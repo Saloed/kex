@@ -1,6 +1,17 @@
 package org.jetbrains.research.kex.smt.z3
 
 import org.jetbrains.research.kex.KexTest
+//import com.microsoft.z3.*
+//import org.jetbrains.research.kex.ktype.KexInt
+//import org.jetbrains.research.kex.state.memory.MemoryAccessScope
+//import org.jetbrains.research.kex.state.memory.MemoryDescriptor
+//import org.jetbrains.research.kex.state.memory.MemoryType
+//import org.jetbrains.research.kex.state.memory.MemoryVersion
+//import org.jetbrains.research.kex.smt.z3.Dynamic_
+//import kotlin.test.Test
+//import kotlin.test.assertEquals
+//import kotlin.test.assertTrue
+//import kotlin.test.assertFalse
 
 class Z3SolverTest : KexTest() {
 //    @Test
