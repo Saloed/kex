@@ -205,7 +205,7 @@ class NewRecursiveFixpointQuery(
             convertCtx.setUpInitialMemory(eCtx, argMapping.inMemory.toMap())
             convertCtx.resetMemory()
             val result = ctx.converter.convert(resultPs, convertEf, convertCtx)
-            return result.expr // fixme: axiom
+            return result.asAxiom()
         }
 
         private fun convertQueryExpressionToPS(
