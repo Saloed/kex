@@ -92,11 +92,15 @@ data class RefinementSources private constructor(val value: List<RefinementSourc
             }
             .let { RefinementSources(it) }
 
-    fun merge(other: RefinementSources): RefinementSources {
+    fun merge(other: RefinementSources) = merge(other) { myCondition, otherCondition ->
+        ChoiceState(listOf(myCondition, otherCondition))
+    }
+
+    fun merge(other: RefinementSources, mergeConditions: (PredicateState, PredicateState) -> PredicateState): RefinementSources {
         val lhs = this.value.groupBy { it.criteria }
         val rhs = other.value.groupBy { it.criteria }
         val merged = (lhs.keys + rhs.keys).map {
-            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b) }
+            ((lhs[it] ?: emptyList()) + (rhs[it] ?: emptyList())).reduce { a, b -> a.merge(b, mergeConditions) }
         }
         return RefinementSources(merged)
     }
@@ -128,9 +132,9 @@ data class RefinementSource private constructor(val criteria: RefinementCriteria
 
     fun fmap(transform: (PredicateState) -> PredicateState) = RefinementSource(criteria, transform(state))
 
-    fun merge(other: RefinementSource): RefinementSource {
+    fun merge(other: RefinementSource, mergeConditions: (PredicateState, PredicateState) -> PredicateState): RefinementSource {
         if (criteria != other.criteria) throw IllegalArgumentException("Try to merge different refinement conditions")
-        val mergedCondition = ChoiceState(listOf(state, other.state))
+        val mergedCondition = mergeConditions(state, other.state)
         return RefinementSource(criteria, mergedCondition)
     }
 

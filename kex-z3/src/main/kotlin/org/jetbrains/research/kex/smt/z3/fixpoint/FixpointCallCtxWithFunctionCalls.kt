@@ -15,7 +15,7 @@ class FixpointCallCtxWithFunctionCalls(
 
     override fun mkOptions() = Z3OptionBuilder()
         .fp.engine("spacer")
-        .fp.xform.inlineEager(false)
-        .fp.xform.inlineLinear(false)
-        .fp.spacer.simplifyPob(true)
+//        .fp.xform.inlineEager(false)
+//        .fp.xform.inlineLinear(false)
+//        .fp.spacer.simplifyPob(true)
 }

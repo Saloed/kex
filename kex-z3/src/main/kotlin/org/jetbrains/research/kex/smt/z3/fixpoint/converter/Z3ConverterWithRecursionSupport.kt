@@ -117,17 +117,32 @@ class Z3ConverterWithRecursionSupport(
         val memoryDescriptors = memoryVersionInfo.allMemoryVersions.keys.toList()
         val argsInfo = externalFunctionInfo.getOrPut(call.index) {
             val callArguments = call.predicate.callTerm.subterms
-            val numInArgs = callArguments.size + memoryDescriptors.size
-            val numOutArgs = memoryDescriptors.size + 1
-            ExternalCallArgumentsInfo(call.index, numInArgs, numOutArgs)
+            ExternalCallArgumentsInfo(
+                call.index,
+                callArguments.size,
+                memoryDescriptors.size,
+                1,
+                memoryDescriptors.size,
+                memoryDescriptors
+            )
         }
         return ExternalFunctionCall(memoryDescriptors, argsInfo)
     }
 
-    data class ExternalCallArgumentsInfo(val functionId: Int, val inArgs: Int, val outArgs: Int) : FunctionCallInfo {
+    val externalFunctionsInfo: Map<Int, ExternalCallArgumentsInfo>
+        get() = externalFunctionInfo
+
+    data class ExternalCallArgumentsInfo(
+        val functionId: Int,
+        val inArgs: Int,
+        val inMemories: Int,
+        val outArgs: Int,
+        val outMemories: Int,
+        val memoryDescriptors: List<MemoryDescriptor>
+    ) : FunctionCallInfo {
         override fun getId(): Int = functionId
-        override fun getNumInArgs(): Int = inArgs
-        override fun getNumOutArgs(): Int = outArgs
+        override fun getNumInArgs(): Int = inArgs + inMemories
+        override fun getNumOutArgs(): Int = outArgs + outMemories
     }
 
     interface FunctionCaller {

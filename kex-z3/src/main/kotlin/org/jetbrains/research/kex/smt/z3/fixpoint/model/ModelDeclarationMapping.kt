@@ -1,5 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
+import org.jetbrains.research.kex.ktype.KexType
+import org.jetbrains.research.kex.smt.z3.SolverExpr_
 import org.jetbrains.research.kex.smt.z3.fixpoint.converter.Z3ConverterWithCallMemory
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
@@ -13,8 +15,8 @@ import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.ValueTerm
 import org.jetbrains.research.kex.state.transformer.collectArguments
 
-class ModelDeclarationMapping(val arguments: ArgumentDeclarations) {
-    private val terms = hashMapOf<Declaration, Term>()
+open class ModelDeclarationMapping(val arguments: ArgumentDeclarations) {
+    val terms = hashMapOf<Declaration, Term>()
     val callDependentDeclarations = hashMapOf<Pair<MemoryDescriptor, MemoryVersion>, Z3ConverterWithCallMemory.CallInfo>()
     val calls = hashMapOf<Int, Z3ConverterWithCallMemory.CallInfo>()
 
@@ -60,6 +62,10 @@ class ModelDeclarationMapping(val arguments: ArgumentDeclarations) {
                 ?: error("No term for declaration $idx: ${arguments[idx]}")
         if (term is CallTerm) error("Unexpected CallTerm")
         return term
+    }
+
+    open fun getConst(expr: SolverExpr_, type: KexType, callDependencies: MutableSet<TermDependency>): Term {
+        error("Unsupported operation")
     }
 
     private fun collectArguments(ps: Array<out PredicateState>): Pair<ValueTerm?, Map<Int, ArgumentTerm>> {

@@ -65,7 +65,7 @@ open class ${Factory} : ${SMTFactory}() {
         Memory_.makeDefault< Ptr_, Element >(ctx, id, makeIntConst(default) as Element, type)
 
 #set($types = ["Bool", "Short", "Char", "Int", "Long", "Float", "Double"])
-    fun getVarByTypeAndName(type: KexType, name: String, fresh: Boolean = false) = when(type) {
+    open fun getVarByTypeAndName(type: KexType, name: String, fresh: Boolean = false) = when(type) {
 #foreach($type in $types)
         is Kex${type} -> make${type}(name, fresh)
 #end

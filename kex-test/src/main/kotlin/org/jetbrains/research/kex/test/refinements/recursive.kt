@@ -157,5 +157,18 @@ object Recursive {
         if (oldX == 15) throw IllegalArgumentException("More exceptions")
         return recursiveWithFunctionCalls(x)
     }
+
+    fun simpleNonRecursiveFunction(a: Int): Int {
+        preventFromInlining()
+        return a + 5
+    }
+
+    fun recursiveWithFunctionCallsSimple(x: Int): Int {
+        if (x > 100) return x
+        val tmp = simpleNonRecursiveFunction(x)
+        if (tmp <= 17) throw IllegalArgumentException("Ex")
+        return recursiveWithFunctionCallsSimple(tmp + 1)
+    }
+
 }
 

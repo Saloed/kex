@@ -16,7 +16,11 @@ import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.value.instruction.Instruction
 import org.jetbrains.research.kfg.ir.value.instruction.ReturnInst
 
-class RefinementSourceBuilder(val method: Method, val sources: List<ExceptionSource>) {
+class RefinementSourceBuilder(
+    val method: Method,
+    val sources: List<ExceptionSource>,
+    private val optimize: Boolean = true
+) {
     private val stateBuilder = PredicateStateBuilderWithThrows.forMethod(method)
     private val sourceByInstruction = sources.associateBy { it.instruction }
 
@@ -25,7 +29,7 @@ class RefinementSourceBuilder(val method: Method, val sources: List<ExceptionSou
         if (nonEmptySources.isEmpty()) return RefinementSources.empty()
         val refinementSources = nonEmptySources.map { buildExceptionPathsForSource(it) }
                 .fold(RefinementSources.empty()) { res, source -> res.merge(source) }
-        return refinementSources.fmap { it.optimize() }
+        return refinementSources.fmap { it.optimizeIfEnabled() }
     }
 
     fun buildNormals(returns: List<ReturnInst>): PredicateState {
@@ -34,7 +38,12 @@ class RefinementSourceBuilder(val method: Method, val sources: List<ExceptionSou
             1 -> normalsForSingleReturn(returns.first())
             else -> error("Too many return instructions")
         }
-        return normalExecutionPaths.optimize()
+        return normalExecutionPaths.optimizeIfEnabled()
+    }
+
+    private fun PredicateState.optimizeIfEnabled() = when {
+        optimize -> optimize()
+        else -> this
     }
 
     private fun normalsForNoReturns(): PredicateState {

@@ -151,4 +151,12 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
             emptyState()
         }
     }
+
+    @Test
+    fun `simple recursion with function call`() = run("recursiveWithFunctionCallsSimple") {
+        refinement(IllegalArgumentException()) {
+            emptyState()
+        }
+    }
+
 }

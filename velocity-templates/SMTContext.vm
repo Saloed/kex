@@ -23,7 +23,7 @@ data class VersionedMemory(val memory: Memory_< Ptr_, Dynamic_ >, val version: M
 
 internal data class VersionedMemoryDescriptor(val descriptor: MemoryDescriptor, val version: MemoryVersion)
 
-class ${Context} : ${SMTContext} {
+open class ${Context} : ${SMTContext} {
     companion object {
         const val BASE_LOCAL_PTR = (1 shl 10) + 1
         const val BASE_STATIC_PTR = (1 shl 24) + 1
@@ -49,7 +49,7 @@ class ${Context} : ${SMTContext} {
     private val staticTypes: MutableMap< Int, KexType >
     private val typeIndex: AtomicInteger
     private val typeMap: MutableMap< KexType, Int >
-    private val initialMemories: MutableMap< MemoryDescriptor, VersionedMemory >
+    protected val initialMemories: MutableMap< MemoryDescriptor, VersionedMemory >
     private var activeMemories: MutableMap< MemoryDescriptor, VersionedMemory >
     private var archiveMemories: MutableMap< VersionedMemoryDescriptor, VersionedMemory >
 

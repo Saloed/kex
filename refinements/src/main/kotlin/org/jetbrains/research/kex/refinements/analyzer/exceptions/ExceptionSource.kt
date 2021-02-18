@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.refinements.analyzer.exceptions
 
 import org.jetbrains.research.kex.refinements.PathConditions
 import org.jetbrains.research.kex.refinements.RefinementCriteria
+import org.jetbrains.research.kex.state.falseState
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.trueState
 import org.jetbrains.research.kfg.ir.value.instruction.CallInst
@@ -45,9 +46,10 @@ sealed class ExceptionSource {
 
     data class RecursiveCallException(
             override val instruction: CallInst,
-            val criteria: Set<RefinementCriteria>
+            val criteria: Set<RefinementCriteria>,
+            private val callIsException: Boolean = true
     ) : ExceptionSource() {
-        override val path = PathConditions(criteria.associateWith { trueState() })
+        override val path = PathConditions(criteria.associateWith { if (callIsException) trueState() else falseState() })
         override fun criteria() = criteria
         override fun toString(): String = "RecursiveCall: $instruction"
     }

@@ -4,6 +4,7 @@ import com.abdullin.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import com.microsoft.z3.enumerations.Z3_lbool
+import com.microsoft.z3.enumerations.Z3_sort_kind
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.smt.z3.Z3Unlogic
@@ -40,9 +41,9 @@ internal class ConverterContext {
 }
 
 class FixpointModelConverter(
-        private val mapping: ModelDeclarationMapping,
-        private val tf: TypeFactory,
-        private val z3Context: Z3Context
+    private val mapping: ModelDeclarationMapping,
+    private val tf: TypeFactory,
+    private val z3Context: Z3Context
 ) {
     private lateinit var converterContext: ConverterContext
 
@@ -51,26 +52,26 @@ class FixpointModelConverter(
         val rawPath = convert(expr.simplify())
         val rawState = converterContext.stateBuilder.apply()
         val state = rawState
-                .let { ComparisonNormalizer().apply(it) }
-                .let { Optimizer.apply(it) }
-                .let { InstanceOfCorrector(z3Context, tf).apply(it) }
-                .simplify()
+            .let { ComparisonNormalizer().apply(it) }
+            .let { Optimizer.apply(it) }
+            .let { InstanceOfCorrector(z3Context, tf).apply(it) }
+            .simplify()
         val path = Optimizer.apply(rawPath)
         analyzeMemoryDependencies(state)
         MemoryUtils.verifyVersions(state)
         return RecoveredModel(
-                PredicateStateWithPath(state, path),
-                converterContext.callDependencies.toSet(),
-                converterContext.pathVarGenerator.generatedVariables().toSet(),
-                converterContext.tmpVarGenerator.generatedVariables().toSet()
+            PredicateStateWithPath(state, path),
+            converterContext.callDependencies.toSet(),
+            converterContext.pathVarGenerator.generatedVariables().toSet(),
+            converterContext.tmpVarGenerator.generatedVariables().toSet()
         )
     }
 
     private fun analyzeMemoryDependencies(state: PredicateState) = converterContext.callDependencies.plusAssign(
-            MemoryUtils.collectMemoryAccesses(state).mapNotNull { memAccess ->
-                mapping.callDependentDeclarations[memAccess.descriptor() to memAccess.memoryVersion]
-                        ?.let { TermDependency.MemoryDependency(memAccess, it.index, it.predicate) }
-            }
+        MemoryUtils.collectMemoryAccesses(state).mapNotNull { memAccess ->
+            mapping.callDependentDeclarations[memAccess.descriptor() to memAccess.memoryVersion]
+                ?.let { TermDependency.MemoryDependency(memAccess, it.index, it.predicate) }
+        }
     )
 
 
@@ -131,7 +132,17 @@ class FixpointModelConverter(
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
         expr.isRealToInt -> expr.convertArgs().first().let { term { it primitiveAs KexInt() } }
+        expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
         else -> TODO()
+    }
+
+    private fun expressionKexType(varExpr: Expr): KexType = when (varExpr.sort.sortKind) {
+        Z3_sort_kind.Z3_BOOL_SORT -> KexBool()
+        Z3_sort_kind.Z3_INT_SORT -> KexInt()
+        Z3_sort_kind.Z3_ARRAY_SORT -> TODO()
+        Z3_sort_kind.Z3_BV_SORT -> TODO()
+        Z3_sort_kind.Z3_REAL_SORT -> TODO()
+        else -> error("Unexpected expression sort: ${varExpr.sort}")
     }
 
     private fun convertBVTerm(expr: BitVecExpr): Term = when {
@@ -143,7 +154,10 @@ class FixpointModelConverter(
 
     private fun convertFPTerm(expr: FPExpr): Term = when {
         expr is FPNum -> Z3Unlogic.undo(expr)
-        expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_ADD -> listOf(expr.args[1], expr.args[2]).map { convertTerm(it) }.combine { a, b -> a add b }
+        expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_ADD -> listOf(
+            expr.args[1],
+            expr.args[2]
+        ).map { convertTerm(it) }.combine { a, b -> a add b }
         expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_TO_FP -> convertTerm(expr.args[1])
         expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_NEG -> convertTerm(expr.args[0]).let { term { it.not() } }
         else -> TODO()
@@ -191,7 +205,7 @@ class FixpointModelConverter(
     private fun convertComplexMemoryArray(expr: ArrayExpr): Pair<Term, Declaration.Memory> = when {
         expr.isVar -> {
             val decl = mapping.arguments[expr.index] as? Declaration.Memory
-                    ?: error("Non memory declaration")
+                ?: error("Non memory declaration")
             term { const(true) } to decl
         }
         expr.isStore && expr.numArgs == 3 -> {
@@ -201,14 +215,19 @@ class FixpointModelConverter(
         else -> TODO()
     }
 
-    private fun convertComplexMemoryArrayStore(memoryExpr: Expr, locationExpr: Expr, valueExpr: Expr): Pair<Term, Declaration.Memory> {
+    private fun convertComplexMemoryArrayStore(
+        memoryExpr: Expr,
+        locationExpr: Expr,
+        valueExpr: Expr
+    ): Pair<Term, Declaration.Memory> {
         val (_, memoryDecl) = convertComplexMemoryExpr(memoryExpr)
         val location = convertTerm(locationExpr)
         val value = convertTerm(valueExpr)
         when (memoryDecl.descriptor.memoryType) {
             MemoryType.PROPERTY -> {
                 val (owner, cls, propertyName) = preprocessClassProperty(memoryDecl, location)
-                val propertyLoad = getFieldLoad(owner, cls, propertyName, memoryDecl.version, memoryDecl.descriptor.scopeInfo)
+                val propertyLoad =
+                    getFieldLoad(owner, cls, propertyName, memoryDecl.version, memoryDecl.descriptor.scopeInfo)
                 val valueStorePc = converterContext.tmpVariable(KexBool())
                 converterContext.stateBuilder += basic {
                     state { valueStorePc equality (propertyLoad eq value) }
@@ -239,7 +258,7 @@ class FixpointModelConverter(
     private fun convertMemoryLoad(memory: Expr, location: Expr): Term {
         check(memory.isVar) { "Memory is not var $memory" }
         val decl = mapping.arguments[memory.index] as? Declaration.Memory
-                ?: error("Non memory descriptor")
+            ?: error("Non memory descriptor")
         return convertMemoryLoad(decl, location)
     }
 
@@ -258,7 +277,10 @@ class FixpointModelConverter(
                 rhs.type is KexArray -> rhs to lhs
                 else -> throw IllegalStateException("Array load has no base and index")
             }
-            term { tf.getArrayIndex(base, index).load().withMemoryVersion(decl.version).withScopeInfo(decl.descriptor.scopeInfo) }
+            term {
+                tf.getArrayIndex(base, index).load().withMemoryVersion(decl.version)
+                    .withScopeInfo(decl.descriptor.scopeInfo)
+            }
         }
         MemoryType.SPECIAL -> when (decl.descriptor.memoryName) {
             InstanceOfTerm.TYPE_MEMORY_NAME -> InstanceOfTerm(UnknownType, convertTerm(location), decl.version)
@@ -274,8 +296,8 @@ class FixpointModelConverter(
             obj is ConstIntTerm -> {
                 val objId = obj.value
                 val identifier = z3Context.getLocals().entries
-                        .firstOrNull { (_, id) -> id == objId }?.key
-                        ?: error("No info about object $objId")
+                    .firstOrNull { (_, id) -> id == objId }?.key
+                    ?: error("No info about object $objId")
                 LocalObjectTerm("local__$objId", identifier)
             }
             else -> throw IllegalArgumentException("Only class types supported")
@@ -284,7 +306,13 @@ class FixpointModelConverter(
         return Triple(owner, tf.cm[className], propertyName)
     }
 
-    private fun getFieldLoad(owner: Term, cls: Class, fieldName: String, version: MemoryVersion, scope: MemoryAccessScope): Term {
+    private fun getFieldLoad(
+        owner: Term,
+        cls: Class,
+        fieldName: String,
+        version: MemoryVersion,
+        scope: MemoryAccessScope
+    ): Term {
         val (fields, fieldType) = cls.property(fieldName)
         if (fields.size == 1) {
             val field = fields.first()
@@ -315,15 +343,18 @@ class FixpointModelConverter(
         return resultFiledLoad
     }
 
-    private fun Term.instanceOf(cls: Class, version: MemoryVersion, scope: MemoryAccessScope): Term = cls.allInheritors()
+    private fun Term.instanceOf(cls: Class, version: MemoryVersion, scope: MemoryAccessScope): Term =
+        cls.allInheritors()
             .map { it.kexType }
             .map { term { tf.getInstanceOf(it, this@instanceOf).withMemoryVersion(version).withScopeInfo(scope) } }
             .combine { t1, t2 -> t1 or t2 }
 
     private fun Expr.convertArgs() = args.map { convertTerm(it) }
-    private fun List<Term>.combine(combiner: TermBuilder.(Term, Term) -> Term) = reduce { acc, term -> TermBuilder.Terms.combiner(acc, term) }
+    private fun List<Term>.combine(combiner: TermBuilder.(Term, Term) -> Term) =
+        reduce { acc, term -> TermBuilder.Terms.combiner(acc, term) }
 
-    private fun List<PredicateState>.combine(combiner: (PredicateState, PredicateState) -> PredicateState) = reduceOrNull(combiner)
+    private fun List<PredicateState>.combine(combiner: (PredicateState, PredicateState) -> PredicateState) =
+        reduceOrNull(combiner)
             ?: BasicState()
 
 }
