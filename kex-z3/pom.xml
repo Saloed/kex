@@ -13,14 +13,24 @@
 
     <properties>
         <klaxon.version>3.0.6</klaxon.version>
-        <z3.version>4.8.10-function-calls</z3.version>
+        <z3.version>4.8.10-function-calls-0.1</z3.version>
     </properties>
 
     <repositories>
         <repository>
-          <id>github</id>
-          <name>GitHub Saloed z3</name>
-          <url>https://maven.pkg.github.com/saloed/z3</url>
+            <id>github</id>
+            <name>GitHub Saloed z3</name>
+            <url>https://maven.pkg.github.com/saloed/z3</url>
+        </repository>
+        <repository>
+            <id>github-diff</id>
+            <name>GitHub Saloed Diff</name>
+            <url>https://maven.pkg.github.com/saloed/custom-diff</url>
+        </repository>
+        <repository>
+            <id>github-dmp</id>
+            <name>GitHub Saloed Diff Match Patch</name>
+            <url>https://maven.pkg.github.com/saloed/diff-match-patch</url>
         </repository>
     </repositories>
 
@@ -69,6 +79,16 @@
             <groupId>ru.spbstu</groupId>
             <artifactId>ktuples</artifactId>
             <version>0.0.1.11</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.saloed</groupId>
+            <artifactId>custom-diff</artifactId>
+            <version>0.0.6</version>
+        </dependency>
+        <dependency>
+            <groupId>name.fraser.neil.plaintext</groupId>
+            <artifactId>diff_match_patch</artifactId>
+            <version>master</version>
         </dependency>
     </dependencies>
 
