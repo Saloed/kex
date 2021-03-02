@@ -20,7 +20,7 @@ class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersi
     private fun versionIdentifier(): Int {
         var result = version + 1
         result = 31 * result + subversion + 1
-        result = 31 * result + type.ordinal + 1
+        result = 31 * result + type.hashCode() + 1
         return result
     }
 
