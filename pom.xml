@@ -29,7 +29,7 @@
         <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
 
         <kt-helper.version>0.0.6</kt-helper.version>
-        <kfg.version>master-SNAPSHOT</kfg.version>
+        <kfg.version>0.0.11-5</kfg.version>
 
         <!-- Modules dependency parameters -->
         <serialization.version>1.0.0</serialization.version>
@@ -40,10 +40,6 @@
     </properties>
 
     <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
         <repository>
             <snapshots>
                 <enabled>false</enabled>

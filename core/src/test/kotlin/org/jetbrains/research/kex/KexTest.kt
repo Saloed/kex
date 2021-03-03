@@ -1,19 +1,21 @@
 package org.jetbrains.research.kex
 
+import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.transform.LoopDeroller
 import org.jetbrains.research.kex.config.FileConfig
 import org.jetbrains.research.kex.config.RuntimeConfig
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kfg.ClassManager
-import org.jetbrains.research.kfg.Jar
 import org.jetbrains.research.kfg.KfgConfig
 import org.jetbrains.research.kfg.Package
 import org.jetbrains.research.kfg.analysis.LoopAnalysis
 import org.jetbrains.research.kfg.analysis.LoopSimplifier
+import org.jetbrains.research.kfg.container.asContainer
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.util.Flags
 import java.nio.file.Paths
+import kotlin.system.exitProcess
 
 abstract class KexTest(includeStdlib: Boolean = false, failOnError: Boolean = true) {
     val packageName = "org/jetbrains/research/kex/test"
@@ -31,18 +33,13 @@ abstract class KexTest(includeStdlib: Boolean = false, failOnError: Boolean = tr
         RuntimeConfig.setValue("z3", "paramFile", "$rootDir/z3.params")
 
         jarPath = "$rootDir/kex-test/target/kex-test-$version-jar-with-dependencies.jar"
-        val jar = Jar(jarPath, `package`)
-        loader = jar.classLoader
-        val jarsToAnalyze = when {
-            includeStdlib -> listOf(
-                    jar,
-                    Jar(Paths.get("$rootDir/lib/rt-mock.jar"), Package.defaultPackage),
-                    Jar(jarPath, Package("kotlin/*"))
-            )
-            else -> listOf(jar)
+        val jar = Paths.get(jarPath).toAbsolutePath().asContainer(`package`)?: run {
+            log.error("Can't represent $jarPath as class container")
+            exitProcess(1)
         }
+        loader = jar.classLoader
         cm = ClassManager(KfgConfig(flags = Flags.readAll, failOnError = failOnError))
-        cm.initialize(*jarsToAnalyze.toTypedArray())
+        cm.initialize(jar)
     }
 
     protected fun getPSA(method: Method): PredicateStateAnalysis {

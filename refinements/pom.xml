@@ -18,8 +18,9 @@
 
     <repositories>
         <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
+            <id>github</id>
+            <name>GitHub Saloed kfg</name>
+            <url>https://maven.pkg.github.com/saloed/kfg</url>
         </repository>
         <repository>
             <snapshots>
@@ -101,11 +102,10 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.Saloed</groupId>
-            <artifactId>kfg</artifactId>
-            <version>${kfg.version}</version>
+          <groupId>org.jetbrains.research</groupId>
+          <artifactId>kfg</artifactId>
+          <version>${kfg.version}</version>
         </dependency>
-
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>

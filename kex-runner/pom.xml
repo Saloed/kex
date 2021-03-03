@@ -28,6 +28,11 @@
             <url>https://jitpack.io</url>
         </repository>
         <repository>
+            <id>github</id>
+            <name>GitHub Saloed kfg</name>
+            <url>https://maven.pkg.github.com/saloed/kfg</url>
+        </repository>
+        <repository>
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>
@@ -93,9 +98,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.Saloed</groupId>
-            <artifactId>kfg</artifactId>
-            <version>${kfg.version}</version>
+          <groupId>org.jetbrains.research</groupId>
+          <artifactId>kfg</artifactId>
+          <version>${kfg.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.benas.random-beans</groupId>

@@ -11,6 +11,14 @@
 
     <artifactId>core</artifactId>
 
+    <repositories>
+        <repository>
+            <id>github</id>
+            <name>GitHub Saloed kfg</name>
+            <url>https://maven.pkg.github.com/saloed/kfg</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>org.ini4j</groupId>
@@ -34,9 +42,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.Saloed</groupId>
-            <artifactId>kfg</artifactId>
-            <version>${kfg.version}</version>
+          <groupId>org.jetbrains.research</groupId>
+          <artifactId>kfg</artifactId>
+          <version>${kfg.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.research</groupId>
