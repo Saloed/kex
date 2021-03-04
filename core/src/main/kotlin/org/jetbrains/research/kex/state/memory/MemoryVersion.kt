@@ -3,8 +3,8 @@ package org.jetbrains.research.kex.state.memory
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class MemoryVersionType {
-    INITIAL, NEW, NORMAL, MERGE, DEFAULT
+enum class MemoryVersionType(val typeIdx: Int) {
+    INITIAL(0), NEW(1), NORMAL(2), MERGE(3), DEFAULT(-1)
 }
 
 @Serializable
@@ -20,7 +20,7 @@ class MemoryVersion(val version: Int, val subversion: Int, val type: MemoryVersi
     private fun versionIdentifier(): Int {
         var result = version + 1
         result = 31 * result + subversion + 1
-        result = 31 * result + type.hashCode() + 1
+        result = 31 * result + type.typeIdx
         return result
     }
 
