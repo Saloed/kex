@@ -29,7 +29,7 @@
         <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
 
         <kt-helper.version>0.0.6</kt-helper.version>
-        <kfg.version>0.0.11-5</kfg.version>
+        <kfg.version>0.0.11-6</kfg.version>
 
         <!-- Modules dependency parameters -->
         <serialization.version>1.0.0</serialization.version>

@@ -281,6 +281,7 @@ internal object CallInstSerializer : KSerializer<CallInst> {
             element("opcode", CallOpcodeSerializer.descriptor)
             element("class", ClassSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
+            element<Int>("id")
         }
 
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: CallInst) {
@@ -288,6 +289,7 @@ internal object CallInstSerializer : KSerializer<CallInst> {
             encodeSerializableElement(descriptor, 1, CallOpcodeSerializer, value.opcode)
             encodeSerializableElement(descriptor, 2, ClassSerializer, value.`class`)
             encodeSerializableElement(descriptor, 3, LocationSerializer, value.location)
+            encodeIntElement(descriptor, 4, value.id)
         }
 
         override fun Decoder.deserializeObject(): ReferencedObject<CallInst> {
@@ -295,16 +297,18 @@ internal object CallInstSerializer : KSerializer<CallInst> {
             lateinit var opcode: CallOpcode
             lateinit var klass: Class
             lateinit var location: Location
+            var id: Int = -1
             val ref = deserializeObjectAndReference { descriptor, i ->
                 when (i) {
                     0 -> method = decodeSerializableElement(descriptor, i, MethodSerializer)
                     1 -> opcode = decodeSerializableElement(descriptor, i, CallOpcodeSerializer)
                     2 -> klass = decodeSerializableElement(descriptor, i, ClassSerializer)
                     3 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    4 -> id = decodeIntElement(descriptor, i)
                     else -> throw SerializationException("Unknown index $i")
                 }
             }
-            val obj = CallInst(opcode, method, klass, emptyArray()).update(loc = location) as CallInst
+            val obj = CallInst(id, opcode, method, klass, emptyArray()).update(loc = location) as CallInst
             return ReferencedObject(ref, obj)
         }
     }
@@ -324,27 +328,31 @@ internal object NewInstSerializer : KSerializer<NewInst> {
             element("name", PolymorphicSerializer(Name::class).descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
+            element<Int>("id")
         }
 
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewInst) {
             encodeSerializableElement(descriptor, 0, PolymorphicSerializer(Name::class), value.name)
             encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
             encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
+            encodeIntElement(descriptor, 3, value.id)
         }
 
         override fun Decoder.deserializeObject(): ReferencedObject<NewInst> {
             lateinit var name: Name
             lateinit var type: Type
             lateinit var location: Location
+            var id: Int = -1
             val ref = deserializeObjectAndReference { descriptor, i ->
                 when (i) {
                     0 -> name = decodeSerializableElement(descriptor, i, PolymorphicSerializer(Name::class))
                     1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
                     2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    3 -> id = decodeIntElement(descriptor, i)
                     else -> throw SerializationException("Unknown index $i")
                 }
             }
-            val obj = NewInst(name, type).update(loc = location) as NewInst
+            val obj = NewInst(id, name, type).update(loc = location) as NewInst
             return ReferencedObject(ref, obj)
         }
     }
@@ -364,27 +372,31 @@ internal object NewArrayInstSerializer : KSerializer<NewArrayInst> {
             element("name", PolymorphicSerializer(Name::class).descriptor)
             element("type", TypeSerializer.descriptor)
             element("location", LocationSerializer.descriptor)
+            element<Int>("id")
         }
 
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: NewArrayInst) {
             encodeSerializableElement(descriptor, 0, PolymorphicSerializer(Name::class), value.name)
             encodeSerializableElement(descriptor, 1, TypeSerializer, value.type)
             encodeSerializableElement(descriptor, 2, LocationSerializer, value.location)
+            encodeIntElement(descriptor, 3, value.id)
         }
 
         override fun Decoder.deserializeObject(): ReferencedObject<NewArrayInst> {
             lateinit var name: Name
             lateinit var type: Type
             lateinit var location: Location
+            var id: Int = -1
             val ref = deserializeObjectAndReference { descriptor, i ->
                 when (i) {
                     0 -> name = decodeSerializableElement(descriptor, i, PolymorphicSerializer(Name::class))
                     1 -> type = decodeSerializableElement(descriptor, i, TypeSerializer)
                     2 -> location = decodeSerializableElement(descriptor, i, LocationSerializer)
+                    3 -> id = decodeIntElement(descriptor, i)
                     else -> throw SerializationException("Unknown index $i")
                 }
             }
-            val obj = NewArrayInst(name, type, emptyArray()).update(loc = location) as NewArrayInst
+            val obj = NewArrayInst(id, name, type, emptyArray()).update(loc = location) as NewArrayInst
             return ReferencedObject(ref, obj)
         }
     }

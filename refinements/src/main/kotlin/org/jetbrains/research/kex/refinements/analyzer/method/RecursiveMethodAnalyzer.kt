@@ -9,11 +9,11 @@ import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexPointer
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.refinements.*
-import org.jetbrains.research.kex.refinements.analyzer.utils.MethodCallCollector
-import org.jetbrains.research.kex.refinements.analyzer.utils.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.ExceptionSource
 import org.jetbrains.research.kex.refinements.analyzer.exceptions.PredicateStateBuilderWithThrows
 import org.jetbrains.research.kex.refinements.analyzer.sources.RecursiveRefinementSourcesAnalyzer
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodCallCollector
+import org.jetbrains.research.kex.refinements.analyzer.utils.MethodExecutionPathsAnalyzer
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -83,7 +83,7 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
             method.isStatic -> term { `class`(method.`class`) }
             else -> term { value(method.`class`.kexType, "owner") }
         }
-        val instruction = CallInst(CallOpcode.Special(), StringName("recursion_root_call"), method, method.`class`, emptyArray())
+        val instruction = cm.instruction.getCall(CallOpcode.Special(), StringName("recursion_root_call"), method, method.`class`, emptyArray())
         val methodCall = term { tf.getCall(method, instruction, owner, arguments) }
         returnTerm.call(methodCall)
     } as CallPredicate
