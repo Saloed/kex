@@ -24,8 +24,8 @@ fun main(args: Array<String>) {
     val leftFile = parsedArgs.getOptionValue("left").let { Paths.get(it) }
     val rightFile = parsedArgs.getOptionValue("right").let { Paths.get(it) }
 
-    val lhsSections = makeSections(leftFile.readLines(Charsets.UTF_8))
-    val rhsSections = makeSections(rightFile.readLines(Charsets.UTF_8))
+    val lhsSections = makeSections(leftFile.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
+    val rhsSections = makeSections(rightFile.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
 
     val leftHeaders = lhsSections.joinToString("\n") { it.header }
     val rightHeaders = rhsSections.joinToString("\n") { it.header }
@@ -36,7 +36,8 @@ fun main(args: Array<String>) {
     check(sectionGroups.filter { it.left != null }.count() == lhsSections.size) { "Left groups mismatch" }
     check(sectionGroups.filter { it.right != null }.count() == rhsSections.size) { "Right groups mismatch" }
     val diffs = sectionGroups.flatMap { it.asDiff() }
-    val twoWayDiff = twoWayDiffFromDMPDiff(diffs, leftFile.fileName.toString(), rightFile.fileName.toString(), DiffMode.LINE)
+    val twoWayDiff =
+        twoWayDiffFromDMPDiff(diffs, leftFile.fileName.toString(), rightFile.fileName.toString(), DiffMode.LINE)
     val result = twoWayDiff.saveToJson()
     outFile.writeText(result, Charsets.UTF_8)
 }
@@ -123,4 +124,35 @@ private fun makeSections(lines: List<String>): List<FileSection> {
         sections += FileSection(currentHeader, currentSectionContent.toList())
     }
     return sections
+}
+
+private val analyzerStart = Regex("^CALL ANALYZER: (\\d+)$")
+private val analyzerEnd = Regex("^RETURN ANALYZER: (\\d+)$")
+private val noCall = -1
+
+private fun collapseCallAnalyzer(lines: List<String>): List<String> {
+    val newLines = mutableListOf<String>()
+    var skip = false
+    var callId = noCall
+    for (line in lines) {
+        val startPattern = analyzerStart.find(line)
+        val endPattern = analyzerEnd.find(line)
+        if (startPattern != null) {
+            if (skip || callId != noCall) error("Nested call")
+            callId = startPattern.groupValues[1].toInt()
+            skip = true
+            continue
+        }
+        if (endPattern != null) {
+            if (!skip || callId == noCall) error("Return from unknown call")
+            val endCall = endPattern.groupValues[1].toInt()
+            if (endCall != callId) error("Return call mismatch")
+            callId = noCall
+            skip = false
+            continue
+        }
+        if (skip) continue
+        newLines += line
+    }
+    return newLines
 }
