@@ -179,8 +179,8 @@ private fun Context.removeArrays(expr: Expr): Expr {
     }
     if (expr.isStore) {
         val args = expr.args.map { removeArrays(it) }
-        val decl = mkFuncDecl("array_store", args.map { it.sort }.toTypedArray(), intSort)
-        return mkApp(decl, *args.toTypedArray())
+        // approximation to find variables mapping
+        return args[0]
     }
     if (expr.isArray) {
         val newArrayVar = mkConst(expr.funcDecl.name, intSort)
