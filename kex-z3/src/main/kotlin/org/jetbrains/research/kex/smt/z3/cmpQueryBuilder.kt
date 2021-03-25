@@ -2,6 +2,7 @@ package org.jetbrains.research.kex.smt.z3
 
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_ast_kind
+import com.microsoft.z3.enumerations.Z3_decl_kind
 import org.apache.commons.cli.DefaultParser
 import org.apache.commons.cli.Option
 import org.apache.commons.cli.Options
@@ -64,12 +65,25 @@ fun validateBindings(
     return status == Status.SATISFIABLE
 }
 
+private fun Context.removeArraySelects(expr: Expr): Expr {
+    if (!expr.isApp) return expr
+    if (expr.isSelect) {
+        val decl = mkFreshFuncDecl("select_wrapper", expr.funcDecl.domain, expr.funcDecl.range)
+        return mkApp(decl, *expr.args)
+    }
+    if (expr.numArgs == 0) return expr
+    val newArgs = expr.args.map { removeArraySelects(it) }
+    return mkApp(expr.funcDecl, *newArgs.toTypedArray())
+}
+
 private fun findVariableBindings(
-    first: BoolExpr,
-    second: BoolExpr,
-    other: List<BoolExpr>,
+    firstX: BoolExpr,
+    secondX: BoolExpr,
+    otherX: List<BoolExpr>,
     ctx: Context
 ): Map<Expr, Expr> {
+    val (first, second, other) = ctx.removeArrays(firstX, secondX, otherX)
+
     val bindingSources = listOf(
         createBinding(ctx, collectVariables(first).toList()),
         createBinding(ctx, collectVariables(second).toList())
@@ -95,54 +109,32 @@ private fun findVariableBindings(
         bindings += ctx.mkEq(variable, bindingValue.value)
     }
 
-    val allBindings = ctx.mkAnd(*bindings.toTypedArray(), *other.toTypedArray())
+    val allBindings = ctx.mkAnd(*bindings.toTypedArray())
     val allConstraints = ctx.mkAnd(*constraints.toTypedArray())
 
-    val solver = ctx.mkSolver("HORN")
+    println(allBindings.simplify())
+
+    val solver = ctx.mkSolver() //("HORN")
     val params = ctx.mkParams()
     Z3OptionBuilder()
-        .fp.engine("spacer")
-        .fp.xform.inlineLinear(false)
-        .fp.xform.inlineEager(false)
+//        .fp.engine("spacer")
+//        .fp.xform.inlineLinear(false)
+//        .fp.xform.inlineEager(false)
         .produceUnsatCores(true)
         .addToParams(params)
     solver.setParameters(params)
-    val bindVariables = bindingVars.values.toList()
-    val bindVarPredicate = ctx.mkApp(
-        ctx.mkFuncDecl(
-            "var_binding_predicate",
-            bindVariables.map { it.sort }.toTypedArray(),
-            ctx.mkBoolSort()
-        ), *bindVariables.toTypedArray()
-    ) as BoolExpr
-    val specialPredicate = ctx.mkApp(
-        ctx.mkFuncDecl(
-            "special_predicate",
-            orderedVariables.map { it.sort }.toTypedArray(),
-            ctx.mkBoolSort()
-        ), *orderedVariables.toTypedArray()
-    ) as BoolExpr
 
+    solver.add(allConstraints)
     solver.add(
         ctx.mkForall(
-            ctx.mkImplies(
-                ctx.mkImplies(ctx.mkAnd(allConstraints, allBindings), ctx.mkEq(first, second)),
-                bindVarPredicate
-            ),
-            orderedVariables + bindVariables
+            ctx.mkImplies(ctx.mkAnd(allBindings), ctx.mkAnd(*other.toTypedArray())),
+            orderedVariables
         )
     )
-
     solver.add(
         ctx.mkForall(
-            ctx.mkImplies(
-                ctx.mkAnd(
-                    bindVarPredicate,
-                    ctx.mkImplies(ctx.mkAnd(allConstraints, allBindings), ctx.mkNot(ctx.mkEq(first, second))),
-                ),
-                ctx.mkFalse()
-            ),
-            orderedVariables + bindVariables
+            ctx.mkImplies(ctx.mkAnd(allBindings), ctx.mkEq(first, second)),
+            orderedVariables
         )
     )
 
@@ -165,6 +157,52 @@ private fun findVariableBindings(
 
     return actualBinding
 }
+
+private fun Context.removeArrays(
+    first: BoolExpr,
+    second: BoolExpr,
+    other: List<BoolExpr>
+): Triple<BoolExpr, BoolExpr, List<BoolExpr>> {
+    val newFirst = removeArrays(first) as BoolExpr
+    val newSecond = removeArrays(second) as BoolExpr
+    val newOthers = other.map { removeArrays(it) as BoolExpr }
+
+    return Triple(newFirst, newSecond, newOthers)
+}
+
+val arrayVars = mutableSetOf<Expr>()
+
+private fun Context.removeArrays(expr: Expr): Expr {
+    if (!expr.isApp && !expr.isArray) return expr
+    if (expr.isSelect) {
+        TODO("SELECT")
+    }
+    if (expr.isStore) {
+        val args = expr.args.map { removeArrays(it) }
+        val decl = mkFuncDecl("array_store", args.map { it.sort }.toTypedArray(), intSort)
+        return mkApp(decl, *args.toTypedArray())
+    }
+    if (expr.isArray) {
+        val newArrayVar = mkConst(expr.funcDecl.name, intSort)
+        arrayVars += newArrayVar
+        return newArrayVar
+    }
+    if (expr.numArgs == 0) return expr
+    val newArgs = expr.args.map { removeArrays(it) }
+    val newSorts = newArgs.map { it.sort }.toTypedArray()
+    if (newSorts.contentEquals(expr.funcDecl.domain)) {
+        return mkApp(expr.funcDecl, *newArgs.toTypedArray())
+    }
+    return when (expr.funcDecl.declKind) {
+        Z3_decl_kind.Z3_OP_EQ -> mkEq(newArgs[0], newArgs[1])
+        Z3_decl_kind.Z3_OP_AND -> mkAnd(*newArgs.map { it as BoolExpr }.toTypedArray())
+        Z3_decl_kind.Z3_OP_OR -> mkOr(*newArgs.map { it as BoolExpr }.toTypedArray())
+        Z3_decl_kind.Z3_OP_NOT -> mkNot(newArgs[0] as BoolExpr)
+        Z3_decl_kind.Z3_OP_IMPLIES -> mkImplies(newArgs[0] as BoolExpr, newArgs[1] as BoolExpr)
+        else -> TODO("Unexpected decl kind")
+    }
+}
+
 
 fun Context.mkForall(body: Expr, variables: List<Expr>) =
     mkForall(variables.toTypedArray(), body, 0, arrayOf(), null, null, null)
@@ -217,8 +255,8 @@ private fun Expr.tag(): VarTag {
 
 private fun Expr.type(): VarType = when {
     isBool -> VarType.BOOL
-    isInt -> VarType.INT
-    isArray -> VarType.INT_ARRAY
+    isInt && this !in arrayVars -> VarType.INT
+    isArray || this in arrayVars -> VarType.INT_ARRAY
     else -> error("Unexpected variable sort: $this")
 }
 
