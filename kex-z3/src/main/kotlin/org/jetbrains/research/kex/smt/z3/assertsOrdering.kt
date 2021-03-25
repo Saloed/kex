@@ -10,10 +10,7 @@ import org.apache.commons.cli.Options
 import java.io.Writer
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.bufferedWriter
-import kotlin.io.path.extension
-import kotlin.io.path.nameWithoutExtension
+import kotlin.io.path.*
 
 
 @ExperimentalPathApi
@@ -73,25 +70,27 @@ private fun writeResult(
     val orderedLeftUnresolved = unresolvedLeft.sortedBy { it }
     val orderedRightUnresolved = unresolvedRight.sortedBy { it }
     for ((left, right) in orderedMatches) {
+        leftFile.writeSeparator("-")
+        rightFile.writeSeparator("-")
         leftFile.write(ctx.left[left].toString())
         rightFile.write(ctx.right[right].toString())
-        leftFile.writeSeparator()
-        rightFile.writeSeparator()
     }
     for (left in orderedLeftUnresolved) {
+        leftFile.writeSeparator("*")
         leftFile.write(ctx.left[left].toString())
-        leftFile.writeSeparator()
     }
     for (right in orderedRightUnresolved) {
+        rightFile.writeSeparator("*")
         rightFile.write(ctx.right[right].toString())
-        rightFile.writeSeparator()
     }
 }
 
-private fun Writer.writeSeparator() = write("\n${"-".repeat(20)}\n")
+private fun Writer.writeSeparator(separator: String) = write("\n${separator.repeat(20)}\n")
 
 @ExperimentalPathApi
-private fun Path.toResultPath() = parent.resolve("${fileName.nameWithoutExtension}_ordered.${fileName.extension}")
+private fun Path.toResultPath() =
+    (parent ?: Path("."))
+        .resolve("${fileName.nameWithoutExtension}_ordered.${fileName.extension}")
 
 private fun resolveMatchGroups(
     ctx: CompareContext,

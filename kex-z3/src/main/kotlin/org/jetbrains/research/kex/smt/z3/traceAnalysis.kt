@@ -8,13 +8,48 @@ import name.fraser.neil.plaintext.diff_match_patch.Operation
 import org.apache.commons.cli.DefaultParser
 import org.apache.commons.cli.Option
 import org.apache.commons.cli.Options
+import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.readLines
-import kotlin.io.path.writeText
+import kotlin.io.path.*
 
 @ExperimentalPathApi
 fun main(args: Array<String>) {
+    val options = Options().addOption("m", "many", false, "Analyze many trace files")
+    val parsedArgs = DefaultParser().parse(options, args, true)
+    if (!parsedArgs.hasOption("many")) {
+        twoFilesMode(parsedArgs.args)
+    } else {
+        manyFilesMode(parsedArgs.args)
+    }
+}
+
+@ExperimentalPathApi
+private fun manyFilesMode(args: Array<String>) {
+    val options = Options()
+        .addOption(Option("p", "prefix", true, "Z3 trace files prefix").apply { isRequired = true })
+        .addOption(Option("r", "resprefix", true, "Result files prefix").apply { isRequired = true })
+    val parsedArgs = DefaultParser().parse(options, args, true)
+    val prefixPath = parsedArgs.getOptionValue("prefix").let { Paths.get(it) }
+    val outBasePath = parsedArgs.getOptionValue("resprefix").let { Paths.get(it) }
+    val traces = (prefixPath.parent ?: Path(".")).listDirectoryEntries("${prefixPath.fileName}*")
+    val pairsToCompare = traces.flatMap { t -> traces.map { it to t } }
+        .map { (a, b) -> setOf(a, b) }
+        .toSet().filter { it.size == 2 }
+        .map {
+            val (a, b) = it.toList().sorted()
+            a to b
+        }
+    for ((left, right) in pairsToCompare) {
+        val leftSuffix = left.fileName.toString().removePrefix(prefixPath.fileName.toString())
+        val rightSuffix = right.fileName.toString().removePrefix(prefixPath.fileName.toString())
+        val outFile = outBasePath.resolveSibling("${outBasePath.fileName}-${leftSuffix}-${rightSuffix}.jdiff")
+        outFile.parent?.createDirectories()
+        analyzeFilePair(left, right, outFile)
+    }
+}
+
+@ExperimentalPathApi
+private fun twoFilesMode(args: Array<String>) {
     val options = Options()
         .addOption(Option("l", "left", true, "Z3 trace file to place on left side").apply { isRequired = true })
         .addOption(Option("r", "right", true, "Z3 trace file to place on right side").apply { isRequired = true })
@@ -24,8 +59,13 @@ fun main(args: Array<String>) {
     val leftFile = parsedArgs.getOptionValue("left").let { Paths.get(it) }
     val rightFile = parsedArgs.getOptionValue("right").let { Paths.get(it) }
 
-    val lhsSections = makeSections(leftFile.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
-    val rhsSections = makeSections(rightFile.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
+    analyzeFilePair(leftFile, rightFile, outFile)
+}
+
+@ExperimentalPathApi
+private fun analyzeFilePair(left: Path, right: Path, out: Path) {
+    val lhsSections = makeSections(left.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
+    val rhsSections = makeSections(right.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
 
     val leftHeaders = lhsSections.joinToString("\n") { it.header }
     val rightHeaders = rhsSections.joinToString("\n") { it.header }
@@ -37,9 +77,9 @@ fun main(args: Array<String>) {
     check(sectionGroups.filter { it.right != null }.count() == rhsSections.size) { "Right groups mismatch" }
     val diffs = sectionGroups.flatMap { it.asDiff() }
     val twoWayDiff =
-        twoWayDiffFromDMPDiff(diffs, leftFile.fileName.toString(), rightFile.fileName.toString(), DiffMode.LINE)
+        twoWayDiffFromDMPDiff(diffs, left.fileName.toString(), right.fileName.toString(), DiffMode.LINE)
     val result = twoWayDiff.saveToJson()
-    outFile.writeText(result, Charsets.UTF_8)
+    out.writeText(result, Charsets.UTF_8)
 }
 
 private data class HeaderDiff(val left: String?, val right: String?)
