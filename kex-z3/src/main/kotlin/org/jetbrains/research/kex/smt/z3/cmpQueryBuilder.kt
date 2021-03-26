@@ -27,10 +27,12 @@ fun main(args: Array<String>) {
     val additionalConstraints = asserts.drop(2)
 
     val bindings = findVariableBindings(firstFormula, secondFormula, additionalConstraints, ctx)
-    return
+    println(bindings)
+
     if (!validateBindings(firstFormula, secondFormula, bindings, ctx)) {
         error("Incorrect bindings")
     }
+
     val formulaWithBindings = printBindings(firstFormula, secondFormula, bindings, ctx)
     println(formulaWithBindings)
 }
@@ -51,13 +53,24 @@ fun validateBindings(
     bindings: Map<Expr, Expr>,
     ctx: Context
 ): Boolean {
-    val bindingStatements = bindings.map { ctx.mkEq(it.key, it.value) }
-    val statement = ctx.mkImplies(
-        ctx.mkAnd(*bindingStatements.toTypedArray()),
-        ctx.mkEq(first, second)
-    )
-    val variables = collectVariables(first) + collectVariables(second) + bindings.keys
-    val query = ctx.mkForall(variables.toTypedArray(), statement, 0, arrayOf(), null, null, null)
+    val firstVariables = mutableListOf<Expr>()
+    val secondVariables = mutableListOf<Expr>()
+    val bothVariables = mutableListOf<Expr>()
+
+    for ((firstVar, secondVar) in bindings) {
+        check(firstVar.sort == secondVar.sort) { "Sort mismatch" }
+        val bothVar = ctx.mkFreshConst("both_var", firstVar.sort)
+        firstVariables += firstVar
+        secondVariables += secondVar
+        bothVariables += bothVar
+    }
+
+    val preparedFirst = first.substitute(firstVariables.toTypedArray(), bothVariables.toTypedArray())
+    val preparedSecond = second.substitute(secondVariables.toTypedArray(), bothVariables.toTypedArray())
+
+    val variables = (countVariables(preparedFirst).keys + countVariables(preparedSecond).keys).toList()
+    val query = ctx.mkForall(ctx.mkEq(preparedFirst, preparedSecond), variables)
+
     val solver = ctx.mkSolver()
     solver.add(query)
     val status = solver.check()
@@ -65,56 +78,93 @@ fun validateBindings(
     return status == Status.SATISFIABLE
 }
 
-private fun Context.removeArraySelects(expr: Expr): Expr {
-    if (!expr.isApp) return expr
-    if (expr.isSelect) {
-        val decl = mkFreshFuncDecl("select_wrapper", expr.funcDecl.domain, expr.funcDecl.range)
-        return mkApp(decl, *expr.args)
+sealed class VariableBindingTree {
+    class Node(val expr: Expr, val condition: BoolExpr, val tree: VariableBindingTree) : VariableBindingTree() {
+        override fun bindingValue(ctx: Context): Expr = ctx.mkITE(condition, expr, tree.bindingValue(ctx))
+        override fun conditions(): List<Expr> = listOf(condition) + tree.conditions()
+        override fun eval(model: Model): Expr {
+            val conditionValue = model.eval(condition, false)
+            return when {
+                conditionValue.isTrue -> expr
+                conditionValue.isFalse -> tree.eval(model)
+                else -> error("Unexpected condition value: $condition = $conditionValue")
+            }
+        }
     }
-    if (expr.numArgs == 0) return expr
-    val newArgs = expr.args.map { removeArraySelects(it) }
-    return mkApp(expr.funcDecl, *newArgs.toTypedArray())
+
+    class Leaf(val expr: Expr) : VariableBindingTree() {
+        override fun bindingValue(ctx: Context): Expr = expr
+        override fun conditions(): List<Expr> = emptyList()
+        override fun eval(model: Model): Expr = expr
+    }
+
+    abstract fun bindingValue(ctx: Context): Expr
+    abstract fun conditions(): List<Expr>
+    abstract fun eval(model: Model): Expr
+
+    companion object {
+        fun create(ctx: Context, exprs: List<Expr>): VariableBindingTree {
+            val result = exprs.fold<Expr, VariableBindingTree?>(null) { tree, expr ->
+                when (tree) {
+                    null -> Leaf(expr)
+                    else -> Node(expr, ctx.mkFreshConst("var_binding", ctx.mkBoolSort()) as BoolExpr, tree)
+                }
+            }
+            return result ?: error("Empty exprs")
+        }
+    }
 }
 
 private fun findVariableBindings(
-    firstX: BoolExpr,
-    secondX: BoolExpr,
-    otherX: List<BoolExpr>,
+    first: BoolExpr,
+    second: BoolExpr,
+    other: List<BoolExpr>,
     ctx: Context
 ): Map<Expr, Expr> {
-    val (first, second, other) = ctx.removeArrays(firstX, secondX, otherX)
+    val groups = VariableGroups.group(first, second)
+    val arraysRemover = ArraysRemover(ctx)
+    val (newFirst, newSecond, newOther) = arraysRemover.removeArrays(first, second, other)
+    val arrayVarMapping = arraysRemover.arrayVarsMapping
+    val newGroups = groups.map { (f, s) ->
+        f.map { arrayVarMapping[it] ?: it } to s.map { arrayVarMapping[it] ?: it }
+    }
+    val bindings = findVariableBinding(ctx, newFirst, newSecond, newOther, newGroups)
+    val arrayReverseMapping = arrayVarMapping.entries.associateBy({ it.value }, { it.key })
+    return bindings.map { (f, s) ->
+        (arrayReverseMapping[f] ?: f) to (arrayReverseMapping[s] ?: s)
+    }.toMap()
+}
 
-    val bindingSources = listOf(
-        createBinding(ctx, collectVariables(first).toList()),
-        createBinding(ctx, collectVariables(second).toList())
-    ).associateBy { it.tag }
-    val orderedVariables = (other + listOf(first, second)).map { collectVariables(it) }.flatten().toSet().toList()
-
-    val bindingVars = mutableMapOf<Expr, IntExpr>()
+private fun findVariableBinding(
+    ctx: Context,
+    first: BoolExpr,
+    second: BoolExpr,
+    other: List<BoolExpr>,
+    groups: List<Pair<List<Expr>, List<Expr>>>
+): Map<Expr, Expr> {
+    val knownBindings = mutableMapOf<Expr, Expr>()
+    val bindingVars = mutableMapOf<Expr, VariableBindingTree>()
     val bindings = mutableListOf<BoolExpr>()
-    val constraints = mutableListOf<BoolExpr>()
 
-    for (variable in orderedVariables) {
-        if (variable.tag() != VarTag.GOOD) continue
-        val bindingVar = ctx.mkFreshConst("var_binding", ctx.mkIntSort()) as IntExpr
-        val bindingSource = bindingSources.getValue(variable.tag().opposite())
-        val bindingCandidates = bindingSource.bindingArray(variable)
-        bindingVars += variable to bindingVar
-        constraints += bindingCandidates.indices.map { ctx.mkEq(bindingVar, ctx.mkInt(it)) }
-            .let { ctx.mkOr(*it.toTypedArray()) }
-
-        val bindingValue = bindingCandidates.withIndex().reduce { (_, acc), (i, candidate) ->
-            IndexedValue(i, ctx.mkITE(ctx.mkEq(bindingVar, ctx.mkInt(i)), candidate, acc))
+    for ((firstGroup, secondGroup) in groups) {
+        check(firstGroup.size == secondGroup.size) { "Group size mismatch" }
+        if (firstGroup.size == 1) {
+            knownBindings[firstGroup.first()] = secondGroup.first()
+            continue
         }
-        bindings += ctx.mkEq(variable, bindingValue.value)
+        for (variable in firstGroup) {
+            val bindingTree = VariableBindingTree.create(ctx, secondGroup)
+            val bindingValue = bindingTree.bindingValue(ctx)
+            bindingVars[variable] = bindingTree
+            bindings += ctx.mkEq(variable, bindingValue)
+        }
     }
 
+    val orderedVariables = (countVariables(first).keys + countVariables(second).keys).toList()
+    val allKnowns = ctx.mkAnd(*knownBindings.map { ctx.mkEq(it.key, it.value) }.toTypedArray())
     val allBindings = ctx.mkAnd(*bindings.toTypedArray())
-    val allConstraints = ctx.mkAnd(*constraints.toTypedArray())
 
-    println(allBindings.simplify())
-
-    val solver = ctx.mkSolver() //("HORN")
+    val solver = ctx.mkSolver()
     val params = ctx.mkParams()
     Z3OptionBuilder()
 //        .fp.engine("spacer")
@@ -124,182 +174,185 @@ private fun findVariableBindings(
         .addToParams(params)
     solver.setParameters(params)
 
-    solver.add(allConstraints)
     solver.add(
         ctx.mkForall(
-            ctx.mkImplies(ctx.mkAnd(allBindings), ctx.mkAnd(*other.toTypedArray())),
+            ctx.mkImplies(ctx.mkAnd(allKnowns, allBindings), ctx.mkAnd(*other.toTypedArray())),
             orderedVariables
         )
     )
     solver.add(
         ctx.mkForall(
-            ctx.mkImplies(ctx.mkAnd(allBindings), ctx.mkEq(first, second)),
+            ctx.mkImplies(ctx.mkAnd(allKnowns, allBindings), ctx.mkEq(first, second)),
             orderedVariables
         )
     )
 
-    println(solver)
-
-    println(solver.check())
-    println(solver.unsatCore.contentToString())
-    println(solver.reasonUnknown)
+    val status = solver.check()
+    if (status != Status.SATISFIABLE) error("No binding found")
 
     val model = solver.model
-    println(model)
-    val actualBinding = mutableMapOf<Expr, Expr>()
-    for ((variable, bindingVar) in bindingVars) {
-        val modelValue = model.evaluate(bindingVar, false) as IntNum
-        val source = bindingSources.getValue(variable.tag().opposite()).bindingArray(variable)
-        actualBinding += variable to source[modelValue.int]
+    val actualBindings = knownBindings.toMutableMap()
+    for ((variable, bindingTree) in bindingVars) {
+        actualBindings[variable] = bindingTree.eval(model)
     }
-
-    println(actualBinding)
-
-    return actualBinding
+    return actualBindings
 }
 
-private fun Context.removeArrays(
-    first: BoolExpr,
-    second: BoolExpr,
-    other: List<BoolExpr>
-): Triple<BoolExpr, BoolExpr, List<BoolExpr>> {
-    val newFirst = removeArrays(first) as BoolExpr
-    val newSecond = removeArrays(second) as BoolExpr
-    val newOthers = other.map { removeArrays(it) as BoolExpr }
+class VariableGroups private constructor() {
+    val variableGroups = mutableListOf<Pair<List<Expr>, List<Expr>>>()
 
-    return Triple(newFirst, newSecond, newOthers)
+    private fun analyzeVariables(first: Expr, second: Expr) {
+        val firstVars = countVariables(first)
+        val secondVars = countVariables(second)
+        groupByPrefix(firstVars.entries.toList(), secondVars.entries.toList())
+    }
+
+    private fun groupByPrefix(first: List<Map.Entry<Expr, Int>>, second: List<Map.Entry<Expr, Int>>) {
+        val firstVars = first.groupBy { it.key.variablePrefix() }
+        val secondVars = second.groupBy { it.key.variablePrefix() }
+        val groups = mergeGroups(firstVars, secondVars) { "Different prefixes" }
+        for ((firstGroup, secondGroup) in groups) {
+            groupByNumberOfOccurrences(firstGroup, secondGroup)
+        }
+    }
+
+    private fun groupByNumberOfOccurrences(first: List<Map.Entry<Expr, Int>>, second: List<Map.Entry<Expr, Int>>) {
+        val firstVars = first.groupBy({ it.value }, { it.key })
+        val secondVars = second.groupBy({ it.value }, { it.key })
+        val groups = mergeGroups(firstVars, secondVars) { "Variable count mismatch" }
+        for ((firstGroup, secondGroup) in groups) {
+            groupByType(firstGroup, secondGroup)
+        }
+    }
+
+    private fun groupByType(first: List<Expr>, second: List<Expr>) {
+        val firstVars = first.groupBy { it.sort }
+        val secondVars = second.groupBy { it.sort }
+        val groups = mergeGroups(firstVars, secondVars) { "Variable sorts mismatch" }
+        for ((firstGroup, secondGroup) in groups) {
+            variableGroups += firstGroup to secondGroup
+        }
+    }
+
+    private inline fun <reified K, V> mergeGroups(
+        first: Map<K, List<V>>,
+        second: Map<K, List<V>>,
+        message: () -> String
+    ): List<Pair<List<V>, List<V>>> {
+        check(first.keys == second.keys, message)
+        val values = mutableListOf<Pair<List<V>, List<V>>>()
+        for ((key, firstValue) in first) {
+            val secondValue = second.getValue(key)
+            check(firstValue.size == secondValue.size) { message() + ": Variable group size mismatch" }
+            values += firstValue to secondValue
+        }
+        return values
+    }
+
+
+    companion object {
+        fun group(first: Expr, second: Expr) = VariableGroups()
+            .apply { analyzeVariables(first, second) }
+            .variableGroups.toList()
+    }
 }
 
-val arrayVars = mutableSetOf<Expr>()
+class ArraysRemover(val ctx: Context) {
+    val arrayVarsMapping = mutableMapOf<Expr, Expr>()
+    fun removeArrays(
+        first: BoolExpr,
+        second: BoolExpr,
+        other: List<BoolExpr>
+    ): Triple<BoolExpr, BoolExpr, List<BoolExpr>> {
+        val newFirst = removeArrays(first) as BoolExpr
+        val newSecond = removeArrays(second) as BoolExpr
+        val newOthers = other.map { removeArrays(it) as BoolExpr }
 
-private fun Context.removeArrays(expr: Expr): Expr {
-    if (!expr.isApp && !expr.isArray) return expr
-    if (expr.isSelect) {
-        TODO("SELECT")
+        return Triple(newFirst, newSecond, newOthers)
     }
-    if (expr.isStore) {
-        val args = expr.args.map { removeArrays(it) }
-        // approximation to find variables mapping
-        return args[0]
-    }
-    if (expr.isArray) {
-        val newArrayVar = mkConst(expr.funcDecl.name, intSort)
-        arrayVars += newArrayVar
-        return newArrayVar
-    }
-    if (expr.numArgs == 0) return expr
-    val newArgs = expr.args.map { removeArrays(it) }
-    val newSorts = newArgs.map { it.sort }.toTypedArray()
-    if (newSorts.contentEquals(expr.funcDecl.domain)) {
-        return mkApp(expr.funcDecl, *newArgs.toTypedArray())
-    }
-    return when (expr.funcDecl.declKind) {
-        Z3_decl_kind.Z3_OP_EQ -> mkEq(newArgs[0], newArgs[1])
-        Z3_decl_kind.Z3_OP_AND -> mkAnd(*newArgs.map { it as BoolExpr }.toTypedArray())
-        Z3_decl_kind.Z3_OP_OR -> mkOr(*newArgs.map { it as BoolExpr }.toTypedArray())
-        Z3_decl_kind.Z3_OP_NOT -> mkNot(newArgs[0] as BoolExpr)
-        Z3_decl_kind.Z3_OP_IMPLIES -> mkImplies(newArgs[0] as BoolExpr, newArgs[1] as BoolExpr)
-        else -> TODO("Unexpected decl kind")
+
+    private fun removeArrays(expr: Expr): Expr {
+        if (!expr.isApp && !expr.isArray) return expr
+        if (expr.isSelect) {
+            TODO("SELECT")
+        }
+        if (expr.isStore) {
+            val args = expr.args.map { removeArrays(it) }
+            // approximation to find variables mapping
+            return args[0]
+        }
+        if (expr.isArray) {
+            val newArrayVar = ctx.mkConst(expr.funcDecl.name, ctx.intSort)
+            arrayVarsMapping[expr] = newArrayVar
+            return newArrayVar
+        }
+        if (expr.numArgs == 0) return expr
+        val newArgs = expr.args.map { removeArrays(it) }
+        val newSorts = newArgs.map { it.sort }.toTypedArray()
+        if (newSorts.contentEquals(expr.funcDecl.domain)) {
+            return ctx.mkApp(expr.funcDecl, *newArgs.toTypedArray())
+        }
+        return when (expr.funcDecl.declKind) {
+            Z3_decl_kind.Z3_OP_EQ -> ctx.mkEq(newArgs[0], newArgs[1])
+            Z3_decl_kind.Z3_OP_AND -> ctx.mkAnd(*newArgs.map { it as BoolExpr }.toTypedArray())
+            Z3_decl_kind.Z3_OP_OR -> ctx.mkOr(*newArgs.map { it as BoolExpr }.toTypedArray())
+            Z3_decl_kind.Z3_OP_NOT -> ctx.mkNot(newArgs[0] as BoolExpr)
+            Z3_decl_kind.Z3_OP_IMPLIES -> ctx.mkImplies(newArgs[0] as BoolExpr, newArgs[1] as BoolExpr)
+            else -> TODO("Unexpected decl kind")
+        }
     }
 }
-
 
 fun Context.mkForall(body: Expr, variables: List<Expr>) =
     mkForall(variables.toTypedArray(), body, 0, arrayOf(), null, null, null)
 
-private fun createBinding(ctx: Context, variables: List<Expr>): Bindings {
-    if (variables.isEmpty()) error("No variables")
-    val tag = variables.first().tag()
-    val bools = variables.filter { it.type() == VarType.BOOL }
-    val ints = variables.filter { it.type() == VarType.INT }
-    val arrays = variables.filter { it.type() == VarType.INT_ARRAY }
-    return Bindings(tag, arrays, ints, bools)
-}
-
 enum class VarTag {
     BAD, GOOD;
-
-    fun opposite() = when (this) {
-        BAD -> GOOD
-        GOOD -> BAD
-    }
 }
 
-enum class VarType {
-    BOOL, INT, INT_ARRAY
-}
+private fun Expr.name() = "${this.funcDecl.name}"
 
-data class Bindings(
-    val tag: VarTag,
-    val arrays: List<Expr>,
-    val ints: List<Expr>,
-    val bools: List<Expr>
-) {
-    fun bindingArray(variable: Expr): List<Expr> {
-        check(variable.tag() != tag) { "Try to select from same tag" }
-        val type = variable.type()
-        return when (type) {
-            VarType.BOOL -> bools
-            VarType.INT -> ints
-            VarType.INT_ARRAY -> arrays
-        }
-    }
+private fun Expr.tagMarker() = when (tag()) {
+    VarTag.BAD -> "bad_"
+    VarTag.GOOD -> "good_"
 }
 
 private fun Expr.tag(): VarTag {
-    val text = "$this"
-    if (text.startsWith("bad") || text.startsWith("|bad")) return VarTag.BAD
-    if (text.startsWith("good") || text.startsWith("|good")) return VarTag.GOOD
+    val text = name()
+    if (text.startsWith("bad")) return VarTag.BAD
+    if (text.startsWith("good")) return VarTag.GOOD
     error("Unexpected var name: $text")
 }
 
-private fun Expr.type(): VarType = when {
-    isBool -> VarType.BOOL
-    isInt && this !in arrayVars -> VarType.INT
-    isArray || this in arrayVars -> VarType.INT_ARRAY
-    else -> error("Unexpected variable sort: $this")
+private fun Expr.nameWithoutTag() = name().removePrefix(tagMarker())
+
+private fun String.indexOfOrLast(txt: String) = indexOf(txt).let { if (it != -1) it else lastIndex }
+
+private fun Expr.variablePrefix(): String {
+    val name = nameWithoutTag()
+    val idx = minOf(name.indexOfOrLast("!"), name.indexOfOrLast("__"), name.indexOfOrLast("#"))
+    return name.substring(0, idx)
 }
 
-fun possibleVariableAssignments(ctx: Context, variables: Set<Expr>): BoolExpr {
-    val assignments = variables.map { it to possibleVariableAssignments(it, variables - it) }
-    val variants = assignments.map { (variable, candidates) -> candidates.map { ctx.mkEq(variable, it) } }
-        .map { ctx.mkOr(*it.toTypedArray()) }
-    return ctx.mkAnd(*variants.toTypedArray())
+fun countVariables(expr: Expr): Map<Expr, Int> {
+    val variables = mutableMapOf<Expr, Int>()
+    countVariables(expr, variables)
+    return variables
 }
 
-fun possibleVariableAssignments(variable: Expr, variables: Set<Expr>): List<Expr> =
-    variables.filter { it.sort == variable.sort }
-
-
-fun normalizeModel(ctx: Context, expr: Expr, variables: List<Expr>): Expr {
+fun countVariables(expr: Expr, variables: MutableMap<Expr, Int>) {
     when (expr.astKind) {
         Z3_ast_kind.Z3_VAR_AST -> {
-            return variables[expr.index]
-        }
-        Z3_ast_kind.Z3_APP_AST -> {
-            if (expr.numArgs == 0) return expr
-            val newArgs = expr.args.map { normalizeModel(ctx, it, variables) }
-            return ctx.mkApp(expr.funcDecl, *newArgs.toTypedArray())
-        }
-        else -> return expr
-    }
-}
-
-fun collectVariables(expr: Expr, variables: MutableSet<Expr> = mutableSetOf()): Set<Expr> {
-    when (expr.astKind) {
-        Z3_ast_kind.Z3_VAR_AST -> {
-            variables.add(expr)
+            variables[expr] = (variables[expr] ?: 0) + 1
         }
         Z3_ast_kind.Z3_APP_AST -> {
             if (expr.isConst && !expr.isTrue && !expr.isFalse) {
-                variables.add(expr)
+                variables[expr] = (variables[expr] ?: 0) + 1
             } else {
-                expr.args.forEach { collectVariables(it, variables) }
+                expr.args.forEach { countVariables(it, variables) }
             }
         }
         else -> {
         }
     }
-    return variables
 }
-
