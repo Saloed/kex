@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3
+package org.jetbrains.research.kex.smt.z3.utilities
 
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Context

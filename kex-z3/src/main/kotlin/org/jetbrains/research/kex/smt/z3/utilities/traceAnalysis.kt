@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3
+package org.jetbrains.research.kex.smt.z3.utilities
 
 import com.github.saloed.diff.DiffMode
 import com.github.saloed.diff.twoWayDiffFromDMPDiff
@@ -12,7 +12,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.*
 
-@ExperimentalPathApi
+
 fun main(args: Array<String>) {
     val options = Options().addOption("m", "many", false, "Analyze many trace files")
     val parsedArgs = DefaultParser().parse(options, args, true)
@@ -23,7 +23,8 @@ fun main(args: Array<String>) {
     }
 }
 
-@ExperimentalPathApi
+
+@OptIn(ExperimentalPathApi::class)
 private fun manyFilesMode(args: Array<String>) {
     val options = Options()
         .addOption(Option("p", "prefix", true, "Z3 trace files prefix").apply { isRequired = true })
@@ -31,7 +32,7 @@ private fun manyFilesMode(args: Array<String>) {
     val parsedArgs = DefaultParser().parse(options, args, true)
     val prefixPath = parsedArgs.getOptionValue("prefix").let { Paths.get(it) }
     val outBasePath = parsedArgs.getOptionValue("resprefix").let { Paths.get(it) }
-    val traces = (prefixPath.parent ?: Path(".")).listDirectoryEntries("${prefixPath.fileName}*")
+    val traces = prefixPath.parent().listDirectoryEntries("${prefixPath.fileName}*")
     val pairsToCompare = traces.flatMap { t -> traces.map { it to t } }
         .map { (a, b) -> setOf(a, b) }
         .toSet().filter { it.size == 2 }
@@ -48,7 +49,7 @@ private fun manyFilesMode(args: Array<String>) {
     }
 }
 
-@ExperimentalPathApi
+
 private fun twoFilesMode(args: Array<String>) {
     val options = Options()
         .addOption(Option("l", "left", true, "Z3 trace file to place on left side").apply { isRequired = true })
@@ -62,7 +63,7 @@ private fun twoFilesMode(args: Array<String>) {
     analyzeFilePair(leftFile, rightFile, outFile)
 }
 
-@ExperimentalPathApi
+@OptIn(ExperimentalPathApi::class)
 private fun analyzeFilePair(left: Path, right: Path, out: Path) {
     val lhsSections = makeSections(left.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
     val rhsSections = makeSections(right.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })

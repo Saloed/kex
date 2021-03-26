@@ -1,4 +1,4 @@
-package org.jetbrains.research.kex.smt.z3
+package org.jetbrains.research.kex.smt.z3.utilities
 
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.Context
@@ -13,7 +13,8 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 
-@ExperimentalPathApi
+
+@OptIn(ExperimentalPathApi::class)
 fun main(args: Array<String>) {
     val options = Options()
         .addOption(Option("f", "file", true, "Z3 asserts").apply { isRequired = true })
@@ -21,10 +22,14 @@ fun main(args: Array<String>) {
     val parsedArgs = DefaultParser().parse(options, args)
     val file = parsedArgs.getOptionValue("file").let { Paths.get(it) }
     val smtlib2Source = file.readText()
+    val result = guessVariableDeclarations(smtlib2Source)
+    file.writeText(result)
+}
+
+fun guessVariableDeclarations(smtlib2Source: String): String {
     val searchContext = SearchContext(smtlib2Source)
     searchContext.loop()
-    val result = searchContext.smtlibWithDeclarations()
-    file.writeText(result)
+    return searchContext.smtlibWithDeclarations()
 }
 
 val missingVariableRe = Regex("\\(error \"line \\d+ column \\d+: unknown constant (.*)\"\\)")

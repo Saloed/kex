@@ -1,17 +1,17 @@
-package org.jetbrains.research.kex.smt.z3
+package org.jetbrains.research.kex.smt.z3.utilities
 
 import com.microsoft.z3.*
-import com.microsoft.z3.enumerations.Z3_ast_kind
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import org.apache.commons.cli.DefaultParser
 import org.apache.commons.cli.Option
 import org.apache.commons.cli.Options
+import org.jetbrains.research.kex.smt.z3.Z3OptionBuilder
 import java.nio.file.Paths
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.readText
 
 
-@ExperimentalPathApi
+@OptIn(ExperimentalPathApi::class)
 fun main(args: Array<String>) {
     val options = Options()
         .addOption(Option("f", "file", true, "Z3 asserts").apply { isRequired = true })
@@ -19,6 +19,11 @@ fun main(args: Array<String>) {
     val parsedArgs = DefaultParser().parse(options, args)
     val file = parsedArgs.getOptionValue("file").let { Paths.get(it) }
     val smtlib2Source = file.readText()
+    val formulaWithBindings = checkFormulasEquality(smtlib2Source)
+    println(formulaWithBindings)
+}
+
+fun checkFormulasEquality(smtlib2Source: String): String {
     val ctx = Context()
     val asserts = ctx.parseSMTLIB2String(smtlib2Source, emptyArray(), emptyArray(), emptyArray(), emptyArray())
     check(asserts.size >= 2) { "Unexpected asserts" }
@@ -33,8 +38,7 @@ fun main(args: Array<String>) {
         error("Incorrect bindings")
     }
 
-    val formulaWithBindings = printBindings(firstFormula, secondFormula, bindings, ctx)
-    println(formulaWithBindings)
+    return printBindings(firstFormula, secondFormula, bindings, ctx)
 }
 
 fun printBindings(first: BoolExpr, second: BoolExpr, bindings: Map<Expr, Expr>, ctx: Context): String {
@@ -303,28 +307,19 @@ class ArraysRemover(val ctx: Context) {
     }
 }
 
-fun Context.mkForall(body: Expr, variables: List<Expr>) =
-    mkForall(variables.toTypedArray(), body, 0, arrayOf(), null, null, null)
 
-enum class VarTag {
-    BAD, GOOD;
-}
-
-private fun Expr.name() = "${this.funcDecl.name}"
-
-private fun Expr.tagMarker() = when (tag()) {
-    VarTag.BAD -> "bad_"
-    VarTag.GOOD -> "good_"
+enum class VarTag(val marker: String) {
+    BAD("bad_"), GOOD("good_");
 }
 
 private fun Expr.tag(): VarTag {
     val text = name()
-    if (text.startsWith("bad")) return VarTag.BAD
-    if (text.startsWith("good")) return VarTag.GOOD
+    if (text.startsWith(VarTag.BAD.marker)) return VarTag.BAD
+    if (text.startsWith(VarTag.GOOD.marker)) return VarTag.GOOD
     error("Unexpected var name: $text")
 }
 
-private fun Expr.nameWithoutTag() = name().removePrefix(tagMarker())
+private fun Expr.nameWithoutTag() = name().removePrefix(tag().marker)
 
 private fun String.indexOfOrLast(txt: String) = indexOf(txt).let { if (it != -1) it else lastIndex }
 
@@ -332,27 +327,4 @@ private fun Expr.variablePrefix(): String {
     val name = nameWithoutTag()
     val idx = minOf(name.indexOfOrLast("!"), name.indexOfOrLast("__"), name.indexOfOrLast("#"))
     return name.substring(0, idx)
-}
-
-fun countVariables(expr: Expr): Map<Expr, Int> {
-    val variables = mutableMapOf<Expr, Int>()
-    countVariables(expr, variables)
-    return variables
-}
-
-fun countVariables(expr: Expr, variables: MutableMap<Expr, Int>) {
-    when (expr.astKind) {
-        Z3_ast_kind.Z3_VAR_AST -> {
-            variables[expr] = (variables[expr] ?: 0) + 1
-        }
-        Z3_ast_kind.Z3_APP_AST -> {
-            if (expr.isConst && !expr.isTrue && !expr.isFalse) {
-                variables[expr] = (variables[expr] ?: 0) + 1
-            } else {
-                expr.args.forEach { countVariables(it, variables) }
-            }
-        }
-        else -> {
-        }
-    }
 }
