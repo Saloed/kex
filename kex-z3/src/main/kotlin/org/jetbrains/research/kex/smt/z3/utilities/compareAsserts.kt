@@ -15,13 +15,19 @@ fun main(args: Array<String>) {
     val options = Options()
         .addOption(Option("g", "good", true, "Z3 asserts").apply { isRequired = true })
         .addOption(Option("b", "bad", true, "Z3 asserts").apply { isRequired = true })
+        .addOption(
+            Option("e", "function-call-extension", true, "Function calls definitions")
+                .apply { isRequired = false }
+        )
         .addOption(Option("d", "dump", false, "Dump intermediate results").apply { isRequired = false })
     val parsedArgs = DefaultParser().parse(options, args)
     val goodAssertsFile = parsedArgs.getOptionValue("good").let { Paths.get(it) }
     val badAssertsFile = parsedArgs.getOptionValue("bad").let { Paths.get(it) }
+    val fcExtensionFile = parsedArgs.getOptionValue("function-call-extension")?.let { Paths.get(it) }
+    val fcExtensions = fcExtensionFile?.let { FunctionCallInfo.load(it) }
     val dumpIntermediateResults = parsedArgs.hasOption("dump")
-    val goodWithVariables = guessVariables(goodAssertsFile, dumpIntermediateResults)
-    val badWithVariables = guessVariables(badAssertsFile, dumpIntermediateResults)
+    val goodWithVariables = guessVariables(goodAssertsFile, dumpIntermediateResults, fcExtensions)
+    val badWithVariables = guessVariables(badAssertsFile, dumpIntermediateResults, fcExtensions)
     val goodWithTags = renameVariables(goodAssertsFile, goodWithVariables, VarTag.GOOD, dumpIntermediateResults)
     val badWithTags = renameVariables(badAssertsFile, badWithVariables, VarTag.BAD, dumpIntermediateResults)
     val equalityCheckerQuery =
@@ -71,9 +77,9 @@ private fun renameVariables(assertsFile: Path, source: String, tag: VarTag, dump
 }
 
 @OptIn(ExperimentalPathApi::class)
-private fun guessVariables(assertsFile: Path, dump: Boolean): String {
+private fun guessVariables(assertsFile: Path, dump: Boolean, fcExtensions: List<FunctionCallInfo>?): String {
     val source = assertsFile.readText()
-    val withVariables = guessVariableDeclarations(source)
+    val withVariables = guessVariableDeclarations(source, fcExtensions)
     if (dump) {
         val dumpFile = assertsFile.parent().resolve("${assertsFile.fileName}-with-variables")
         dumpFile.writeText(withVariables)
