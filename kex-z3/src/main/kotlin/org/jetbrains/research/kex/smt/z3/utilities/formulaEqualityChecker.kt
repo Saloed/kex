@@ -69,17 +69,23 @@ fun validateBindings(
         bothVariables += bothVar
     }
 
-    val preparedFirst = first.substitute(firstVariables.toTypedArray(), bothVariables.toTypedArray())
-    val preparedSecond = second.substitute(secondVariables.toTypedArray(), bothVariables.toTypedArray())
+    val preparedFirst = first.substitute(firstVariables.toTypedArray(), bothVariables.toTypedArray()) as BoolExpr
+    val preparedSecond = second.substitute(secondVariables.toTypedArray(), bothVariables.toTypedArray()) as BoolExpr
 
-    val variables = (countVariables(preparedFirst).keys + countVariables(preparedSecond).keys).toList()
-    val query = ctx.mkForall(ctx.mkEq(preparedFirst, preparedSecond), variables)
+    validateFormulaHasModel(ctx, preparedFirst, "first formula")
+    validateFormulaHasModel(ctx, preparedSecond, "second formula")
 
+    val query = ctx.mkNot(ctx.mkEq(preparedFirst, preparedSecond))
     val solver = ctx.mkSolver()
     solver.add(query)
-    val status = solver.check()
-    println("Validation: $status")
-    return status == Status.SATISFIABLE
+    solver.checkUnSatOrError("validation")
+    return true
+}
+
+fun validateFormulaHasModel(ctx: Context, formula: BoolExpr, message: String){
+    val solver = ctx.mkSolver()
+    solver.add(formula)
+    solver.checkSatOrError("Validation -- no formula: $message")
 }
 
 sealed class VariableBindingTree {
@@ -191,15 +197,29 @@ private fun findVariableBinding(
         )
     )
 
-    val status = solver.check()
-    if (status != Status.SATISFIABLE) error("No binding found")
-
+    solver.checkSatOrError("No binding found")
     val model = solver.model
     val actualBindings = knownBindings.toMutableMap()
     for ((variable, bindingTree) in bindingVars) {
         actualBindings[variable] = bindingTree.eval(model)
     }
     return actualBindings
+}
+
+fun Solver.checkSatOrError(message: String){
+    when(check()){
+        Status.SATISFIABLE -> return
+        Status.UNSATISFIABLE -> error("UNSATISFIABLE: $message\ncore: ${unsatCore.contentToString()}")
+        Status.UNKNOWN -> error("UNKNOWN: $message\nreason: $reasonUnknown")
+    }
+}
+
+fun Solver.checkUnSatOrError(message: String){
+    when(check()){
+        Status.UNSATISFIABLE -> return
+        Status.SATISFIABLE -> error("SATISFIABLE: $message\nmodel: $model")
+        Status.UNKNOWN -> error("UNKNOWN: $message\nreason: $reasonUnknown")
+    }
 }
 
 class VariableGroups private constructor() {
