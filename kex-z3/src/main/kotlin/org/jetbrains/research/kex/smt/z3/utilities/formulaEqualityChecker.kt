@@ -31,8 +31,11 @@ fun checkFormulasEquality(smtlib2Source: String): String {
     val secondFormula = asserts[1]
     val additionalConstraints = asserts.drop(2)
 
-    val bindings = findVariableBindings(firstFormula, secondFormula, additionalConstraints, ctx)
+    val f2sBindings = findVariableBindings(firstFormula, secondFormula, additionalConstraints, ctx)
+    val s2fBindings = findVariableBindings(secondFormula, firstFormula, additionalConstraints, ctx)
+    val bindings = mergeBindings(ctx, f2sBindings, s2fBindings, firstFormula, secondFormula)
     println(bindings)
+    checkUnboundedVariables(bindings, firstFormula, secondFormula)
 
     if (!validateBindings(firstFormula, secondFormula, bindings, ctx)) {
         error("Incorrect bindings")
@@ -41,12 +44,77 @@ fun checkFormulasEquality(smtlib2Source: String): String {
     return printBindings(firstFormula, secondFormula, bindings, ctx)
 }
 
-fun printBindings(first: BoolExpr, second: BoolExpr, bindings: Map<Expr, Expr>, ctx: Context): String {
+fun mergeBindings(
+    ctx: Context,
+    f2sBindings: Map<Expr, Expr>,
+    s2fBindings: Map<Expr, Expr>,
+    firstFormula: BoolExpr,
+    secondFormula: BoolExpr
+): List<BindingSubstitution> {
+    val allUsedVariables = f2sBindings.keys + s2fBindings.keys + f2sBindings.values.toSet() + s2fBindings.values.toSet()
+    if (!checkUnboundedVariables(allUsedVariables, ctx.mkAnd(firstFormula, secondFormula))) {
+        error("Missing or unknown variables")
+    }
+
+    val groups = mutableListOf<BindingGroup?>()
+    groups += f2sBindings.map { listOf(it.key to it.value) }.map { BindingGroup(it) }
+    groups += s2fBindings.map { listOf(it.value to it.key) }.map { BindingGroup(it) }
+
+    var merged = true
+    while (merged) {
+        merged = false
+        for (i in groups.indices) {
+            groups[i] ?: continue
+            for (j in groups.indices) {
+                if (i == j) continue
+                val jGroup = groups[j] ?: continue
+                val iGroup = groups[i] ?: continue
+                if (iGroup.variables.intersect(jGroup.variables).isEmpty()) continue
+                groups[i] = iGroup.merge(jGroup)
+                groups[j] = null
+                merged = true
+            }
+        }
+    }
+    return groups.filterNotNull().map { it.makeBindings() }
+}
+
+data class BindingGroup(val bindings: List<Pair<Expr, Expr>>) {
+    val variables by lazy { (bindings.map { it.first } + bindings.map { it.second }).toSet() }
+    fun merge(other: BindingGroup) = BindingGroup(bindings + other.bindings)
+
+    fun makeBindings(): BindingSubstitution {
+        val firstVariables = bindings.map { it.first }.toSet()
+        val secondVariables = bindings.map { it.second }.toSet()
+        check(firstVariables.size == secondVariables.size) { "Variables size mismatch" }
+        return BindingSubstitution(firstVariables, secondVariables)
+    }
+}
+
+data class BindingSubstitution(val first: Set<Expr>, val second: Set<Expr>)
+
+fun checkUnboundedVariables(bindings: List<BindingSubstitution>, firstFormula: BoolExpr, secondFormula: BoolExpr) {
+    var status = checkUnboundedVariables(bindings.flatMap { it.first }.toSet(), firstFormula)
+    status = status && checkUnboundedVariables(bindings.flatMap { it.second }.toSet(), secondFormula)
+    check(status) { "Incorrect binding" }
+}
+
+private fun checkUnboundedVariables(usedVariables: Set<Expr>, formula: BoolExpr): Boolean {
+    val formulaVariables = collectVariables(formula)
+    val unbounded = formulaVariables - usedVariables
+    val unknown = usedVariables - formulaVariables
+    println("Vars without binding: $unbounded")
+    println("Unknown Vars: $unknown")
+    return unbounded.isEmpty() && unknown.isEmpty()
+}
+
+fun printBindings(first: BoolExpr, second: BoolExpr, bindings: List<BindingSubstitution>, ctx: Context): String {
     val solver = ctx.mkSolver()
     solver.add(first)
     solver.add(second)
-    for ((key, value) in bindings.entries.sortedBy { "${it.key}" }) {
-        solver.add(ctx.mkEq(key, value))
+    for ((firstVars, secondVars) in bindings) {
+        val binding = firstVars.zip(secondVars).map { (f, s) -> ctx.mkEq(f, s) }
+        solver.add(ctx.mkAnd(*binding.toTypedArray()))
     }
     return solver.toString()
 }
@@ -54,19 +122,25 @@ fun printBindings(first: BoolExpr, second: BoolExpr, bindings: Map<Expr, Expr>, 
 fun validateBindings(
     first: BoolExpr,
     second: BoolExpr,
-    bindings: Map<Expr, Expr>,
+    bindings: List<BindingSubstitution>,
     ctx: Context
 ): Boolean {
     val firstVariables = mutableListOf<Expr>()
     val secondVariables = mutableListOf<Expr>()
     val bothVariables = mutableListOf<Expr>()
 
-    for ((firstVar, secondVar) in bindings) {
-        check(firstVar.sort == secondVar.sort) { "Sort mismatch" }
-        val bothVar = ctx.mkFreshConst("both_var", firstVar.sort)
-        firstVariables += firstVar
-        secondVariables += secondVar
-        bothVariables += bothVar
+    for ((firstVars, secondVars) in bindings) {
+        if (firstVars.isEmpty()) error("Empty binding")
+        check(firstVars.size == secondVars.size) { "Variable binding size mismatch" }
+        val varPrototype = firstVars.first()
+        check(firstVars.all { it.sort == varPrototype.sort }) { "First variables sort mismatch" }
+        check(secondVars.all { it.sort == varPrototype.sort }) { "Second variables sort mismatch" }
+
+        val bothVar = ctx.mkFreshConst("both_var", varPrototype.sort)
+        val bothVars = MutableList(firstVars.size) { _ -> bothVar }
+        firstVariables += firstVars
+        secondVariables += secondVars
+        bothVariables += bothVars
     }
 
     val preparedFirst = first.substitute(firstVariables.toTypedArray(), bothVariables.toTypedArray()) as BoolExpr

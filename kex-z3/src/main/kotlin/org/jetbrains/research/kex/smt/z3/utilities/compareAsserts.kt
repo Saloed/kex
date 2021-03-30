@@ -26,12 +26,18 @@ fun main(args: Array<String>) {
     val fcExtensionFile = parsedArgs.getOptionValue("function-call-extension")?.let { Paths.get(it) }
     val fcExtensions = fcExtensionFile?.let { FunctionCallInfo.load(it) }
     val dumpIntermediateResults = parsedArgs.hasOption("dump")
+    println("Guess good variables")
     val goodWithVariables = guessVariables(goodAssertsFile, dumpIntermediateResults, fcExtensions)
+    println("Guess bad variables")
     val badWithVariables = guessVariables(badAssertsFile, dumpIntermediateResults, fcExtensions)
+    println("Tag good variables")
     val goodWithTags = renameVariables(goodAssertsFile, goodWithVariables, VarTag.GOOD, dumpIntermediateResults)
+    println("Tag bad variables")
     val badWithTags = renameVariables(badAssertsFile, badWithVariables, VarTag.BAD, dumpIntermediateResults)
+    println("Create equality query")
     val equalityCheckerQuery =
         makeEqualityCheckerQuery(goodAssertsFile, goodWithTags, badWithTags, dumpIntermediateResults)
+    println("Run equality check")
     val checkResult = checkEquality(goodAssertsFile, equalityCheckerQuery, dumpIntermediateResults)
     println(checkResult)
 }
