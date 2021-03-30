@@ -69,7 +69,7 @@ class SearchContext(val smtlib2Source: String, val functionCallFormulaExtension:
 
     private val sourceWithFc by lazy {
         val fcExtensions = functionCallFormulaExtension ?: error("No function call info provided")
-        val defineStatements = fcExtensions.joinToString("\n") { it.smtlibDefineStatement() }
+        val defineStatements = fcExtensions.joinToString("\n") { it.smtlibDeclareStatement() }
         return@lazy "${defineStatements}\n${smtlib2Source}"
     }
 

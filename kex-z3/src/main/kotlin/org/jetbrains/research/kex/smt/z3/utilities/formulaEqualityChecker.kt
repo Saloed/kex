@@ -82,7 +82,7 @@ fun validateBindings(
     return true
 }
 
-fun validateFormulaHasModel(ctx: Context, formula: BoolExpr, message: String){
+fun validateFormulaHasModel(ctx: Context, formula: BoolExpr, message: String) {
     val solver = ctx.mkSolver()
     solver.add(formula)
     solver.checkSatOrError("Validation -- no formula: $message")
@@ -206,16 +206,16 @@ private fun findVariableBinding(
     return actualBindings
 }
 
-fun Solver.checkSatOrError(message: String){
-    when(check()){
+fun Solver.checkSatOrError(message: String) {
+    when (check()) {
         Status.SATISFIABLE -> return
         Status.UNSATISFIABLE -> error("UNSATISFIABLE: $message\ncore: ${unsatCore.contentToString()}")
         Status.UNKNOWN -> error("UNKNOWN: $message\nreason: $reasonUnknown")
     }
 }
 
-fun Solver.checkUnSatOrError(message: String){
-    when(check()){
+fun Solver.checkUnSatOrError(message: String) {
+    when (check()) {
         Status.UNSATISFIABLE -> return
         Status.SATISFIABLE -> error("SATISFIABLE: $message\nmodel: $model")
         Status.UNKNOWN -> error("UNKNOWN: $message\nreason: $reasonUnknown")
@@ -322,7 +322,14 @@ class ArraysRemover(val ctx: Context) {
             Z3_decl_kind.Z3_OP_OR -> ctx.mkOr(*newArgs.map { it as BoolExpr }.toTypedArray())
             Z3_decl_kind.Z3_OP_NOT -> ctx.mkNot(newArgs[0] as BoolExpr)
             Z3_decl_kind.Z3_OP_IMPLIES -> ctx.mkImplies(newArgs[0] as BoolExpr, newArgs[1] as BoolExpr)
-            else -> TODO("Unexpected decl kind")
+            Z3_decl_kind.Z3_OP_UNINTERPRETED -> when (expr.name()) {
+                "function_call" -> {
+                    val newDecl = ctx.mkFuncDecl(expr.funcDecl.name, newSorts, ctx.boolSort)
+                    ctx.mkApp(newDecl, *newArgs.toTypedArray())
+                }
+                else -> TODO("Unexpected uninterpreted function: $expr")
+            }
+            else -> TODO("Unexpected decl kind: $expr")
         }
     }
 }
