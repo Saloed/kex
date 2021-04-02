@@ -326,12 +326,9 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         addQuery(solver)
         println("*".repeat(20))
         println("Call solver")
-        println(solver)
-        println("*".repeat(20))
         val model = querySolver(solver)
         updateBindingHistory(model)
         val bindings = createBindings(model)
-        println(solver)
         println("Validate query")
         println("*".repeat(20))
         if (!validateBindings(bindings, queryFirstFormula, querySecondFormula)) {
