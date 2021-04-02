@@ -32,6 +32,23 @@ data class FunctionCallInfo(
     fun smtlibDeclareStatement(): String =
         "(declare-fun function_call (${allArgsWithIndex.joinToString(" ") { it.type }}) Bool)"
 
+    fun smtlibFunctionDefinition() = """
+        ${smtlibDeclareStatement()}
+        ${allArgsWithIndex.joinToString ("\n"){ "(declare-fun ${it.name} () ${it.type})" }}
+        (assert 
+        (=> (= ${idxArg.name} ${idx})
+            (= 
+                (function_call  ${allArgsWithIndex.joinToString(" ") { it.name }} )
+                $definition
+            )
+        )
+        )
+    """.trimIndent()
+
+    fun smtlibParseableDefAsAssert() = """
+        (assert $definition)
+    """.trimIndent()
+
 
     companion object {
         @OptIn(ExperimentalPathApi::class)

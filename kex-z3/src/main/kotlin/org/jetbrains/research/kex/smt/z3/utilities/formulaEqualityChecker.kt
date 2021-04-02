@@ -9,6 +9,7 @@ import org.jetbrains.research.kex.smt.z3.Z3OptionBuilder
 import java.nio.file.Paths
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.readText
+import kotlin.system.exitProcess
 
 
 @OptIn(ExperimentalPathApi::class)
@@ -323,15 +324,16 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         variableBindingFormula = ctx.mkAnd(*bindings.toTypedArray()).simplifyBool()
         otherConstraintFormula = ctx.mkAnd(*other.toTypedArray()).simplifyBool()
 
-        queryFirstFormula = first
-        querySecondFormula = second
-        queryFormula = ctx.mkEq(first, second)
+        val ufRemover = UninterpretedFunctionsRemover(ctx, fcExtension)
+        queryFirstFormula = ufRemover.remove(first) as BoolExpr
+        querySecondFormula = ufRemover.remove(second) as BoolExpr
+        queryFormula = ctx.mkEq(queryFirstFormula, querySecondFormula)
 
         conditionVariables = bindingVars.values.flatMap { it.conditions() }.toSet()
 
         val uninterpretedFunctionsCollector = UninterpretedFunctionsCollector()
-        uninterpretedFunctionsCollector.visit(first)
-        uninterpretedFunctionsCollector.visit(second)
+        uninterpretedFunctionsCollector.visit(queryFirstFormula)
+        uninterpretedFunctionsCollector.visit(querySecondFormula)
         other.forEach { uninterpretedFunctionsCollector.visit(it) }
         val uninterpretedFunctions = uninterpretedFunctionsCollector.uninterpretedFunctions
         uninterpretedFunctionsInterpretations = uninterpretedFunctions.flatMap { createUFInterpretation(it) }
@@ -360,12 +362,19 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         } else if (function.name == ctx.mkSymbol("function_call")) {
             val knownFunctionCalls = fcExtension ?: error("No function calls provided")
             val matchedCalls = knownFunctionCalls.filter { it.matchDeclaration(function) }
+
+            val statements = matchedCalls
+                .map { it.smtlibFunctionDefinition() }
+                .flatMap { ctx.parseSMTLIB2String(it, emptyArray(), emptyArray(), emptyArray(), emptyArray()).toList() }
+            val noArraysStatements = statements.map { ArraysRemover(ctx).removeArrays(it) }
+            return noArraysStatements.map { expr ->
+                val vars = collectVariables(expr).toList()
+                ctx.mkForall(expr, vars)
+            }
+
             val vars = function.domain.map { ctx.mkFreshConst("var_", it) }
             val otherVars = function.domain.map { ctx.mkFreshConst("other_var_", it) }
-            return listOf(
-                 ctx.mkForall( ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr, vars)
-//                ctx.mkForall(ctx.mkImplies(ctx.mkEq(vars[0], ctx.mkInt(1)), ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr), vars)
-            )
+
             val functionDefs = matchedCalls.flatMap { call ->
                 val idxVar = vars[0]
                 val otherIdxVar = otherVars[0]
@@ -413,6 +422,10 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
                 )
                 ctx.mkForall(statement, vars + otherVarsWithSameIdx)
             }
+            return listOf(
+                ctx.mkForall(ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr, vars)
+//                ctx.mkForall(ctx.mkImplies(ctx.mkEq(vars[0], ctx.mkInt(1)), ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr), vars)
+            )
             return functionDefs //+ interpretations
         }
         error("Unexpected UF $function")
@@ -458,7 +471,8 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
                 .mapValues { (_, conditions) -> ctx.mkOr(*conditions.toTypedArray()) }
             constraints += tree.uniqueConstraint(ctx, otherVariablesConditions)
         }
-        return constraints.map { it.simplifyBool() }
+        val allConstraints = constraints.map { it.simplifyBool() }.toTypedArray()
+        return listOf(ctx.mkAnd(*allConstraints).simplifyBool())
     }
 
 
@@ -471,6 +485,7 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     }
 
     private fun findBinding(): Map<Expr, Expr> {
+//        queryForFixpoint()
         val solver = createSolver()
         addVariableConstrains(solver)
         addQuery(solver)
@@ -489,6 +504,41 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         }
         println("*".repeat(20))
         return bindings
+    }
+
+    private fun queryForFixpoint() {
+        val solver = ctx.mkSolver("HORN")
+        val params = ctx.mkParams()
+        Z3OptionBuilder()
+            .fp.engine("spacer")
+            //        .fp.xform.inlineLinear(false)
+            //        .fp.xform.inlineEager(false)
+            .produceUnsatCores(true)
+            .addToParams(params)
+        solver.setParameters(params)
+
+        val allUnique = ctx.mkAnd(*uniquenessConstraints.toTypedArray())
+        val allInterpretations = ctx.mkTrue()// ctx.mkAnd(*uninterpretedFunctionsInterpretations.toTypedArray())
+        val condition = ctx.mkAnd(allUnique, allInterpretations, knownBindingFormula, variableBindingFormula)
+        val conditionVariables = bindingVars.values.flatMap { it.conditions() }.toSet().toList()
+        val predicate = ctx.mkFuncDecl("xxx_predicate", conditionVariables.map { it.sort }.toTypedArray(), ctx.boolSort)
+        val predicateApp = ctx.mkApp(predicate, *conditionVariables.toTypedArray())
+        val positive = ctx.mkImplies(ctx.mkImplies(ctx.mkAnd(condition), queryFormula), predicateApp as BoolExpr)
+        val negative = ctx.mkImplies(
+            ctx.mkAnd(predicateApp, ctx.mkImplies(ctx.mkAnd(condition), ctx.mkNot(queryFormula))),
+            ctx.mkFalse()
+        )
+        val allVariables = (collectVariables(positive) + collectVariables(negative)).toList()
+        val posStatement = ctx.mkForall(positive, allVariables)
+        val negStatement = ctx.mkForall(negative, allVariables)
+        solver.add(posStatement)
+        solver.add(negStatement)
+        println(solver)
+        val status = solver.check()
+        println(status)
+        println(solver.reasonUnknown)
+        println(solver.model)
+        exitProcess(1)
     }
 
     private fun updateBindingHistory(model: Model) {
@@ -576,6 +626,26 @@ class VariableGroups private constructor(private val firstFormula: Expr, private
             .groupWith("Variable count") { vars -> vars.groupBy({ it.value }, { it.key }) }
             .groupWith("Variable sort") { vars -> vars.groupBy { it.sort } }
             .groupByUsagePattern()
+            .groupWith("Variable name") { vars -> vars.groupByIfNeeded { it.variableKindByName() } }
+    }
+
+    private fun Expr.variableKindByName(): String {
+        val untaggedName = nameWithoutTag()
+        if (untaggedName.matches(Regex(".*__tr\\d+"))) {
+            return "tr_kind"
+        }
+        if (untaggedName.matches(Regex(".*#level_\\d+!\\d+"))) {
+            return "level_kind"
+        }
+        if (untaggedName.matches(Regex(".*#reach_tag_\\d+_\\d+"))) {
+            return "reach_tag_kind"
+        }
+        return ""
+    }
+
+    private inline fun <reified T, reified K> List<T>.groupByIfNeeded(key: (T) -> K): Map<K?, List<T>> {
+        if (size <= 1) return mapOf(null to this)
+        return groupBy(key)
     }
 
     private fun List<VariableGroup<Expr>>.groupByUsagePattern() = flatMap { (first, second) ->
@@ -674,6 +744,35 @@ class UninterpretedFunctionsCollector {
     }
 }
 
+class UninterpretedFunctionsRemover(val ctx: Context, val fcExtension: List<FunctionCallInfo>?) {
+    fun remove(expr: Expr): Expr {
+        if (!expr.isApp) return expr
+        if (expr.isConst) return expr
+        val newArgs = expr.args.map { remove(it) }
+        if (expr.funcDecl.declKind != Z3_decl_kind.Z3_OP_UNINTERPRETED) {
+            return expr.funcDecl.apply(*newArgs.toTypedArray())
+        }
+        if (expr.funcDecl.name == ctx.mkSymbol("store_approx")) {
+            return newArgs[0]
+        }
+        if (expr.funcDecl.name == ctx.mkSymbol("function_call")) {
+            val fcInfo = fcExtension ?: error("No fc info")
+            val idx = (newArgs[0] as IntNum).int
+            val functionInfo = fcInfo.find { it.idx == idx } ?: error("No function with idx: $idx")
+            val args = functionInfo.allArgsWithIndex.zip(newArgs).map { ctx.mkConst(it.first.name, it.second.sort) }
+            val functionDef = ctx.parseSMTLIB2String(
+                functionInfo.smtlibParseableDefAsAssert(),
+                emptyArray(),
+                emptyArray(),
+                args.map { it.funcDecl.name }.toTypedArray(),
+                args.map { it.funcDecl }.toTypedArray()
+            )[0]
+            return functionDef.substitute(args.toTypedArray(), newArgs.toTypedArray())
+        }
+        error("Unexpected UF: $expr")
+    }
+}
+
 class ArraysRemover(val ctx: Context) {
     val arrayVarsMapping = mutableMapOf<Expr, Expr>()
 
@@ -689,7 +788,7 @@ class ArraysRemover(val ctx: Context) {
         return Triple(newFirst, newSecond, newOthers)
     }
 
-    private fun removeArrays(expr: Expr): Expr {
+    fun removeArrays(expr: Expr): Expr {
         if (!expr.isApp && !expr.isArray) return expr
         if (expr.isSelect) {
             TODO("SELECT")
