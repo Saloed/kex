@@ -9,7 +9,6 @@ import org.jetbrains.research.kex.smt.z3.Z3OptionBuilder
 import java.nio.file.Paths
 import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.readText
-import kotlin.system.exitProcess
 
 
 @OptIn(ExperimentalPathApi::class)
@@ -127,7 +126,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     private lateinit var orderedVariables: List<Expr>
     private lateinit var bindings: List<BoolExpr>
     private lateinit var uniquenessConstraints: List<BoolExpr>
-    private lateinit var uninterpretedFunctionsInterpretations: List<BoolExpr>
     private lateinit var knownBindings: MutableMap<Expr, Expr>
     private lateinit var bindingVars: MutableMap<Expr, VariableBindingTree>
     private lateinit var arrayVarMapping: Map<Expr, Expr>
@@ -149,7 +147,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     }
 
     fun loop(): String {
-//        initFixedVariables()
         while (true) {
             println("-".repeat(50))
             val bindings = searchForBinding()
@@ -158,57 +155,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
             if (validateBindings(bindings, originalFirst, originalSecond)) {
                 return printBindings(bindings)
             }
-        }
-    }
-
-    private fun initFixedVariables() {
-        val solver = createSolver()
-        addVariableConstrains(solver)
-        addQuery(solver)
-        solver.push()
-        val fixedVariables = mutableSetOf<Expr>()
-        var hasChanges = true
-        while (hasChanges) {
-            hasChanges = false
-            solver.push()
-            for (fixedVar in fixedVariableSelectors) {
-                solver.add(fixedVar)
-            }
-
-            for (variable in conditionVariables) {
-                if (variable in fixedVariables) continue
-                println("-".repeat(30))
-                println(variable)
-                solver.push()
-                solver.add(ctx.mkEq(variable, ctx.mkTrue()))
-                val statusTrue = solver.check()
-                println(statusTrue)
-                if (statusTrue == Status.UNKNOWN) {
-                    println(solver.reasonUnknown)
-                }
-                solver.pop()
-                solver.push()
-                solver.add(ctx.mkEq(variable, ctx.mkFalse()))
-                val statusFalse = solver.check()
-                println(statusFalse)
-                if (statusFalse == Status.UNKNOWN) {
-                    println(solver.reasonUnknown)
-                }
-                solver.pop()
-                if (statusTrue == Status.SATISFIABLE && statusFalse != Status.SATISFIABLE) {
-                    fixedVariables += variable
-                    hasChanges = true
-                    fixedVariableSelectors += ctx.mkEq(variable, ctx.mkTrue())
-                    break
-                }
-                if (statusTrue != Status.SATISFIABLE && statusFalse == Status.SATISFIABLE) {
-                    fixedVariables += variable
-                    hasChanges = true
-                    fixedVariableSelectors += ctx.mkEq(variable, ctx.mkFalse())
-                    break
-                }
-            }
-            solver.pop()
         }
     }
 
@@ -330,116 +276,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         queryFormula = ctx.mkEq(queryFirstFormula, querySecondFormula)
 
         conditionVariables = bindingVars.values.flatMap { it.conditions() }.toSet()
-
-        val uninterpretedFunctionsCollector = UninterpretedFunctionsCollector()
-        uninterpretedFunctionsCollector.visit(queryFirstFormula)
-        uninterpretedFunctionsCollector.visit(querySecondFormula)
-        other.forEach { uninterpretedFunctionsCollector.visit(it) }
-        val uninterpretedFunctions = uninterpretedFunctionsCollector.uninterpretedFunctions
-        uninterpretedFunctionsInterpretations = uninterpretedFunctions.flatMap { createUFInterpretation(it) }
-    }
-
-    private fun createUFInterpretation(function: FuncDecl): List<BoolExpr> {
-        if (function.name == ctx.mkSymbol("store_approx")) {
-            return emptyList()
-            val sorts = function.domain
-            check(sorts.size == 3) { "Unexpected array store" }
-            val arrays = listOf("a1", "a2").map { ctx.mkConst(it, sorts[0]) }
-            val indices = listOf("i1", "i2").map { ctx.mkConst(it, sorts[1]) }
-            val values = listOf("v1", "v2").map { ctx.mkConst(it, sorts[2]) }
-            val statement = ctx.mkImplies(
-                ctx.mkAnd(
-                    ctx.mkEq(arrays[0], arrays[1]),
-                    ctx.mkEq(indices[0], indices[1]),
-                    ctx.mkEq(values[0], values[1])
-                ),
-                ctx.mkEq(
-                    ctx.mkApp(function, arrays[0], indices[0], values[0]),
-                    ctx.mkApp(function, arrays[1], indices[1], values[1]),
-                )
-            )
-            return listOf(ctx.mkForall(statement, arrays + indices + values))
-        } else if (function.name == ctx.mkSymbol("function_call")) {
-            val knownFunctionCalls = fcExtension ?: error("No function calls provided")
-            val matchedCalls = knownFunctionCalls.filter { it.matchDeclaration(function) }
-
-            val statements = matchedCalls
-                .map { it.smtlibFunctionDefinition() }
-                .flatMap { ctx.parseSMTLIB2String(it, emptyArray(), emptyArray(), emptyArray(), emptyArray()).toList() }
-            val noArraysStatements = statements.map { ArraysRemover(ctx).removeArrays(it) }
-            return noArraysStatements.map { expr ->
-                val vars = collectVariables(expr).toList()
-                ctx.mkForall(expr, vars)
-            }
-
-            val vars = function.domain.map { ctx.mkFreshConst("var_", it) }
-            val otherVars = function.domain.map { ctx.mkFreshConst("other_var_", it) }
-
-            val functionDefs = matchedCalls.flatMap { call ->
-                val idxVar = vars[0]
-                val otherIdxVar = otherVars[0]
-                val inVars = vars.subList(1, call.inArgs.size + 1)
-                val inOtherVars = otherVars.subList(1, call.inArgs.size + 1)
-                val thisCall = ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr
-                val otherCall = ctx.mkApp(function, *otherVars.toTypedArray()) as BoolExpr
-
-                val idxEquality = ctx.mkEq(idxVar, otherIdxVar)
-                val inVarsEquality = inVars.zip(inOtherVars) { a, b -> ctx.mkEq(a, b) }
-                val idxNotEquality = ctx.mkNot(idxEquality)
-                val inVarsNotEquality = inVarsEquality.map { ctx.mkNot(it) }
-
-                val positive = ctx.mkImplies(
-                    ctx.mkAnd(idxEquality, *inVarsEquality.toTypedArray()),
-                    ctx.mkEq(thisCall, otherCall)
-                )
-                val negative = ctx.mkImplies(
-                    ctx.mkOr(idxNotEquality, *inVarsNotEquality.toTypedArray()),
-                    ctx.mkNot(ctx.mkEq(thisCall, otherCall))
-                )
-                listOf(
-                    ctx.mkForall(positive, vars + otherVars),
-                    ctx.mkForall(negative, vars + otherVars)
-                )
-            }
-
-            val otherVarsWithSameIdx = otherVars.toMutableList()
-            otherVarsWithSameIdx[0] = vars[0]
-
-            val interpretations = matchedCalls.map { call ->
-                val idxVar = vars[0]
-                val inVars = vars.subList(1, call.inArgs.size + 1)
-                val inOtherVars = otherVarsWithSameIdx.subList(1, call.inArgs.size + 1)
-                val outVars = vars.subList(call.inArgs.size + 1, vars.size)
-                val outOtherVars = otherVarsWithSameIdx.subList(call.inArgs.size + 1, vars.size)
-                val idxMatch = ctx.mkEq(idxVar, ctx.mkInt(call.idx))
-                val inVarsEquality = inVars.zip(inOtherVars) { a, b -> ctx.mkEq(a, b) }
-                val outVarsEquality = outVars.zip(outOtherVars) { a, b -> ctx.mkEq(a, b) }
-                val thisCall = ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr
-                val otherCall = ctx.mkApp(function, *otherVarsWithSameIdx.toTypedArray()) as BoolExpr
-                val statement = ctx.mkImplies(
-                    ctx.mkAnd(idxMatch, thisCall, otherCall, *inVarsEquality.toTypedArray()),
-                    ctx.mkAnd(*outVarsEquality.toTypedArray())
-                )
-                ctx.mkForall(statement, vars + otherVarsWithSameIdx)
-            }
-            return listOf(
-                ctx.mkForall(ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr, vars)
-//                ctx.mkForall(ctx.mkImplies(ctx.mkEq(vars[0], ctx.mkInt(1)), ctx.mkApp(function, *vars.toTypedArray()) as BoolExpr), vars)
-            )
-            return functionDefs //+ interpretations
-        }
-        error("Unexpected UF $function")
-    }
-
-    private fun FunctionCallInfo.matchDeclaration(decl: FuncDecl): Boolean {
-        val sortsStr = decl.domain.map { "$it" }
-        val functionTypes = allArgsWithIndex.map { it.type }.map { t ->
-            when {
-                t.startsWith("(Array ") -> "Int" // Array removal
-                else -> t
-            }
-        }
-        return sortsStr == functionTypes
     }
 
     private fun checkUnboundedVariables(bindings: Map<Expr, Expr>) {
@@ -485,7 +321,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     }
 
     private fun findBinding(): Map<Expr, Expr> {
-//        queryForFixpoint()
         val solver = createSolver()
         addVariableConstrains(solver)
         addQuery(solver)
@@ -504,41 +339,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         }
         println("*".repeat(20))
         return bindings
-    }
-
-    private fun queryForFixpoint() {
-        val solver = ctx.mkSolver("HORN")
-        val params = ctx.mkParams()
-        Z3OptionBuilder()
-            .fp.engine("spacer")
-            //        .fp.xform.inlineLinear(false)
-            //        .fp.xform.inlineEager(false)
-            .produceUnsatCores(true)
-            .addToParams(params)
-        solver.setParameters(params)
-
-        val allUnique = ctx.mkAnd(*uniquenessConstraints.toTypedArray())
-        val allInterpretations = ctx.mkTrue()// ctx.mkAnd(*uninterpretedFunctionsInterpretations.toTypedArray())
-        val condition = ctx.mkAnd(allUnique, allInterpretations, knownBindingFormula, variableBindingFormula)
-        val conditionVariables = bindingVars.values.flatMap { it.conditions() }.toSet().toList()
-        val predicate = ctx.mkFuncDecl("xxx_predicate", conditionVariables.map { it.sort }.toTypedArray(), ctx.boolSort)
-        val predicateApp = ctx.mkApp(predicate, *conditionVariables.toTypedArray())
-        val positive = ctx.mkImplies(ctx.mkImplies(ctx.mkAnd(condition), queryFormula), predicateApp as BoolExpr)
-        val negative = ctx.mkImplies(
-            ctx.mkAnd(predicateApp, ctx.mkImplies(ctx.mkAnd(condition), ctx.mkNot(queryFormula))),
-            ctx.mkFalse()
-        )
-        val allVariables = (collectVariables(positive) + collectVariables(negative)).toList()
-        val posStatement = ctx.mkForall(positive, allVariables)
-        val negStatement = ctx.mkForall(negative, allVariables)
-        solver.add(posStatement)
-        solver.add(negStatement)
-        println(solver)
-        val status = solver.check()
-        println(status)
-        println(solver.reasonUnknown)
-        println(solver.model)
-        exitProcess(1)
     }
 
     private fun updateBindingHistory(model: Model) {
@@ -571,9 +371,6 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     }
 
     private fun addQuery(solver: Solver) {
-        for (ufInterpretation in uninterpretedFunctionsInterpretations) {
-            solver.add(ufInterpretation)
-        }
         solver.add(
             ctx.mkForall(
                 ctx.mkImplies(ctx.mkAnd(knownBindingFormula, variableBindingFormula), otherConstraintFormula),
@@ -729,18 +526,6 @@ class UsageCollector private constructor(private val variable: Expr) {
             collector.visitExpr(formula, emptyList())
             return collector.usages
         }
-    }
-}
-
-
-class UninterpretedFunctionsCollector {
-    val uninterpretedFunctions = mutableSetOf<FuncDecl>()
-    fun visit(expr: Expr) {
-        if (!expr.isApp) return
-        if (!expr.isConst && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_UNINTERPRETED) {
-            uninterpretedFunctions += expr.funcDecl
-        }
-        expr.args.forEach { visit(it) }
     }
 }
 
