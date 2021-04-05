@@ -65,6 +65,7 @@ sealed class VariableBindingTree {
             return ctx.mkAnd(uniquenessConstraint, nestedConstraint)
         }
 
+        override fun variables() = listOf(expr) + tree.variables()
         override fun toString() = "$condition -> $expr\n$tree"
     }
 
@@ -81,6 +82,7 @@ sealed class VariableBindingTree {
             return mapOf(expr to condition)
         }
 
+        override fun variables() = listOf(expr)
         override fun bindingValue(ctx: Context): Expr = expr
         override fun conditions(): List<Expr> = emptyList()
         override fun eval(model: Model): Expr = expr
@@ -92,6 +94,7 @@ sealed class VariableBindingTree {
     protected abstract fun variableSelectCondition(ctx: Context, root: VariableBindingTree): Map<Expr, BoolExpr>
     abstract fun bindingValue(ctx: Context): Expr
     abstract fun conditions(): List<Expr>
+    abstract fun variables(): List<Expr>
     abstract fun eval(model: Model): Expr
     abstract fun uniqueConstraint(ctx: Context, variablesConditions: Map<Expr, BoolExpr>): BoolExpr
 
@@ -129,6 +132,7 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
     private lateinit var knownBindings: MutableMap<Expr, Expr>
     private lateinit var bindingVars: MutableMap<Expr, VariableBindingTree>
     private lateinit var arrayVarMapping: Map<Expr, Expr>
+    private val bindingHistory = mutableListOf<Map<Expr, Expr>>()
     private val variableSelectionHistory = mutableListOf<BoolExpr>()
     private val fixedVariableSelectors = mutableListOf<BoolExpr>()
 
@@ -352,6 +356,7 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         for ((variable, bindingTree) in bindingVars) {
             actualBindings[variable] = bindingTree.eval(model)
         }
+        bindingHistory += actualBindings.toMutableMap()
         return actualBindings
     }
 
@@ -384,12 +389,41 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
 
     private fun querySolver(solver: Solver): Model {
         when (solver.check()) {
-            Status.UNSATISFIABLE -> error("UNSATISFIABLE: No binding found\ncore: ${solver.unsatCore.contentToString()}")
+            Status.UNSATISFIABLE -> reportNoBindingFound(solver)
             Status.UNKNOWN -> error("UNKNOWN: No binding found\nreason: ${solver.reasonUnknown}")
             Status.SATISFIABLE -> {
             }
         }
         return solver.model
+    }
+
+    private fun reportNoBindingFound(solver: Solver) {
+        val bindingSet = bindingHistory.map { it.entries.toMutableSet() }
+        for (binding in bindingSet) {
+            binding -= knownBindings.entries
+        }
+        var minedBindings = bindingSet.first().toSet()
+        for (binding in bindingSet) {
+            minedBindings = minedBindings.intersect(binding)
+        }
+        val allVarsWithBinding = knownBindings.keys + minedBindings.map { it.key }
+        val unboundedVars = bindingVars.filterKeys { it !in allVarsWithBinding }
+        val allBoundedVariables = (knownBindings.values + minedBindings.map { it.value }).toSet()
+
+        println("#".repeat(50))
+        println("Known bindings")
+        for ((f, s) in knownBindings) {
+            println("$f = $s")
+        }
+        println("Mined bindings")
+        for ((f, s) in minedBindings) {
+            println("$f = $s")
+        }
+        println("Unknown bindings")
+        for ((f, variants) in unboundedVars) {
+            println("$f = ${variants.variables().filter { it !in allBoundedVariables }}")
+        }
+        error("UNSATISFIABLE: No binding found\ncore: ${solver.unsatCore.contentToString()}")
     }
 
     private fun createSolver(): Solver {
