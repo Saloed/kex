@@ -1,5 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.utilities
 
+import com.abdullin.kthelper.collection.firstOrElse
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import org.apache.commons.cli.DefaultParser
@@ -15,21 +16,15 @@ import kotlin.io.path.readText
 fun main(args: Array<String>) {
     val options = Options()
         .addOption(Option("f", "file", true, "Z3 asserts").apply { isRequired = true })
-        .addOption(
-            Option("e", "function-call-extension", true, "Function calls definitions")
-                .apply { isRequired = false }
-        )
 
     val parsedArgs = DefaultParser().parse(options, args)
     val file = parsedArgs.getOptionValue("file").let { Paths.get(it) }
-    val fcExtensionFile = parsedArgs.getOptionValue("function-call-extension")?.let { Paths.get(it) }
     val smtlib2Source = file.readText()
-    val fcExtension = fcExtensionFile?.let { FunctionCallInfo.load(it) }
-    val formulaWithBindings = checkFormulasEquality(smtlib2Source, fcExtension)
+    val formulaWithBindings = checkFormulasEquality(smtlib2Source)
     println(formulaWithBindings)
 }
 
-fun checkFormulasEquality(smtlib2Source: String, fcExtension: List<FunctionCallInfo>?): String {
+fun checkFormulasEquality(smtlib2Source: String): String {
     val ctx = Context()
     val asserts = ctx.parseSMTLIB2String(smtlib2Source, emptyArray(), emptyArray(), emptyArray(), emptyArray())
     check(asserts.size >= 2) { "Unexpected asserts" }
@@ -37,7 +32,7 @@ fun checkFormulasEquality(smtlib2Source: String, fcExtension: List<FunctionCallI
     val secondFormula = asserts[1]
     val additionalConstraints = asserts.drop(2)
 
-    val bindingSearchContext = BindingSearchContext(ctx, fcExtension)
+    val bindingSearchContext = BindingSearchContext(ctx)
     bindingSearchContext.init(firstFormula, secondFormula, additionalConstraints)
     return bindingSearchContext.loop()
 }
@@ -115,7 +110,7 @@ sealed class VariableBindingTree {
     }
 }
 
-class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallInfo>?) {
+class BindingSearchContext(val ctx: Context) {
     private lateinit var querySecondFormula: BoolExpr
     private lateinit var queryFirstFormula: BoolExpr
     private lateinit var originalFirst: BoolExpr
@@ -274,7 +269,7 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         variableBindingFormula = ctx.mkAnd(*bindings.toTypedArray()).simplifyBool()
         otherConstraintFormula = ctx.mkAnd(*other.toTypedArray()).simplifyBool()
 
-        val ufRemover = UninterpretedFunctionsRemover(ctx, fcExtension)
+        val ufRemover = UninterpretedFunctionsRemover(ctx)
         queryFirstFormula = ufRemover.remove(first) as BoolExpr
         querySecondFormula = ufRemover.remove(second) as BoolExpr
         queryFormula = ctx.mkEq(queryFirstFormula, querySecondFormula)
@@ -402,7 +397,7 @@ class BindingSearchContext(val ctx: Context, val fcExtension: List<FunctionCallI
         for (binding in bindingSet) {
             binding -= knownBindings.entries
         }
-        var minedBindings = bindingSet.first().toSet()
+        var minedBindings = bindingSet.firstOrElse { emptyList() }.toSet()
         for (binding in bindingSet) {
             minedBindings = minedBindings.intersect(binding)
         }
@@ -560,7 +555,7 @@ class UsageCollector private constructor(private val variable: Expr) {
     }
 }
 
-class UninterpretedFunctionsRemover(val ctx: Context, val fcExtension: List<FunctionCallInfo>?) {
+class UninterpretedFunctionsRemover(val ctx: Context) {
     fun remove(expr: Expr): Expr {
         if (!expr.isApp) return expr
         if (expr.isConst) return expr
@@ -572,18 +567,7 @@ class UninterpretedFunctionsRemover(val ctx: Context, val fcExtension: List<Func
             return newArgs[0]
         }
         if (expr.funcDecl.name == ctx.mkSymbol("function_call")) {
-            val fcInfo = fcExtension ?: error("No fc info")
-            val idx = (newArgs[0] as IntNum).int
-            val functionInfo = fcInfo.find { it.idx == idx } ?: error("No function with idx: $idx")
-            val args = functionInfo.allArgsWithIndex.zip(newArgs).map { ctx.mkConst(it.first.name, it.second.sort) }
-            val functionDef = ctx.parseSMTLIB2String(
-                functionInfo.smtlibParseableDefAsAssert(),
-                emptyArray(),
-                emptyArray(),
-                args.map { it.funcDecl.name }.toTypedArray(),
-                args.map { it.funcDecl }.toTypedArray()
-            )[0]
-            return functionDef.substitute(args.toTypedArray(), newArgs.toTypedArray())
+            return ctx.mkTrue()
         }
         error("Unexpected UF: $expr")
     }

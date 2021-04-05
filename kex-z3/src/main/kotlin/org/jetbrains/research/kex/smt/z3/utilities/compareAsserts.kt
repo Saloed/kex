@@ -38,18 +38,13 @@ fun main(args: Array<String>) {
     val equalityCheckerQuery =
         makeEqualityCheckerQuery(goodAssertsFile, goodWithTags, badWithTags, dumpIntermediateResults)
     println("Run equality check")
-    val checkResult = checkEquality(goodAssertsFile, equalityCheckerQuery, dumpIntermediateResults, fcExtensions)
+    val checkResult = checkEquality(goodAssertsFile, equalityCheckerQuery, dumpIntermediateResults)
     println(checkResult)
 }
 
 @OptIn(ExperimentalPathApi::class)
-fun checkEquality(
-    assertsFile: Path,
-    equalityCheckerQuery: String,
-    dump: Boolean,
-    fcExtension: List<FunctionCallInfo>?
-): String {
-    val result = checkFormulasEquality(equalityCheckerQuery, fcExtension)
+fun checkEquality(assertsFile: Path, equalityCheckerQuery: String, dump: Boolean): String {
+    val result = checkFormulasEquality(equalityCheckerQuery)
     if (dump) {
         val dumpFile = assertsFile.parent().resolve("${assertsFile.fileName}-result")
         dumpFile.writeText(result)
