@@ -118,7 +118,6 @@ class BindingSearchContext(val ctx: Context) {
     private lateinit var arrayReverseMapping: Map<Expr, Expr>
     private lateinit var conditionVariables: Set<Expr>
     private lateinit var queryFormula: BoolExpr
-    private lateinit var otherConstraintFormula: BoolExpr
     private lateinit var variableBindingFormula: BoolExpr
     private lateinit var knownBindingFormula: BoolExpr
     private lateinit var orderedVariables: List<Expr>
@@ -243,20 +242,7 @@ class BindingSearchContext(val ctx: Context) {
         other: List<BoolExpr>,
         groups: List<Pair<List<Expr>, List<Expr>>>
     ) {
-        knownBindings = mutableMapOf()
-        bindingVars = mutableMapOf()
-
-        for ((firstGroup, secondGroup) in groups) {
-            check(firstGroup.size == secondGroup.size) { "Group size mismatch" }
-            if (firstGroup.size == 1) {
-                knownBindings[firstGroup.first()] = secondGroup.first()
-                continue
-            }
-            for ((i, variable) in firstGroup.withIndex()) {
-                val bindingTree = VariableBindingTree.create(ctx, secondGroup, i)
-                bindingVars[variable] = bindingTree
-            }
-        }
+        initBindings(groups, other, first, second)
 
         uniquenessConstraints = bindingUniquenessConstraints(bindingVars.values.toList())
         bindings = bindingVars.map { (variable, bindingTree) ->
@@ -267,7 +253,6 @@ class BindingSearchContext(val ctx: Context) {
         orderedVariables = (countVariables(first).keys + countVariables(second).keys).toList()
         knownBindingFormula = ctx.mkAnd(*knownBindings.map { ctx.mkEq(it.key, it.value) }.toTypedArray()).simplifyBool()
         variableBindingFormula = ctx.mkAnd(*bindings.toTypedArray()).simplifyBool()
-        otherConstraintFormula = ctx.mkAnd(*other.toTypedArray()).simplifyBool()
 
         val ufRemover = UninterpretedFunctionsRemover(ctx)
         queryFirstFormula = ufRemover.remove(first) as BoolExpr
@@ -275,6 +260,76 @@ class BindingSearchContext(val ctx: Context) {
         queryFormula = ctx.mkEq(queryFirstFormula, querySecondFormula)
 
         conditionVariables = bindingVars.values.flatMap { it.conditions() }.toSet()
+    }
+
+    private fun initBindings(
+        groups: List<Pair<List<Expr>, List<Expr>>>,
+        other: List<BoolExpr>,
+        first: BoolExpr,
+        second: BoolExpr
+    ) {
+        knownBindings = mutableMapOf()
+        bindingVars = mutableMapOf()
+
+        initProvidedBindings(other, first, second)
+
+        val usedFirstVars = knownBindings.keys.toSet()
+        val usedSecondVars = knownBindings.values.toSet()
+        check(usedFirstVars.size == usedSecondVars.size) { "Duplicates in bindings" }
+
+        for ((firstGroup, secondGroup) in groups) {
+            check(firstGroup.size == secondGroup.size) { "Group size mismatch" }
+            if (firstGroup.size == 1) {
+                val firstVar = firstGroup.first()
+                val secondVar = secondGroup.first()
+                if (firstVar in knownBindings) {
+                    val knownBinding = knownBindings[firstVar]
+                    check(secondVar == knownBinding) {
+                        "Different bindings found: provided: [$firstVar = $knownBinding]  found: [$firstVar = $secondVar] "
+                    }
+                    continue
+                }
+                check(firstVar !in usedFirstVars) { "Try to bind used variable" }
+                check(secondVar !in usedSecondVars) { "Try to bind used variable" }
+                knownBindings[firstVar] = secondVar
+                continue
+            }
+            val unusedFirstGroup = firstGroup.filter { it !in usedFirstVars }
+            val unusedSecondGroup = secondGroup.filter { it !in usedSecondVars }
+            check(unusedFirstGroup.size == unusedSecondGroup.size) { "Groups size mismatch" }
+            for ((i, variable) in unusedFirstGroup.withIndex()) {
+                val bindingTree = VariableBindingTree.create(ctx, unusedSecondGroup, i)
+                bindingVars[variable] = bindingTree
+            }
+        }
+    }
+
+    private fun initProvidedBindings(bindings: List<BoolExpr>, first: BoolExpr, second: BoolExpr) {
+        val providedBindings = parseProvidedBindings(bindings)
+        val firstTag = collectVariables(first).map { it.tag() }.toSet().single()
+        val secondTag = collectVariables(second).map { it.tag() }.toSet().single()
+        val correctOrderedBindings = providedBindings.map { (f, s) ->
+            val newFirst = when (firstTag) {
+                f.tag() -> f
+                s.tag() -> s
+                else -> error("Tags mismatch")
+            }
+            val newSecond = when (secondTag) {
+                f.tag() -> f
+                s.tag() -> s
+                else -> error("Tags mismatch")
+            }
+            newFirst to newSecond
+        }
+        knownBindings.putAll(correctOrderedBindings.toMap())
+    }
+
+    private fun parseProvidedBindings(bindings: List<Expr>): List<Pair<Expr, Expr>> = bindings.flatMap {
+        when {
+            it.isEq -> listOf(it.args[0] to it.args[1])
+            it.isAnd -> it.args.flatMap { parseProvidedBindings(it.args.toList()) }
+            else -> error("Unexpected provided binding: $it")
+        }
     }
 
     private fun checkUnboundedVariables(bindings: Map<Expr, Expr>) {
@@ -368,12 +423,6 @@ class BindingSearchContext(val ctx: Context) {
     }
 
     private fun addQuery(solver: Solver) {
-        solver.add(
-            ctx.mkForall(
-                ctx.mkImplies(ctx.mkAnd(knownBindingFormula, variableBindingFormula), otherConstraintFormula),
-                orderedVariables
-            )
-        )
         solver.add(
             ctx.mkForall(
                 ctx.mkImplies(ctx.mkAnd(knownBindingFormula, variableBindingFormula), queryFormula),
