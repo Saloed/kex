@@ -1,7 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.utilities
 
-import com.github.saloed.diff.DiffMode
-import com.github.saloed.diff.twoWayDiffFromDMPDiff
+import com.github.saloed.diff.*
 import name.fraser.neil.plaintext.DiffMatchPatch
 import name.fraser.neil.plaintext.diff_match_patch.Diff
 import name.fraser.neil.plaintext.diff_match_patch.Operation
@@ -65,8 +64,29 @@ private fun twoFilesMode(args: Array<String>) {
 
 @OptIn(ExperimentalPathApi::class)
 private fun analyzeFilePair(left: Path, right: Path, out: Path) {
+    val twoWayDiff = buildDiff(left, right)
+    val result = twoWayDiff.saveToJson()
+    out.writeText(result, Charsets.UTF_8)
+}
+
+@OptIn(ExperimentalPathApi::class)
+private fun buildDiff(left: Path, right: Path): TwoWayDiff {
     val lhsSections = makeSections(left.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
     val rhsSections = makeSections(right.readLines(Charsets.UTF_8).let { collapseCallAnalyzer(it) })
+
+    if (lhsSections.size == rhsSections.size && lhsSections.size == 1) {
+        val leftSection = lhsSections.first()
+        val rightSection = rhsSections.first()
+        val leftFile = DiffFile(left.fileName.toString(), leftSection.content)
+        val rightFile = DiffFile(right.fileName.toString(), rightSection.content)
+        val leftRange = DiffRange(0, 0, leftFile.contentLines.size, 0)
+        val rightRange = DiffRange(0, 0, rightFile.contentLines.size, 0)
+        val leftDiff = Diff(DiffType.DELETE, leftRange, DiffRange(0, 0, 0, 0))
+        val emptyRangeAfterLeft =
+            DiffRange(leftRange.endLine, leftRange.endLineOffset, leftRange.endLine, leftRange.endLineOffset)
+        val rightDiff = Diff(DiffType.INSERT, emptyRangeAfterLeft, rightRange)
+        return TwoWayDiff(leftFile, rightFile, listOf(leftDiff, rightDiff), DiffMode.LINE)
+    }
 
     val leftHeaders = lhsSections.joinToString("\n") { it.header }
     val rightHeaders = rhsSections.joinToString("\n") { it.header }
@@ -77,10 +97,7 @@ private fun analyzeFilePair(left: Path, right: Path, out: Path) {
     check(sectionGroups.filter { it.left != null }.count() == lhsSections.size) { "Left groups mismatch" }
     check(sectionGroups.filter { it.right != null }.count() == rhsSections.size) { "Right groups mismatch" }
     val diffs = sectionGroups.flatMap { it.asDiff() }
-    val twoWayDiff =
-        twoWayDiffFromDMPDiff(diffs, left.fileName.toString(), right.fileName.toString(), DiffMode.LINE)
-    val result = twoWayDiff.saveToJson()
-    out.writeText(result, Charsets.UTF_8)
+    return twoWayDiffFromDMPDiff(diffs, left.fileName.toString(), right.fileName.toString(), DiffMode.LINE)
 }
 
 private data class HeaderDiff(val left: String?, val right: String?)
