@@ -12,13 +12,13 @@ import org.jetbrains.research.kex.refinements.analyzer.utils.RecursiveCallsAnaly
 import org.jetbrains.research.kex.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.query.NewRecursiveFixpointQuery
-import org.jetbrains.research.kex.state.ChainState
-import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.PredicateStateWithPath
+import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
-import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.predicate.CallPredicate
+import org.jetbrains.research.kex.state.predicate.EqualityPredicate
+import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
+import org.jetbrains.research.kex.state.transformer.TermRemapper
 import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kex.util.structuralMatch
 import org.jetbrains.research.kfg.ClassManager
@@ -173,7 +173,7 @@ class NewRecursiveMethodAnalyzer(
         )
     }
 
-    private fun resolveExternalCall(model: RecoveredModel): PredicateStateWithPath? {
+    private fun resolveExternalCall(model: RecoveredModel): PredicateState {
         log.debug("Run solver for external call")
         val methodsUnderApproximations = MethodApproximationManager()
         val callResolver = CallResolver(this, methodsUnderApproximations)
@@ -186,7 +186,7 @@ class NewRecursiveMethodAnalyzer(
         check(queryApprox.size == 1) { "To many approximations" }
         val queryResult = queryApprox.first()
         check(structuralMatch(queryResult.post, model.state)) { "Query structure mismatch" }
-        return queryResult.pre
+        return inlinePathVariables(queryResult.pre)
     }
 
     private data class ExecutionPaths(
@@ -197,5 +197,20 @@ class NewRecursiveMethodAnalyzer(
         val onlyRecursiveCallsAsNormal: PredicateState,
         val allNormals: PredicateState
     )
+
+
+    private fun inlinePathVariables(predicateStateWithPath: PredicateStateWithPath): PredicateState {
+        val bindings = pathVariablesBindings(predicateStateWithPath.state)
+        return TermRemapper(bindings).apply(predicateStateWithPath.path)
+    }
+
+    private fun pathVariablesBindings(state: PredicateState): Map<Term, Term> = when (state) {
+        is BasicState -> state.predicates.map {
+            val binding = (it as? EqualityPredicate) ?: error("Unexpected predicate $it")
+            binding.lhv to binding.rhv
+        }.toMap()
+        is ChainState -> pathVariablesBindings(state.base) + pathVariablesBindings(state.curr)
+        else -> error("Unexpected state: $state")
+    }
 
 }
