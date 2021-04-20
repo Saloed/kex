@@ -15,6 +15,7 @@ object MemoryUtils {
     }
 
     fun view(ps: PredicateState) = MemoryVersionViewer.view(ps)
+    fun view(info: MemoryVersionInfo) = MemoryVersionInfoViewer.view(info)
     fun collectMemoryAccesses(ps: PredicateState) = MemoryAccessCollector.collect(ps)
     fun collectCallMemory(ps: PredicateState) = PredicateCollector.collectIsInstance<CallPredicate>(ps)
             .flatMap { memoryVersionDescendantTree(it.memoryVersion).entries }
