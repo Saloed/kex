@@ -691,7 +691,7 @@ private fun Expr.tag(): VarTag {
 
 private fun Expr.nameWithoutTag() = name().removePrefix(tag().marker)
 
-private fun String.indexOfOrLast(txt: String) = indexOf(txt).let { if (it != -1) it else lastIndex }
+private fun String.indexOfOrLast(txt: String) = indexOf(txt).let { if (it != -1) it else length }
 
 private fun Expr.variablePrefix(): String {
     val name = nameWithoutTag()
