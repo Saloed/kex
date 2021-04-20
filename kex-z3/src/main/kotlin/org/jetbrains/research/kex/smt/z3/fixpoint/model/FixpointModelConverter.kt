@@ -101,7 +101,7 @@ class FixpointModelConverter(
         expr is BitVecExpr -> convertBVTerm(expr)
         expr is FPExpr -> convertFPTerm(expr)
         expr is RealExpr -> convertRealTerm(expr)
-        else -> TODO()
+        else -> error("Unexpected term with sort ${expr.sort}: $expr")
     }
 
     private fun convertVariableTerm(expr: Expr) = mapping.getTerm(expr.index, converterContext.callDependencies)
@@ -117,7 +117,8 @@ class FixpointModelConverter(
         expr.isConst && expr.boolValue == Z3_lbool.Z3_L_FALSE -> term { const(false) }
         expr.isBVSLE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a le b }
         expr.isBVSGE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a ge b }
-        else -> TODO()
+        expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
+        else -> error("Unexpected Bool expr: $expr")
     }
 
     private fun convertIntTerm(expr: IntExpr): Term = when {
@@ -133,15 +134,15 @@ class FixpointModelConverter(
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
         expr.isRealToInt -> expr.convertArgs().first().let { term { it primitiveAs KexInt() } }
         expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
-        else -> TODO()
+        else -> error("Unexpected Int expr: $expr")
     }
 
     private fun expressionKexType(varExpr: Expr): KexType = when (varExpr.sort.sortKind) {
         Z3_sort_kind.Z3_BOOL_SORT -> KexBool()
         Z3_sort_kind.Z3_INT_SORT -> KexInt()
-        Z3_sort_kind.Z3_ARRAY_SORT -> TODO()
-        Z3_sort_kind.Z3_BV_SORT -> TODO()
-        Z3_sort_kind.Z3_REAL_SORT -> TODO()
+        Z3_sort_kind.Z3_ARRAY_SORT -> error("Kex type for ArraySort is not implemented: $varExpr")
+        Z3_sort_kind.Z3_BV_SORT ->  error("Kex type for BV is not implemented: $varExpr")
+        Z3_sort_kind.Z3_REAL_SORT ->  error("Kex type for Real is not implemented: $varExpr")
         else -> error("Unexpected expression sort: ${varExpr.sort}")
     }
 
@@ -149,7 +150,7 @@ class FixpointModelConverter(
         expr is BitVecNum -> Z3Unlogic.undo(expr)
         expr.isBVAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isBVMul -> expr.convertArgs().combine { a, b -> a mul b }
-        else -> TODO()
+        else -> error("Unexpected BV expr: $expr")
     }
 
     private fun convertFPTerm(expr: FPExpr): Term = when {
@@ -160,7 +161,7 @@ class FixpointModelConverter(
         ).map { convertTerm(it) }.combine { a, b -> a add b }
         expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_TO_FP -> convertTerm(expr.args[1])
         expr.isApp && expr.funcDecl.declKind == Z3_decl_kind.Z3_OP_FPA_NEG -> convertTerm(expr.args[0]).let { term { it.not() } }
-        else -> TODO()
+        else -> error("Unexpected FP expr: $expr")
     }
 
     private fun convertRealTerm(expr: RealExpr): Term = when {
@@ -169,7 +170,7 @@ class FixpointModelConverter(
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
         expr.isIntToReal -> expr.convertArgs().first().let { term { it primitiveAs KexDouble() } }
         expr.isApp && (expr.funcDecl.name as? StringSymbol)?.string == "fp.to_real" -> expr.convertArgs().first()
-        else -> TODO("Real: $expr")
+        else -> error("Unexpected Real expr: $expr")
     }
 
     private fun convertITETerm(expr: Expr): Term {
@@ -199,7 +200,7 @@ class FixpointModelConverter(
     private fun convertComplexMemoryExpr(expr: Expr) = when {
         expr.isITE -> convertComplexMemoryITE(expr)
         expr is ArrayExpr -> convertComplexMemoryArray(expr)
-        else -> TODO()
+        else -> error("Unexpected complex memory expr: $expr")
     }
 
     private fun convertComplexMemoryArray(expr: ArrayExpr): Pair<Term, Declaration.Memory> = when {
@@ -212,7 +213,7 @@ class FixpointModelConverter(
             val (memory, location, value) = expr.args
             convertComplexMemoryArrayStore(memory, location, value)
         }
-        else -> TODO()
+        else -> error("Unexpected complex memory array expr: $expr")
     }
 
     private fun convertComplexMemoryArrayStore(

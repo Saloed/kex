@@ -73,6 +73,7 @@ open class ${Factory} : ${SMTFactory}() {
         is KexClass -> makePtr(name, fresh)
         is KexArray -> makePtr(name, fresh)
         is KexNull -> makePtr(name, fresh)
+        is KexVoid -> makeBool("void", false)
         else -> unreachable { log.error("Unknown type in ExprFactory: ${ type }") }
     }
 

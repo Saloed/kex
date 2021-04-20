@@ -3,7 +3,8 @@ package org.jetbrains.research.kex.smt.z3.fixpoint.declarations
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 
 data class ArgumentDeclarations private constructor(val declarations: List<Declaration>) {
-    operator fun get(idx: Int) = declarations[idx]
+    operator fun get(idx: Int) = declarations.getOrNull(idx)
+        ?: error("Model expression has non argument term")
 
     fun initializeMemoryVersions(memoryVersionInfo: MemoryVersionInfo): ArgumentDeclarations {
         val mutableDeclarations = declarations.toMutableList()

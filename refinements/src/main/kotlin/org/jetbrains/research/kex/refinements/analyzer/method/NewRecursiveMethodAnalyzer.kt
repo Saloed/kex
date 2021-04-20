@@ -15,10 +15,7 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.query.NewRecursiveFixpointQuer
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
-import org.jetbrains.research.kex.state.predicate.EqualityPredicate
-import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
-import org.jetbrains.research.kex.state.transformer.TermRemapper
 import org.jetbrains.research.kex.state.transformer.optimize
 import org.jetbrains.research.kex.util.structuralMatch
 import org.jetbrains.research.kfg.ClassManager
@@ -62,14 +59,14 @@ class NewRecursiveMethodAnalyzer(
 
         check(executionPaths.exceptionSourceWithNoRecursiveCall.value.size == 1) { "TODO: sources" }
 
-        log.debug("State:\n$correctedStateWithApproximations\nSources:\n${executionPaths.allExceptionSources}\nNormals:\n${executionPaths.allNormals}")
-
         val normalExecutionConditions = queryNormalExecutionConditions(
             executionPaths,
             correctedStateWithApproximations,
             correctedMemoryVersionInfo,
             recursiveCallPredicates
         )
+        println(normalExecutionConditions)
+        println("#".repeat(50))
         val exceptionalExecutionConditions = queryExceptionalExecutionConditions(
             executionPaths,
             correctedStateWithApproximations,
@@ -77,6 +74,7 @@ class NewRecursiveMethodAnalyzer(
             recursiveCallPredicates,
             normalExecutionConditions
         )
+        println(exceptionalExecutionConditions)
         log.debug("Result:\n$exceptionalExecutionConditions")
         return exceptionalExecutionConditions
     }
@@ -91,14 +89,22 @@ class NewRecursiveMethodAnalyzer(
         val singleRefinementSource = executionPaths.allExceptionSources.value.first()
         val normalExecutionCondition = normalExecutionConditions.value.first()
         check(singleRefinementSource.criteria == normalExecutionCondition.criteria) { "Criteria mismatch" }
+        val initialPath = normalExecutionCondition.state.negate().toPredicateState()
+        log.debug(
+            "State\n{}\nInitial\n{}\nPositive\n{}\nQuery\n{}\n",
+            state,
+            initialPath,
+            singleRefinementSource.condition,
+            executionPaths.normalWithNoRecursiveCall,
+        )
         val solver = FixpointSolver(cm)
         val result = solver.querySingle {
             query {
                 NewRecursiveFixpointQuery(
                     state,
-                    normalExecutionCondition.state.negate().toPredicateState(),
+                    initialPath,
                     singleRefinementSource.condition,
-                    executionPaths.allNormals,
+                    executionPaths.normalWithNoRecursiveCall,
                     memoryVersions,
                     recursiveCallPredicates,
                     this@NewRecursiveMethodAnalyzer::resolveExternalCall
@@ -113,10 +119,17 @@ class NewRecursiveMethodAnalyzer(
     private fun queryNormalExecutionConditions(
         executionPaths: ExecutionPaths,
         state: PredicateState,
-        memoryVerions: MemoryVersionInfo,
+        memoryVersions: MemoryVersionInfo,
         recursiveCallPredicates: Set<CallPredicate>
     ): Refinements {
         val singleRefinementSource = executionPaths.exceptionSourceWithNoRecursiveCall.value.first()
+        log.debug(
+            "State\n{}\nInitial\n{}\nPositive\n{}\nQuery\n{}\n",
+            state,
+            executionPaths.normalWithNoRecursiveCall,
+            executionPaths.onlyRecursiveCallsAsNormal,
+            singleRefinementSource.condition
+        )
         val solver = FixpointSolver(cm)
         val result = solver.querySingle {
             query {
@@ -125,7 +138,7 @@ class NewRecursiveMethodAnalyzer(
                     executionPaths.normalWithNoRecursiveCall,
                     executionPaths.onlyRecursiveCallsAsNormal,
                     singleRefinementSource.condition,
-                    memoryVerions,
+                    memoryVersions,
                     recursiveCallPredicates,
                     this@NewRecursiveMethodAnalyzer::resolveExternalCall
                 )
@@ -186,7 +199,7 @@ class NewRecursiveMethodAnalyzer(
         check(queryApprox.size == 1) { "To many approximations" }
         val queryResult = queryApprox.first()
         check(structuralMatch(queryResult.post, model.state)) { "Query structure mismatch" }
-        return inlinePathVariables(queryResult.pre)
+        return queryResult.pre.toPredicateState()
     }
 
     private data class ExecutionPaths(
@@ -197,20 +210,4 @@ class NewRecursiveMethodAnalyzer(
         val onlyRecursiveCallsAsNormal: PredicateState,
         val allNormals: PredicateState
     )
-
-
-    private fun inlinePathVariables(predicateStateWithPath: PredicateStateWithPath): PredicateState {
-        val bindings = pathVariablesBindings(predicateStateWithPath.state)
-        return TermRemapper(bindings).apply(predicateStateWithPath.path)
-    }
-
-    private fun pathVariablesBindings(state: PredicateState): Map<Term, Term> = when (state) {
-        is BasicState -> state.predicates.map {
-            val binding = (it as? EqualityPredicate) ?: error("Unexpected predicate $it")
-            binding.lhv to binding.rhv
-        }.toMap()
-        is ChainState -> pathVariablesBindings(state.base) + pathVariablesBindings(state.curr)
-        else -> error("Unexpected state: $state")
-    }
-
 }

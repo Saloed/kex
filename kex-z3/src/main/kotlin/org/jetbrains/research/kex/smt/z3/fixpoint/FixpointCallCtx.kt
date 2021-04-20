@@ -16,7 +16,9 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.query.FixpointSolverQuery
 import org.jetbrains.research.kex.smt.z3.fixpoint.query.StatementBuilder
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kfg.type.TypeFactory
-import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.*
 import kotlin.time.ExperimentalTime
 import kotlin.time.measureTimedValue
 
@@ -75,10 +77,10 @@ open class FixpointCallCtx(
 
     fun build(builder: FixpointCallCtx.() -> BoolExpr) = builder()
 
-    infix fun BoolExpr.and(other: BoolExpr) = context.mkAnd(this, other)
-    infix fun BoolExpr.or(other: BoolExpr) = context.mkOr(this, other)
-    infix fun BoolExpr.implies(other: BoolExpr) = context.mkImplies(this, other)
-    fun BoolExpr.not() = context.mkNot(this)
+    infix fun BoolExpr.and(other: BoolExpr): BoolExpr = context.mkAnd(this, other)
+    infix fun BoolExpr.or(other: BoolExpr): BoolExpr = context.mkOr(this, other)
+    infix fun BoolExpr.implies(other: BoolExpr): BoolExpr = context.mkImplies(this, other)
+    fun BoolExpr.not(): BoolExpr = context.mkNot(this)
     fun BoolExpr.forall(variables: List<Expr>): Quantifier = when {
         variables.isEmpty() -> {
             val dummy = context.mkFreshConst("dummy", context.mkBoolSort())
@@ -87,7 +89,7 @@ open class FixpointCallCtx(
         else -> context.mkForall(variables.toTypedArray(), this, 0, arrayOf(), null, null, null)
     }
 
-    fun boolFunction(name: String, argumentsSorts: List<Sort>) =
+    fun boolFunction(name: String, argumentsSorts: List<Sort>): FuncDecl =
         context.mkFuncDecl(name, argumentsSorts.toTypedArray(), context.mkBoolSort())
 
     fun boolFunctionApp(function: FuncDecl, arguments: List<Expr>) =
@@ -108,7 +110,7 @@ open class FixpointCallCtx(
     ) = withSolver {
         statementBuilder.normal().makeAsserts(this)
 
-        File("last_fixpoint_query.smtlib").writeText(debugFixpointSmtLib(statementBuilder))
+        FixpointQueryLog.log(debugFixpointSmtLib(statementBuilder))
 
         val status = check()
         when (status) {
@@ -152,5 +154,29 @@ open class FixpointCallCtx(
             (get-info :reason-unknown)
 
             """.trimIndent()
+
+
+    @OptIn(ExperimentalPathApi::class)
+    private object FixpointQueryLog {
+        private val logPath = Path("queries")
+        private var logInitialized = false
+        private var queryIndex = 0
+        private fun resetLogDirectory() {
+            Files.walk(logPath)
+                .sorted(Comparator.reverseOrder())
+                .map { it.toFile() }
+                .forEach { it.delete() }
+            logPath.deleteIfExists()
+            logPath.createDirectory()
+            logInitialized = true
+        }
+
+        private fun logPath(): Path {
+            if (!logInitialized) resetLogDirectory()
+            return logPath.resolve("query_${queryIndex++}.smtlib")
+        }
+
+        fun log(query: String) = logPath().writeText(query)
+    }
 
 }

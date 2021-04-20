@@ -18,18 +18,21 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.model.FixpointModelConverter
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.Term
+import org.jetbrains.research.kex.state.term.ValueTerm
+import org.jetbrains.research.kex.state.term.term
+import org.jetbrains.research.kex.state.transformer.Transformer
 
 class ExternalFunctionCallAnalyzer(
     val ctx: FixpointCallCtx,
     val declarationMapping: ModelDeclarationMapping,
     val argsInfo: Map<Int, Z3ConverterWithRecursionSupport.ExternalCallArgumentsInfo>,
-    val externalCallResolver: (RecoveredModel) -> PredicateStateWithPath?
+    val externalCallResolver: (RecoveredModel) -> PredicateState?
 ) : FunctionCallAnalyzer {
-
+    private var callIdx = 0
     private val eCtx: Z3EngineContext
         get() = ctx.ef.ctx
 
@@ -42,9 +45,15 @@ class ExternalFunctionCallAnalyzer(
         inArgs: Array<out Expr>,
         outArgs: Array<out Expr>
     ): Expr? {
-        val result = when {
-            expression.isFunctionCall -> analyzeFunctionCall(functionId, expression, inArgs, outArgs)
-            else -> analyzeOtherExpr(functionId, expression, inArgs, outArgs)
+        callIdx++
+        val result = try {
+            when {
+                expression.isFunctionCall -> analyzeFunctionCall(functionId, expression, inArgs, outArgs)
+                else -> analyzeOtherExpr(functionId, expression, inArgs, outArgs)
+            }
+        } catch (ex: Throwable) {
+            log.error(ex.message, ex.cause)
+            null
         }
         log.debug("$expression | ${inArgs.contentToString()} | ${outArgs.contentToString()}\n=>\n$result")
         log.debug("--------------------------------------------------------------------")
@@ -79,7 +88,7 @@ class ExternalFunctionCallAnalyzer(
     }
 
     private fun resolveCallQuery(query: RecoveredModel): PredicateState? {
-        val result = externalCallResolver(query)?.toPredicateState()
+        val result = externalCallResolver(query)
         log.debug("$query\n=>\n$result")
         log.debug("*************************************************************")
         return result
@@ -91,14 +100,26 @@ class ExternalFunctionCallAnalyzer(
     ): SolverExpr_ {
         val argsName2Expr = argMapping.termMap.map { it.value.name to it.key }.toMap()
             .mapValues { argMapping.exprMap[it.value] }
+        val ps = UniqueTermGenerator(argsName2Expr.keys, "$callIdx").apply(resultPs)
         val convertEf = ExprFactoryWithKnownExprs(eCtx) { type: KexType, name: String ->
             argsName2Expr[name]?.let { Dynamic_.forceCast(Dynamic_(eCtx, it), ExprFactory_.getType(type)) }
         }
         val convertCtx = Z3ContextWithMemoryArrays(convertEf)
         convertCtx.setUpInitialMemory(eCtx, argMapping.inMemory.toMap())
         convertCtx.resetMemory()
-        val result = ctx.converter.convert(resultPs, convertEf, convertCtx)
+        val result = ctx.converter.convert(ps, convertEf, convertCtx)
         return result.asAxiom()
+    }
+
+    private class UniqueTermGenerator(private val knownTerms: Set<String>, private val postfix: String) :
+        Transformer<UniqueTermGenerator> {
+        private val mapping = mutableMapOf<ValueTerm, ValueTerm>()
+        override fun transformValueTerm(term: ValueTerm): Term {
+            if (term.name in knownTerms) return term
+            return mapping.getOrPut(term) {
+                term { value(term.type, "${term.name}_$postfix") } as ValueTerm
+            }
+        }
     }
 
     private fun convertQueryExpressionToPS(

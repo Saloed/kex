@@ -9,7 +9,6 @@ import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.query.recursion.ExternalFunctionCallAnalyzer
 import org.jetbrains.research.kex.state.PredicateState
-import org.jetbrains.research.kex.state.PredicateStateWithPath
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
@@ -22,7 +21,7 @@ class NewRecursiveFixpointQuery(
     val query: PredicateState,
     val memoryVersionInfo: MemoryVersionInfo,
     val recursiveCallPredicates: Set<CallPredicate>,
-    val externalCallResolver: (RecoveredModel) -> PredicateStateWithPath?
+    val externalCallResolver: (RecoveredModel) -> PredicateState?
 ) : FixpointSolverQuery() {
 
     private val hasExternalFunctionCalls by lazy {
@@ -30,10 +29,8 @@ class NewRecursiveFixpointQuery(
             .any { it !in recursiveCallPredicates }
     }
 
-    override fun mkContext(tf: TypeFactory) = when {
-        hasExternalFunctionCalls -> FixpointCallCtxWithFunctionCalls(tf, this)
-        else -> super.mkContext(tf)
-    }
+    override fun mkContext(tf: TypeFactory) =
+        FixpointCallCtxWithFunctionCalls(tf, this, enableFunctionCalls = hasExternalFunctionCalls)
 
     private val recursionPredicate = Z3FixpointSolver.Predicate(0)
     override val FixpointCallCtx.psConverter: Z3ConverterWithRecursionSupport
