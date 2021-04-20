@@ -27,6 +27,13 @@ object Recursive {
         return res
     }
 
+    fun recursiveSimpleTail(x: Int): Int {
+        if (x > 100) return x
+        val tmp = x + 5
+        if (tmp <= 17) throw IllegalArgumentException("Ex")
+        return recursiveSimpleTail(tmp + 1)
+    }
+
     fun recursiveWithNestedCalls(a: Int, b: Int): Int {
         isPositive(a)
         isPositive(b)

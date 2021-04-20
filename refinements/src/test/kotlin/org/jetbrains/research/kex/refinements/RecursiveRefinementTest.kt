@@ -3,13 +3,13 @@ package org.jetbrains.research.kex.refinements
 import org.jetbrains.research.kex.ktype.KexClass
 import org.jetbrains.research.kex.ktype.KexInt
 import org.jetbrains.research.kex.state.*
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 class RecursiveRefinementTest : RefinementTest("Recursive") {
     private val xcls = KexClass(nestedClass("XCls"))
     private val immutableIntWrapper = KexClass(nestedClass("ImmutableIntWrapper"))
     private val mutableIntWrapper = KexClass(nestedClass("MutableIntWrapper"))
-
 
     @Test
     fun testRecursiveSimple() = run("recursiveSimple") {
@@ -27,6 +27,13 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
     }
 
     @Test
+    fun testRecursiveSimpleTail() = run("recursiveSimpleTail") {
+        refinement(IllegalArgumentException()) {
+            basic { path { arg(KexInt(), 0) le const(12) equality true } }
+        }
+    }
+
+    @Test @Ignore
     fun testRecursiveWithNestedCalls() = run("recursiveWithNestedCalls") {
         refinement(IllegalArgumentException()) {
             choice({
@@ -41,15 +48,15 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
         }
     }
 
-    @Test
+    @Test @Ignore
     fun testRecursiveAlwaysException() = run("recursiveAlwaysException") {
         refinement(IllegalArgumentException()) { trueState() }
     }
 
-    @Test
+    @Test @Ignore
     fun testRecursiveWithStackOverflow() = run("recursiveWithStackOverflow") {}
 
-    @Test
+    @Test @Ignore
     fun testRecursiveFunctionCall() = run("recursiveFunctionCall") {
         refinement(IllegalArgumentException()) {
             choice({
@@ -64,88 +71,104 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
         }
     }
 
-    @Test
+    @Test @Ignore
     fun testRecursiveWithMemory() = run("recursiveWithMemory") {
         refinement(IllegalArgumentException()) {
             val choices = listOf(
-                    basic {
-                        path {
-                            arg(xcls, 0).field(KexInt(), "clsFieldB", xcls).load() lt const(0) equality const(true)
-                        }
-                    },
-                    basic {
-                        path {
-                            arg(xcls, 1).field(KexInt(), "clsFieldA", xcls).load() lt const(0) equality const(true)
-                        }
-                    },
-                    basic {
-                        path {
-                            arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() lt const(17) equality const(true)
-                        }
-                    },
-                    basic {
-                        path {
-                            arg(xcls, 1).field(KexInt(), "clsFieldB", xcls).load() le arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() equality const(true)
-                        }
+                basic {
+                    path {
+                        arg(xcls, 0).field(KexInt(), "clsFieldB", xcls).load() lt const(0) equality const(true)
                     }
+                },
+                basic {
+                    path {
+                        arg(xcls, 1).field(KexInt(), "clsFieldA", xcls).load() lt const(0) equality const(true)
+                    }
+                },
+                basic {
+                    path {
+                        arg(xcls, 0).field(KexInt(), "clsFieldA", xcls).load() lt const(17) equality const(true)
+                    }
+                },
+                basic {
+                    path {
+                        arg(xcls, 1).field(KexInt(), "clsFieldB", xcls).load() le arg(xcls, 0).field(
+                            KexInt(),
+                            "clsFieldA",
+                            xcls
+                        ).load() equality const(true)
+                    }
+                }
             )
             ChoiceState(choices)
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursion with mutable memory simple`() = run("simpleRecursionWithMutableMemory") {
         refinement(IllegalStateException()) {
             choice({
                 path { arg(KexInt(), 1) lt 0 equality true }
             }, {
-                path { arg(mutableIntWrapper, 0).field(KexInt(), "value", mutableIntWrapper).load() + arg(KexInt(), 1) ge 20 equality true }
+                path {
+                    arg(mutableIntWrapper, 0).field(KexInt(), "value", mutableIntWrapper).load() + arg(
+                        KexInt(),
+                        1
+                    ) ge 20 equality true
+                }
             }).withMemoryVersions()
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursion with immutable memory simple`() = run("simpleRecursionWithImmutableMemory") {
         refinement(IllegalStateException()) {
             choice({
                 path { arg(KexInt(), 1) lt 0 equality true }
             }, {
-                path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() + arg(KexInt(), 1) ge 20 equality true }
+                path {
+                    arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() + arg(
+                        KexInt(),
+                        1
+                    ) ge 20 equality true
+                }
             }).withMemoryVersions()
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursive with mutable memory and single class argument`() = run("mutableMemoryOnlyClsArg") {
         refinement(IllegalStateException()) {
             basic {
-                path { arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() le 17 equality true }
+                path {
+                    arg(immutableIntWrapper, 0).field(KexInt(), "value", immutableIntWrapper).load() le 17 equality true
+                }
             }
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursive with dependency on mutable memory`() = run("mutableMemoryDependency") {
         refinement(IllegalStateException()) {
             emptyState()
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursive mutable counter`() = run("mutableMemoryDependencyCounter") {
         refinement(IllegalStateException()) {
             falseState()
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursive mutable counter with depth`() = run("mutableMemoryDependencyCounterWithDepth") {
         refinement(IllegalStateException()) {
             emptyState()
         }
     }
 
-    @Test
+    @Test @Ignore
     fun `recursive with memory dependency on function call`() = run("recursiveWithFunctionCalls") {
         refinement(IllegalArgumentException()) {
             emptyState()
@@ -155,7 +178,7 @@ class RecursiveRefinementTest : RefinementTest("Recursive") {
     @Test
     fun `simple recursion with function call`() = run("recursiveWithFunctionCallsSimple") {
         refinement(IllegalArgumentException()) {
-            emptyState()
+            basic { path { arg(KexInt(), 0) le const(12) equality true } }
         }
     }
 
