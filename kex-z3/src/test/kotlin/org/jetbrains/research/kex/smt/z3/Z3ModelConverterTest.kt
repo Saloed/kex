@@ -1,9 +1,6 @@
 package org.jetbrains.research.kex.smt.z3
 
-import com.microsoft.z3.ArithExpr
-import com.microsoft.z3.ArrayExpr
-import com.microsoft.z3.Context
-import com.microsoft.z3.Expr
+import com.microsoft.z3.*
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.ArgumentDeclarations
@@ -19,6 +16,7 @@ import org.jetbrains.research.kex.state.memory.MemoryType
 import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.CallTerm
+import org.jetbrains.research.kex.state.term.IfTerm
 import org.jetbrains.research.kex.state.term.Term
 import org.jetbrains.research.kex.state.term.term
 import org.jetbrains.research.kfg.ir.Method
@@ -29,11 +27,12 @@ import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.MethodNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class Z3ModelConverterTest : KexTest() {
 
     @Test
-    fun `test simple convert`() = TestCase().run {
+    fun `test int convert`() = TestCase().run {
         val (x, xt) = variable("x", KexInt())
         val (y, yt) = variable("y", KexInt())
         expression {
@@ -41,6 +40,36 @@ class Z3ModelConverterTest : KexTest() {
         }
         expected {
             val state = basic { state { modelVar(0) equality ((const(5) add xt) eq yt) } }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
+    @Test
+    fun `test bool convert`() = TestCase().run {
+        val (x, xt) = variable("x", KexBool())
+        val (y, yt) = variable("y", KexBool())
+        expression {
+            mkEq(mkAnd(x as BoolExpr, y as BoolExpr), mkNot(mkOr(mkNot(x), mkNot(y))))
+        }
+        expected {
+            val state = basic { state { modelVar(0) equality ((xt and yt) eq (xt.not() or yt.not()).not()) } }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
+    @Test
+    fun `test ite convert`() = TestCase().run {
+        val (x, xt) = variable("x", KexInt())
+        val (y, yt) = variable("y", KexInt())
+        val (z, zt) = variable("z", KexInt())
+        val (c, ct) = variable("c", KexBool())
+        expression {
+            mkEq(mkITE(c as BoolExpr, x, y), z)
+        }
+        expected {
+            val state = basic { state { modelVar(0) equality (IfTerm(KexInt(), ct, xt, yt) eq zt) } }
             val path = basic { path { modelVar(0) equality true } }
             PredicateStateWithPath(state, path)
         }
@@ -68,13 +97,24 @@ class Z3ModelConverterTest : KexTest() {
         }
     }
 
+    @Test
+    fun `test property multiclass read`() = TestCase().run {
+        val className = "org/jetbrains/research/kex/test/refinements/Inheritance\$MyList"
+        val (memory, _) = property(className, "size", KexInt())
+        val (owner, ownerT) = variable("o", KexClass(className))
+        val (x, xt) = variable("size", KexInt())
+        expression {
+            mkEq(mkSelect(memory as ArrayExpr, owner), x)
+        }
+    }
+
     inner class TestCase {
         private val factory: Z3ExprFactory = Z3ExprFactory()
         private val z3Context: Z3Context = Z3Context.create(factory)
         private val variables = mutableListOf<Pair<Expr, Term>>()
         private val memories = mutableListOf<Pair<Expr, MemoryDescriptor>>()
         private lateinit var expression: Expr
-        private lateinit var expected: PredicateStateWithPath
+        private lateinit var expectedState: PredicateStateWithPath
         fun variable(name: String, type: KexType): Pair<Expr, Term> {
             val expr = factory.getVarByTypeAndName(type, name).expr
             val term = term { value(type, name) }
@@ -97,7 +137,7 @@ class Z3ModelConverterTest : KexTest() {
         fun modelVar(idx: Int) = term { value(KexBool(), "model_pv_$idx") }
 
         fun expected(builder: () -> PredicateStateWithPath) {
-            expected = builder()
+            expectedState = builder()
         }
 
         fun run(case: TestCase.() -> Unit) {
@@ -107,7 +147,8 @@ class Z3ModelConverterTest : KexTest() {
 
             val actual = converter.apply(expression)
             println(actual)
-            assertEquals(expected, actual.state)
+            assertTrue(::expectedState.isInitialized, "Expected state is not provided")
+            assertEquals(expectedState, actual.state)
         }
 
         private fun declarationMapping(): ExternalCallDeclarationMapping {
