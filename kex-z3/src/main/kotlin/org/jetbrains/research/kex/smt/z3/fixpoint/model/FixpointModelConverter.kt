@@ -49,7 +49,7 @@ class FixpointModelConverter(
 
     fun apply(expr: Expr): RecoveredModel {
         converterContext = ConverterContext()
-        val rawPath = convert(expr.simplify())
+        val rawPath = convert(expr)
         val rawState = converterContext.stateBuilder.apply()
         val state = rawState
             .let { ComparisonNormalizer().apply(it) }
@@ -93,8 +93,7 @@ class FixpointModelConverter(
 
     private fun convertTerm(expr: Expr): Term = when {
         expr.isVar -> convertVariableTerm(expr)
-        expr.isSelect && expr.numArgs == 2 && expr.args[0].isVar -> convertMemoryLoad(expr.args[0], expr.args[1])
-        expr.isSelect -> convertComplexMemoryLoad(expr)
+        expr.isSelect -> convertMemoryLoad(expr)
         expr.isITE -> convertITETerm(expr)
         expr is BoolExpr -> convertBoolTerm(expr)
         expr is IntExpr -> convertIntTerm(expr)
@@ -104,7 +103,17 @@ class FixpointModelConverter(
         else -> error("Unexpected term with sort ${expr.sort}: $expr")
     }
 
-    private fun convertVariableTerm(expr: Expr) = mapping.getTerm(expr.index, converterContext.callDependencies)
+    private fun convertVariableTerm(expr: Expr): Term = when {
+        expr.isVar -> mapping.getTerm(expr.index, converterContext.callDependencies)
+        expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
+        else -> error("Expr is not a variable: $expr")
+    }
+
+    private fun convertMemoryDescriptor(memory: Expr): Declaration.Memory = when {
+        memory.isVar -> mapping.getMemory(memory.index)
+        memory.isConst -> mapping.getConstMemory(memory)
+        else -> error("Memory array is not a variable: $memory")
+    }
 
     private fun convertBoolTerm(expr: BoolExpr): Term = when {
         expr.isAnd -> expr.convertArgs().combine { a, b -> a and b }
@@ -117,7 +126,7 @@ class FixpointModelConverter(
         expr.isConst && expr.boolValue == Z3_lbool.Z3_L_FALSE -> term { const(false) }
         expr.isBVSLE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a le b }
         expr.isBVSGE && expr.numArgs == 2 -> expr.convertArgs().combine { a, b -> a ge b }
-        expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
+        expr.isConst -> convertVariableTerm(expr)
         else -> error("Unexpected Bool expr: $expr")
     }
 
@@ -133,7 +142,7 @@ class FixpointModelConverter(
         expr.isAdd -> expr.convertArgs().combine { a, b -> a add b }
         expr.isMul -> expr.convertArgs().combine { a, b -> a mul b }
         expr.isRealToInt -> expr.convertArgs().first().let { term { it primitiveAs KexInt() } }
-        expr.isConst -> mapping.getConst(expr, expressionKexType(expr), converterContext.callDependencies)
+        expr.isConst -> convertVariableTerm(expr)
         else -> error("Unexpected Int expr: $expr")
     }
 
@@ -141,8 +150,8 @@ class FixpointModelConverter(
         Z3_sort_kind.Z3_BOOL_SORT -> KexBool()
         Z3_sort_kind.Z3_INT_SORT -> KexInt()
         Z3_sort_kind.Z3_ARRAY_SORT -> error("Kex type for ArraySort is not implemented: $varExpr")
-        Z3_sort_kind.Z3_BV_SORT ->  error("Kex type for BV is not implemented: $varExpr")
-        Z3_sort_kind.Z3_REAL_SORT ->  error("Kex type for Real is not implemented: $varExpr")
+        Z3_sort_kind.Z3_BV_SORT -> error("Kex type for BV is not implemented: $varExpr")
+        Z3_sort_kind.Z3_REAL_SORT -> error("Kex type for Real is not implemented: $varExpr")
         else -> error("Unexpected expression sort: ${varExpr.sort}")
     }
 
@@ -205,8 +214,7 @@ class FixpointModelConverter(
 
     private fun convertComplexMemoryArray(expr: ArrayExpr): Pair<Term, Declaration.Memory> = when {
         expr.isVar -> {
-            val decl = mapping.arguments[expr.index] as? Declaration.Memory
-                ?: error("Non memory declaration")
+            val decl = convertMemoryDescriptor(expr)
             term { const(true) } to decl
         }
         expr.isStore && expr.numArgs == 3 -> {
@@ -256,11 +264,15 @@ class FixpointModelConverter(
         return term { const(true) } to trueDecl
     }
 
-    private fun convertMemoryLoad(memory: Expr, location: Expr): Term {
-        check(memory.isVar) { "Memory is not var $memory" }
-        val decl = mapping.arguments[memory.index] as? Declaration.Memory
-            ?: error("Non memory descriptor")
-        return convertMemoryLoad(decl, location)
+    private fun convertMemoryLoad(memoryAccess: Expr): Term {
+        if (memoryAccess.isSelect && memoryAccess.numArgs == 2) {
+            val (memory, location) = memoryAccess.args
+            if (memory.isVar || memory.isConst) {
+                val decl = convertMemoryDescriptor(memory)
+                return convertMemoryLoad(decl, location)
+            }
+        }
+        return convertComplexMemoryLoad(memoryAccess)
     }
 
     private fun convertMemoryLoad(decl: Declaration.Memory, location: Expr): Term = when (decl.descriptor.memoryType) {

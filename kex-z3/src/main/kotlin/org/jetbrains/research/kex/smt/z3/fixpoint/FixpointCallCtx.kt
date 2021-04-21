@@ -139,7 +139,7 @@ open class FixpointCallCtx(
             log.debug("\n$elseEntry")
             log.debug("\n${mapping}")
             log.debug("\n${z3Context.getTypeMapping()}")
-            modelConverter.apply(elseEntry)
+            modelConverter.apply(elseEntry.simplify())
         }
     }
 

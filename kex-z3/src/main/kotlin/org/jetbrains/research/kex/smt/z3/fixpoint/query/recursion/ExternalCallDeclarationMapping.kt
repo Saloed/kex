@@ -2,8 +2,10 @@ package org.jetbrains.research.kex.smt.z3.fixpoint.query.recursion
 
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.smt.z3.SolverExpr_
+import org.jetbrains.research.kex.smt.z3.fixpoint.declarations.Declaration
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.ModelDeclarationMapping
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.TermDependency
+import org.jetbrains.research.kex.state.memory.MemoryVersion
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.term.Term
 
@@ -25,6 +27,12 @@ class ExternalCallDeclarationMapping(
             callDependencies.add(TermDependency.CallResultDependency(term, callIndex, callPredicate))
         }
         return term
+    }
+
+    override fun getConstMemory(expr: SolverExpr_): Declaration.Memory {
+        val inDesc = argMapping.inMemoryMap[expr.id]
+        if (inDesc != null) return Declaration.Memory(inDesc, MemoryVersion.initial())
+        TODO("Non initial memory")
     }
 
 }

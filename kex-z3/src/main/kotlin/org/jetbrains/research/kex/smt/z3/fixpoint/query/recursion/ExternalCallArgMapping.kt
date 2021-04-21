@@ -20,6 +20,8 @@ data class ExternalCallArgMapping(
 ) {
     val termMap = mutableMapOf<Int, Term>()
     val exprMap = mutableMapOf<Int, Expr>()
+    val inMemoryMap = mutableMapOf<Int, MemoryDescriptor>()
+    val outMemoryMap = mutableMapOf<Int, MemoryDescriptor>()
     private val exprIdIdx = mutableMapOf<Int, Int>()
     private var exprIdx = 0
 
@@ -31,6 +33,12 @@ data class ExternalCallArgMapping(
         args.forEach { (term, e) ->
             termMap[e.id] = term
             exprMap[e.id] = e
+        }
+        inMemory.forEach { (desc, e) ->
+            inMemoryMap[e.id] = desc
+        }
+        outMemory.forEach { (desc, e) ->
+            outMemoryMap[e.id] = desc
         }
     }
 

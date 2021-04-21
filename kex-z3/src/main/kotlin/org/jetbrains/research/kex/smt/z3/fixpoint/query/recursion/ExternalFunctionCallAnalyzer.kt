@@ -131,7 +131,7 @@ class ExternalFunctionCallAnalyzer(
         val mapping =
             ExternalCallDeclarationMapping(declarationMapping, argMapping, info.index, call)
         val converter = FixpointModelConverter(mapping, ctx.tf, ctx.z3Context)
-        return converter.apply(expression)
+        return converter.apply(expression.simplify())
     }
 
     private fun mkCall(prototype: CallPredicate, argMapping: ExternalCallArgMapping): CallPredicate {
