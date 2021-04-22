@@ -1,6 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query.recursion
 
 import com.abdullin.kthelper.logging.log
+import com.microsoft.z3.ArithExpr
 import com.microsoft.z3.Expr
 import com.microsoft.z3.FunctionCallAnalyzer
 import com.microsoft.z3.enumerations.Z3_decl_kind
@@ -57,6 +58,8 @@ class ExternalFunctionCallAnalyzer(
         }
         log.debug("$expression | ${inArgs.contentToString()} | ${outArgs.contentToString()}\n=>\n$result")
         log.debug("--------------------------------------------------------------------")
+        println("$expression | ${inArgs.contentToString()} | ${outArgs.contentToString()}\n=>\n$result")
+        println("--------------------------------------------------------------------")
         return result
     }
 
@@ -80,6 +83,12 @@ class ExternalFunctionCallAnalyzer(
         val callArgs = argsInfo[functionId] ?: error("Unknown call $functionId")
         val argMapping =
             ExternalCallArgMapping.create(callArgs, inArgs, outArgs, callPrototype)
+
+        val replacement = arrayOf(eCtx.mkAdd(inArgs[1] as ArithExpr, eCtx.mkInt(5)), inArgs[2])
+        val result = expression.substitute(outArgs[0], replacement[0])
+        if (result == expression) return null
+        return result
+
         val call = mkCall(callPrototype.predicate, argMapping)
         val callQuery = convertQueryExpressionToPS(argMapping, expression, callPrototype, call)
         val resultPs = resolveCallQuery(callQuery) ?: return null

@@ -108,6 +108,89 @@ class Z3ModelConverterTest : KexTest() {
         }
     }
 
+    @Test
+    fun `test property read after write`() = TestCase().run {
+        val className = "org/jetbrains/research/kex/test/ObjectTests\$Point"
+        val (memory, _) = property(className, "x", KexInt())
+        val (owner1, owner1T) = variable("o1", KexClass(className))
+        val (owner2, owner2T) = variable("o2", KexClass(className))
+        val (x, xt) = variable("x", KexInt())
+        expression {
+            mkEq(mkSelect(mkStore(memory as ArrayExpr, owner1, mkInt(17)), owner2), x)
+        }
+        expected {
+            val state = basic {
+
+            }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
+    @Test
+    fun `test property read after conditional write`() = TestCase().run {
+        val className = "org/jetbrains/research/kex/test/ObjectTests\$Point"
+        val (memory, _) = property(className, "x", KexInt())
+        val (owner1, owner1T) = variable("o1", KexClass(className))
+        val (owner2, owner2T) = variable("o2", KexClass(className))
+        val (x, xt) = variable("x", KexInt())
+        val (c, ct) = variable("c", KexBool())
+        expression {
+            mkEq(
+                mkSelect(
+                    mkITE(
+                        c as BoolExpr,
+                        mkStore(memory as ArrayExpr, owner1, mkInt(17)),
+                        mkStore(memory as ArrayExpr, owner1, mkInt(19))
+                    ) as ArrayExpr, owner2
+                ), x
+            )
+        }
+        expected {
+            val state = basic {
+
+            }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
+    @Test
+    fun `test property memory compare`() = TestCase().run {
+        val className = "org/jetbrains/research/kex/test/ObjectTests\$Point"
+        val (memory, _) = property(className, "x", KexInt())
+        val (memoryOther, _) = property(className, "x_other", KexInt())
+        expression {
+            mkEq(memory, memoryOther)
+        }
+        expected {
+            val state = basic {
+
+            }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
+    @Test
+    fun `test property memory write and compare`() = TestCase().run {
+        val className = "org/jetbrains/research/kex/test/ObjectTests\$Point"
+        val (memory, _) = property(className, "x", KexInt())
+        val (memoryOther, _) = property(className, "x_other", KexInt())
+        val (owner, ownerT) = variable("o", KexClass(className))
+
+        expression {
+            mkEq(mkStore(memory as ArrayExpr, owner, mkInt(17)), memoryOther)
+        }
+        expected {
+            val state = basic {
+
+            }
+            val path = basic { path { modelVar(0) equality true } }
+            PredicateStateWithPath(state, path)
+        }
+    }
+
     inner class TestCase {
         private val factory: Z3ExprFactory = Z3ExprFactory()
         private val z3Context: Z3Context = Z3Context.create(factory)

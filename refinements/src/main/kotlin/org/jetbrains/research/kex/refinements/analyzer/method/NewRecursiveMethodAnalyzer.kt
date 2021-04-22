@@ -12,8 +12,10 @@ import org.jetbrains.research.kex.refinements.analyzer.utils.RecursiveCallsAnaly
 import org.jetbrains.research.kex.refinements.solver.FixpointSolver
 import org.jetbrains.research.kex.smt.z3.fixpoint.model.RecoveredModel
 import org.jetbrains.research.kex.smt.z3.fixpoint.query.NewRecursiveFixpointQuery
-import org.jetbrains.research.kex.state.*
+import org.jetbrains.research.kex.state.ChainState
+import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.memory.MemoryVersionInfo
+import org.jetbrains.research.kex.state.not
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.transformer.PredicateCollector
 import org.jetbrains.research.kex.state.transformer.optimize
@@ -58,7 +60,7 @@ class NewRecursiveMethodAnalyzer(
                 .toSet()
 
         check(executionPaths.exceptionSourceWithNoRecursiveCall.value.size == 1) { "TODO: sources" }
-
+        println("#".repeat(50))
         val normalExecutionConditions = queryNormalExecutionConditions(
             executionPaths,
             correctedStateWithApproximations,

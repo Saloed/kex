@@ -100,7 +100,13 @@ class FixpointModelConverter(
         expr is BitVecExpr -> convertBVTerm(expr)
         expr is FPExpr -> convertFPTerm(expr)
         expr is RealExpr -> convertRealTerm(expr)
+        expr is ArrayExpr -> convertArray(expr)
         else -> error("Unexpected term with sort ${expr.sort}: $expr")
+    }
+
+    private fun convertArray(expr: ArrayExpr): Term {
+        if (expr.isVariable()) return convertVariableTerm(expr)
+        error("Unsupported array expr: $expr")
     }
 
     private fun convertVariableTerm(expr: Expr): Term = when {
@@ -201,7 +207,7 @@ class FixpointModelConverter(
         if (!simplified.isSelect) return convertTerm(simplified)
         if (simplified.numArgs != 2) error("Unexpected select arguments")
         val (memoryExpr, locationExpr) = simplified.args
-        if (memoryExpr.isVar) return convertTerm(simplified)
+        if (memoryExpr.isVariable()) return convertTerm(simplified)
         val (_, memoryDecl) = convertComplexMemoryExpr(memoryExpr)
         return convertMemoryLoad(memoryDecl, locationExpr)
     }
@@ -213,7 +219,7 @@ class FixpointModelConverter(
     }
 
     private fun convertComplexMemoryArray(expr: ArrayExpr): Pair<Term, Declaration.Memory> = when {
-        expr.isVar -> {
+        expr.isVar || expr.isConst -> {
             val decl = convertMemoryDescriptor(expr)
             term { const(true) } to decl
         }
@@ -369,5 +375,7 @@ class FixpointModelConverter(
     private fun List<PredicateState>.combine(combiner: (PredicateState, PredicateState) -> PredicateState) =
         reduceOrNull(combiner)
             ?: BasicState()
+
+    private fun Expr.isVariable() = isVar || isConst
 
 }
