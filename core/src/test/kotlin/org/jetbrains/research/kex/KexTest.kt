@@ -25,14 +25,14 @@ abstract class KexTest(includeStdlib: Boolean = false, failOnError: Boolean = tr
     val loader: ClassLoader
 
     init {
-        val rootDir = System.getProperty("root.dir")
-        val version = System.getProperty("project.version")
+        val rootDir = System.getenv("root.dir")
+        val version = System.getenv("project.version")
         kexConfig.initialize(RuntimeConfig, FileConfig("$rootDir/kex-test.ini"))
         kexConfig.initLog("$rootDir/kex-test.log")
         RuntimeConfig.setValue("z3", "tacticsFile", "$rootDir/z3.tactics")
         RuntimeConfig.setValue("z3", "paramFile", "$rootDir/z3.params")
 
-        jarPath = "$rootDir/kex-test/target/kex-test-$version-jar-with-dependencies.jar"
+        jarPath = "$rootDir/kex-test/build/libs/kex-test-jar-with-dependencies-$version.jar"
         val jar = Paths.get(jarPath).toAbsolutePath().asContainer(`package`)?: run {
             log.error("Can't represent $jarPath as class container")
             exitProcess(1)

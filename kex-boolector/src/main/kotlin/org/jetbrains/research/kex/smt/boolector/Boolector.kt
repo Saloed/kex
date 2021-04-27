@@ -2,17 +2,20 @@ package org.jetbrains.research.kex.smt.boolector
 
 import org.jetbrains.research.kex.smt.*
 
-@SMTExpr(solver = "Boolector", importPackage = "org.jetbrains.research.boolector", context = "Btor", expr = "BoolectorNode", sort = "BoolectorSort")
+@SMTDefinitions(solver = "Boolector", importPackage = "org.jetbrains.research.boolector", context = "Btor", expr = "BoolectorNode", sort = "BoolectorSort")
+private object Boolector
+
+@SMTExpr(solver = "Boolector")
 abstract class BoolectorSMTExpr
 
-@SMTMemory(solver = "Boolector", importPackage = "org.jetbrains.research.boolector", context = "Btor", byteSize = 32)
+@SMTMemory(solver = "Boolector", byteSize = 32)
 abstract class BoolectorSMTMemory
 
-@SMTExprFactory(solver = "Boolector", importPackage = "org.jetbrains.research.boolector", context = "Btor")
+@SMTExprFactory(solver = "Boolector")
 abstract class BoolectorSMTExprFactory
 
-@SMTContext(solver = "Boolector", importPackage = "org.jetbrains.research.boolector", context = "Btor")
+@SMTContext(solver = "Boolector")
 abstract class BoolectorSMTContext
 
-@SMTConverter(solver = "Boolector", importPackage = "org.jetbrains.research.boolector")
+@SMTConverter(solver = "Boolector")
 abstract class BoolectorSMTConverter

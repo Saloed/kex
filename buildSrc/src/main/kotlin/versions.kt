@@ -1,0 +1,7 @@
+const val `kotlin-version` = "1.4.30"
+const val `kt-helper-version` = "0.0.6"
+const val `kfg-version` = "0.0.11-6"
+const val `serialization-version` = "1.0.0"
+const val `logback-version` = "1.2.3"
+const val `slf4j-version` = "1.7.25"
+const val `ini4j-version` = "0.5.4"
