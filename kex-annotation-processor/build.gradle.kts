@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     implementation("org.apache.velocity:velocity:1.7")
-    implementation("com.beust:klaxon:3.0.6")
+    implementation("com.beust:klaxon:${`klaxon-version`}")
 }
 
 description = "kex-annotation-processor"

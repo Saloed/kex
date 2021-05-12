@@ -62,9 +62,10 @@ dependencies {
     implementation("org.slf4j:slf4j-api:${`slf4j-version`}")
     implementation("ch.qos.logback:logback-classic:${`logback-version`}")
     implementation("com.abdullin:kt-helper:${`kt-helper-version`}")
+    implementation("ru.spbstu:ktuples:${`ktuples-version`}")
     testImplementation(kotlin("test-junit5", `kotlin-version`))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.7.1")
+    testImplementation("org.junit.jupiter:junit-jupiter:${`junit-version`}")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${`junit-version`}")
 }
 
 group = "org.jetbrains.research"
@@ -74,8 +75,6 @@ java.sourceCompatibility = JavaVersion.VERSION_11
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
-    }
-    withType<JavaCompile> {
         sourceCompatibility = "11"
         targetCompatibility = "11"
     }

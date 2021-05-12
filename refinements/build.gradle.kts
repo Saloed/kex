@@ -9,10 +9,9 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":kex-z3"))
     implementation(project(":kex-runner"))
-    implementation("org.jetbrains.research:kfg:${`kfg-version`}")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:${`serialization-version`}")
-    implementation("ru.spbstu:ktuples:0.0.1.11")
-    testImplementation(project(":core").dependencyProject.sourceSets["test"].output)
+    implementation(kfg())
+    implementation(kotlinx("serialization-json-jvm", `serialization-version`))
+    testImplementation(project(":core").tests())
     testRuntimeOnly(project(":kex-test"))
 }
 

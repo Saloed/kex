@@ -6,9 +6,9 @@ plugins {
 }
 
 dependencies {
+    implementation(kfg())
     implementation(project(":kex-annotation-processor"))
-    implementation("org.jetbrains.research:kfg:${`kfg-version`}")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:${`serialization-version`}")
+    implementation(kotlinx("serialization-json-jvm", `serialization-version`))
     testImplementation(project(":kex-test"))
 }
 

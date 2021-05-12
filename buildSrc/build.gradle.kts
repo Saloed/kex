@@ -2,7 +2,7 @@ plugins {
     `kotlin-dsl`
 }
 
-val kotlinVersion = "1.4.30" // todo: remove this
+val kotlinVersion = "1.5.0" // todo: remove this
 
 repositories {
     gradlePluginPortal()
