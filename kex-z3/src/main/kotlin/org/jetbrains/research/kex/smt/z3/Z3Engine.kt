@@ -108,8 +108,8 @@ object Z3Engine : SMTEngine<Context, Expr, Sort, FuncDecl, Pattern>() {
 
     override fun binary(ctx: Context, opcode: Opcode, lhv: Expr, rhv: Expr): Expr {
         val (lhv, rhv) = when {
-            lhv is IntExpr && rhv is BitVecExpr -> ctx.mkInt2BV(ctx.intSortSize[lhv.sort] ?: rhv.sortSize, lhv) to rhv
-            lhv is BitVecExpr && rhv is IntExpr -> lhv to ctx.mkInt2BV(ctx.intSortSize[rhv.sort] ?: lhv.sortSize, rhv)
+            lhv is IntExpr && rhv is BitVecExpr -> ctx.mkInt2BV(ctx.intSortSize[lhv.sort.id] ?: rhv.sortSize, lhv) to rhv
+            lhv is BitVecExpr && rhv is IntExpr -> lhv to ctx.mkInt2BV(ctx.intSortSize[rhv.sort.id] ?: lhv.sortSize, rhv)
             else -> lhv to rhv
         }
         return when (opcode) {
