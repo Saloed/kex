@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.assert.unreachable
 import org.jetbrains.research.kex.annotations.AnnotationsLoader
 import org.jetbrains.research.kex.state.*
 import org.jetbrains.research.kex.state.predicate.CallPredicate
@@ -17,7 +17,7 @@ class AnnotationIncluder(val annotations: AnnotationsLoader) : RecollectingTrans
         val method = call.method
         val args = call.arguments
         val argTypes = method.argTypes
-        val annotatedCall = annotations.getExactCall("${method.`class`}.${method.name}",
+        val annotatedCall = annotations.getExactCall("${method.klass}.${method.name}",
                 *Array(argTypes.size) { argTypes[it].name }) ?: return predicate
         val states = mutableListOf<PredicateState>()
         for ((i, param) in annotatedCall.params.withIndex()) {

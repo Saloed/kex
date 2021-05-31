@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.KexTest
 import org.jetbrains.research.kex.MethodRefinements
@@ -33,7 +33,7 @@ abstract class RefinementTest(
 ) : KexTest(includeStdlib, failOnError) {
     val refinementsPackageName = "$packageName/refinements"
     val refinementsPackage = Package("$refinementsPackageName/*")
-    val `class`: Class
+    val klass: Class
         get() = cm["$refinementsPackageName/$suiteName"]
 
     private val psa: PredicateStateAnalysis
@@ -80,8 +80,8 @@ abstract class RefinementTest(
     }
 
 
-    private fun findMethod(name: String) = `class`.methods.find { it.name == name }
-            ?: throw IllegalStateException("Method $name not found in $`class`")
+    private fun findMethod(name: String) = klass.methods.find { it.name == name }
+            ?: throw IllegalStateException("Method $name not found in $klass")
 
     fun refinementsForMethod(method: Method): Refinements {
         val refinements = MethodRefinements(analysisContext, psa)

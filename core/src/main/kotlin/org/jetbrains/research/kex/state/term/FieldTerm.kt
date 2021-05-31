@@ -17,7 +17,7 @@ class FieldTerm(override val type: KexType, val owner: Term, val fieldName: Term
         get() = owner is ConstClassTerm
 
     val klass: String
-        get() = ownerClass.`class`
+        get() = ownerClass.klass
 
     override fun <T : Transformer<T>> accept(t: Transformer<T>): Term {
         val towner = t.transform(owner)

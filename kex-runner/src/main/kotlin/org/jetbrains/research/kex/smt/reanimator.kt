@@ -1,9 +1,9 @@
 package org.jetbrains.research.kex.smt
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
-import com.abdullin.kthelper.toBoolean
-import com.abdullin.kthelper.tryOrNull
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
+import org.jetbrains.research.kthelper.toBoolean
+import org.jetbrains.research.kthelper.tryOrNull
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.generator.ArrayDescriptor
 import org.jetbrains.research.kex.generator.Descriptor
@@ -149,19 +149,19 @@ class ObjectReanimator(override val method: Method,
                 val (instance, klass) = when {
                     term.isStatic -> {
                         val classRef = (term.owner as ConstClassTerm)
-                        val `class` = tryOrNull { loader.loadClass(classRef.`class`.canonicalDesc) } ?: return null
-                        if (`class`.isSynthetic) return null
-                        null to `class`
+                        val klass = tryOrNull { loader.loadClass(classRef.klass.canonicalDesc) } ?: return null
+                        if (klass.isSynthetic) return null
+                        null to klass
                     }
                     else -> {
                         val objectRef = term.owner
                         val objectAddr = (reanimateFromAssignment(objectRef) as ConstIntTerm).value
                         val type = objectRef.type as KexClass
 
-                        val kfgClass = method.cm[type.`class`]
-                        val `class` = tryOrNull { loader.loadClass(kfgClass.canonicalDesc) } ?: return null
+                        val kfgClass = method.cm[type.klass]
+                        val klass = tryOrNull { loader.loadClass(kfgClass.canonicalDesc) } ?: return null
                         val instance = memory(objectRef.memspace, objectAddr) ?: return null
-                        instance to `class`
+                        instance to klass
                     }
                 }
                 val name = "${term.klass}.${term.fieldNameString}"
@@ -341,25 +341,25 @@ abstract class DescriptorReanimator(override val method: Method,
                 val (instance, klass, field) = when {
                     term.isStatic -> {
                         val classRef = (term.owner as ConstClassTerm)
-                        val `class` = tryOrNull { loader.loadClass(classRef.`class`.canonicalDesc) }
+                        val klass = tryOrNull { loader.loadClass(classRef.klass.canonicalDesc) }
                                 ?: return@descriptor default(term.type, nullable)
-                        if (`class`.isSynthetic) return@descriptor default(term.type, nullable)
+                        if (klass.isSynthetic) return@descriptor default(term.type, nullable)
 
-                        Triple(`null`, `class`, classRef.`class`.getField(fieldName, term.type.getKfgType(types)))
+                        Triple(`null`, klass, classRef.klass.getField(fieldName, term.type.getKfgType(types)))
                     }
                     else -> {
                         val objectRef = term.owner
                         val objectAddr = (reanimateFromAssignment(objectRef) as ConstIntTerm).value
                         val type = objectRef.type as KexClass
 
-                        val kfgClass = method.cm[type.`class`]
-                        val `class` = tryOrNull { loader.loadClass(kfgClass.canonicalDesc) }
+                        val kfgClass = method.cm[type.klass]
+                        val klass = tryOrNull { loader.loadClass(kfgClass.canonicalDesc) }
                                 ?: return@descriptor default(term.type, nullable)
 
                         val instance = memory(objectRef.memspace, objectAddr)
                                 ?: return@descriptor default(term.type, nullable)
 
-                        Triple(instance, `class`, kfgClass.getField(fieldName, term.type.getKfgType(types)))
+                        Triple(instance, klass, kfgClass.getField(fieldName, term.type.getKfgType(types)))
                     }
                 }
                 val name = "${term.klass}.${term.fieldNameString}"
@@ -371,7 +371,7 @@ abstract class DescriptorReanimator(override val method: Method,
                     return@descriptor default(term.type, nullable)
 
                 if (instance is ObjectDescriptor) {
-                    instance[fieldReflect.name] = instance.field(field.name, field.type, field.`class`, reanimatedValue)
+                    instance[fieldReflect.name] = instance.field(field.name, field.type, field.klass, reanimatedValue)
                 }
 
                 instance

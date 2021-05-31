@@ -66,7 +66,7 @@ open class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
         predicateMap[inst] = state(inst.location) {
             val args = inst.args.map { value(it) }
             val callee = when {
-                inst.isStatic -> `class`(inst.method.`class`)
+                inst.isStatic -> klass(inst.method.klass)
                 else -> value(inst.callee)
             }
             val callTerm = callee.call(inst.method, inst, args)
@@ -99,7 +99,7 @@ open class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
         predicateMap[inst] = state(inst.location) {
             val lhv = value(inst)
             val owner = when {
-                inst.isStatic -> `class`(inst.field.`class`)
+                inst.isStatic -> klass(inst.field.klass)
                 else -> value(inst.owner)
             }
             val field = owner.field(inst.type.kexType, inst.field)
@@ -112,7 +112,7 @@ open class PredicateBuilder(override val cm: ClassManager) : MethodVisitor {
     override fun visitFieldStoreInst(inst: FieldStoreInst) {
         predicateMap[inst] = state(inst.location) {
             val owner = when {
-                inst.isStatic -> `class`(inst.field.`class`)
+                inst.isStatic -> klass(inst.field.klass)
                 else -> value(inst.owner)
             }
             val value = value(inst.value)

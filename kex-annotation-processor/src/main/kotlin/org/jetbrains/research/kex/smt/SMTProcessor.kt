@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt
 
-import com.abdullin.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.assert.unreachable
 import org.jetbrains.research.kex.KexProcessor
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -73,8 +73,8 @@ class SMTProcessor : KexProcessor() {
         writeClass(`package`, newClass, parameters, "SMT$nameTemplate")
     }
 
-    private fun writeClass(`package`: String, `class`: String, parameters: Map<String, Any>, template: String) {
-        val file = File("$targetDirectory/${`package`.replace('.', '/')}/$`class`.kt")
+    private fun writeClass(`package`: String, klass: String, parameters: Map<String, Any>, template: String) {
+        val file = File("$targetDirectory/${`package`.replace('.', '/')}/$klass.kt")
         if (!file.parentFile.exists()) file.parentFile.mkdirs()
 
         val stream = ByteArrayOutputStream()
@@ -91,7 +91,7 @@ class SMTProcessor : KexProcessor() {
                 printedGeneratedSourcesDir = true
             }
 
-            info("Generating $template for $`class` in package $`package` with parameters $parameters")
+            info("Generating $template for $klass in package $`package` with parameters $parameters")
             file.writer().use {
                 it.write(resultingFile)
             }

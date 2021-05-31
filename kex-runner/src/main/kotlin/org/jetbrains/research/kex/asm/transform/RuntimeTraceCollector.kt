@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.asm.transform
 
-import com.abdullin.kthelper.collection.buildList
+import org.jetbrains.research.kthelper.collection.buildList
 import org.jetbrains.research.kex.trace.`object`.TraceCollector
 import org.jetbrains.research.kex.trace.`object`.TraceCollectorProxy
 import org.jetbrains.research.kfg.ClassManager
@@ -22,14 +22,14 @@ class RuntimeTraceCollector(override val cm: ClassManager) : MethodVisitor {
     inline val value get() = cm.value
 
     private fun Method.isInstrumented(): Boolean {
-        val klass = this.`class`
+        val klass = this.klass
         if (klass !in cm.concreteClasses) return false
         return true
     }
 
     private fun Value.wrap(): Instruction {
         val wrapperType = this@RuntimeTraceCollector.type.getWrapper(this.type as PrimaryType) as ClassType
-        val wrapperClass = wrapperType.`class`
+        val wrapperClass = wrapperType.klass
         val valueOfMethod = wrapperClass.getMethod("valueOf", MethodDesc(arrayOf(this.type), wrapperType))
         return instruction.getCall(CallOpcode.Static(), valueOfMethod, wrapperClass, arrayOf(this), true)
     }
@@ -177,7 +177,7 @@ class RuntimeTraceCollector(override val cm: ClassManager) : MethodVisitor {
 
             +instruction.getCall(CallOpcode.Virtual(), callMethod, collectorClass, traceCollector,
                     arrayOf(
-                            value.getStringConstant(inst.method.`class`.fullname),
+                            value.getStringConstant(inst.method.klass.fullName),
                             value.getStringConstant(inst.method.name),
                             stringArray,
                             value.getStringConstant(inst.method.returnType.asmDesc),
@@ -211,7 +211,7 @@ class RuntimeTraceCollector(override val cm: ClassManager) : MethodVisitor {
                 +traceCollector
                 val entryMethod = collectorClass.getMethod("staticEntry", MethodDesc(arrayOf(type.stringType), type.voidType))
                 +instruction.getCall(CallOpcode.Virtual(), entryMethod, collectorClass,
-                        traceCollector, arrayOf(value.getStringConstant(method.`class`.fullname)), false)
+                        traceCollector, arrayOf(value.getStringConstant(method.klass.fullName)), false)
             }
             else -> buildList<Instruction> {
                 traceCollector = getNewCollector()
@@ -241,11 +241,11 @@ class RuntimeTraceCollector(override val cm: ClassManager) : MethodVisitor {
 
                 +instruction.getCall(CallOpcode.Virtual(), entryMethod, collectorClass, traceCollector,
                         arrayOf(
-                                value.getStringConstant(method.`class`.fullname),
+                                value.getStringConstant(method.klass.fullName),
                                 value.getStringConstant(method.name),
                                 stringArray,
                                 value.getStringConstant(method.returnType.asmDesc),
-                                if (method.isStatic || method.isConstructor) value.getNullConstant() else value.getThis(method.`class`),
+                                if (method.isStatic || method.isConstructor) value.getNullConstant() else value.getThis(method.klass),
                                 argArray
                         ),
                         false)

@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query.recursion
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import com.microsoft.z3.Expr
 import com.microsoft.z3.FunctionCallAnalyzer
 import com.microsoft.z3.enumerations.Z3_decl_kind

@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.util
 
-import com.abdullin.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.collection.dequeOf
 import java.util.*
 
 abstract class DiffTool<T>(val first: T, val second: T) {

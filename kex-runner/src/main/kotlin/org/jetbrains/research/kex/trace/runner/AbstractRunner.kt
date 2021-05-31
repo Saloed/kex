@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.trace.runner
 
-import com.abdullin.kthelper.`try`
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.`try`
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.util.getConstructor
 import org.jetbrains.research.kex.util.getMethod
@@ -57,7 +57,7 @@ data class InvocationResult(
 }
 
 abstract class AbstractRunner(val method: Method, protected val loader: ClassLoader) {
-    protected val javaClass = loader.loadClass(method.`class`.canonicalDesc)
+    protected val javaClass = loader.loadClass(method.klass.canonicalDesc)
     protected val javaMethod by lazy { javaClass.getMethod(method, loader) }
     protected val javaConstructor by lazy { javaClass.getConstructor(method, loader) }
 

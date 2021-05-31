@@ -2,14 +2,14 @@ package org.jetbrains.research.kex.refinements.analyzer.utils
 
 import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kfg.ClassManager
-import org.jetbrains.research.kfg.UnknownInstance
+import org.jetbrains.research.kfg.UnknownInstanceException
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.ir.OuterClass
 
 class MethodImplementations(private val cm: ClassManager, private val methodRefinements: MethodRefinements) {
     fun collectImplementations(method: Method): Set<Method> =
-            collectInheritors(method.`class`)
+            collectInheritors(method.klass)
                     .mapNotNull { it.getMethodOrNull(method) }
                     .toSet()
 
@@ -23,7 +23,7 @@ class MethodImplementations(private val cm: ClassManager, private val methodRefi
 
     private fun Class.getMethodOrNull(method: Method) = try {
         getMethod(method.name, method.desc)
-    } catch (ex: UnknownInstance) {
+    } catch (ex: UnknownInstanceException) {
         null
     }?.let {
         when {

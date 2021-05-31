@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.solver
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.serialization.RefinementsKexSerializer
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointResult

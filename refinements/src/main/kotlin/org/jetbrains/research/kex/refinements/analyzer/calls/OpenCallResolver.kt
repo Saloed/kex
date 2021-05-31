@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.calls
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.refinements.MethodApproximationManager
 import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementationMerge
 import org.jetbrains.research.kex.refinements.analyzer.utils.MethodImplementations
@@ -55,7 +55,7 @@ class OpenCallResolver(
         if (!checkOwnerTypes(method, resolvingCallTerm.owner)) {
             return RecoveredModel.error()
         }
-        val newOwner = currentCallContext.variableGenerator.createNestedGenerator("call_owner").unique().createUniqueVar(method.`class`.kexType)
+        val newOwner = currentCallContext.variableGenerator.createNestedGenerator("call_owner").unique().createUniqueVar(method.klass.kexType)
         val newCall = CallTerm(
                 resolvingCallTerm.type, newOwner,
                 method, resolvingCallTerm.instruction,
@@ -77,7 +77,7 @@ class OpenCallResolver(
 
     private fun checkOwnerTypes(method: Method, owner: Term): Boolean {
         val ownerType = (owner.type as KexClass).getKfgClass(methodAnalyzer.cm.type)
-        return method.`class`.isInheritorOf(ownerType)
+        return method.klass.isInheritorOf(ownerType)
     }
 
     inner class ImplementationResolver(

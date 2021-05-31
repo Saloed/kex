@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.KexType
 import org.jetbrains.research.kex.smt.z3.Z3Context
 import org.jetbrains.research.kex.state.ChainState

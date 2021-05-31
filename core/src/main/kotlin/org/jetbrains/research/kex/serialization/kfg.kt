@@ -160,7 +160,7 @@ object LocationSerializer : KSerializer<Location> {
 
     override fun serialize(encoder: Encoder, value: Location) {
         val output = encoder.beginStructure(descriptor)
-        output.encodeStringElement(descriptor, 0, value.`package`.toString())
+        output.encodeStringElement(descriptor, 0, value.pkg.toString())
         output.encodeStringElement(descriptor, 1, value.file)
         output.encodeIntElement(descriptor, 2, value.line)
         output.endStructure(descriptor)
@@ -194,7 +194,7 @@ internal object ClassSerializer : KSerializer<Class> {
         get() = PrimitiveSerialDescriptor("fullname", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: Class) {
-        encoder.encodeString(value.fullname)
+        encoder.encodeString(value.fullName)
     }
 
     override fun deserialize(decoder: Decoder) = cm[decoder.decodeString()]
@@ -213,7 +213,7 @@ internal object MethodSerializer : KSerializer<Method> {
 
     override fun serialize(encoder: Encoder, value: Method) {
         val output = encoder.beginStructure(descriptor)
-        output.encodeSerializableElement(descriptor, 0, ClassSerializer, value.`class`)
+        output.encodeSerializableElement(descriptor, 0, ClassSerializer, value.klass)
         output.encodeStringElement(descriptor, 1, value.name)
         output.encodeSerializableElement(descriptor, 2, TypeSerializer, value.returnType)
         output.encodeSerializableElement(descriptor, 3, ListSerializer(TypeSerializer), value.argTypes.toList())
@@ -287,7 +287,7 @@ internal object CallInstSerializer : KSerializer<CallInst> {
         override fun CompositeEncoder.serializeElements(descriptor: SerialDescriptor, value: CallInst) {
             encodeSerializableElement(descriptor, 0, MethodSerializer, value.method)
             encodeSerializableElement(descriptor, 1, CallOpcodeSerializer, value.opcode)
-            encodeSerializableElement(descriptor, 2, ClassSerializer, value.`class`)
+            encodeSerializableElement(descriptor, 2, ClassSerializer, value.klass)
             encodeSerializableElement(descriptor, 3, LocationSerializer, value.location)
             encodeIntElement(descriptor, 4, value.id)
         }

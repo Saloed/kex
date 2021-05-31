@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex
 
-import com.abdullin.kthelper.collection.dequeOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.refinements.Refinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.config.kexConfig
@@ -67,8 +67,8 @@ class MethodRefinements(
         return refinement
     }
 
-    fun isExcluded(method: Method) = "${method.`class`.fullname}::${method.name}" in excludeMethods || isExcluded(method.`class`)
-    fun isExcluded(cls: Class) = cls.fullname in excludeClasses || isExcluded(cls.`package`)
+    fun isExcluded(method: Method) = "${method.klass.fullName}::${method.name}" in excludeMethods || isExcluded(method.klass)
+    fun isExcluded(cls: Class) = cls.fullName in excludeClasses || isExcluded(cls.pkg)
     fun isExcluded(pkg: Package) = pkg in excludePackages || excludePackages.any { it.isParent(pkg) }
 
     private fun analyzeMethod(method: Method): Refinements {

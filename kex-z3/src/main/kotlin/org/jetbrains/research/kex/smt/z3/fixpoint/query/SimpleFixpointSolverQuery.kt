@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.query
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import com.microsoft.z3.BoolExpr
 import org.jetbrains.research.kex.smt.z3.fixpoint.FixpointCallCtx
 import org.jetbrains.research.kex.smt.z3.fixpoint.Z3FixpointSolver

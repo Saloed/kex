@@ -1,9 +1,9 @@
 package org.jetbrains.research.kex.ktype
 
-import com.abdullin.kthelper.assert.ktassert
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.defaultHashCode
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.assert.ktassert
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.logging.log
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.BaseType
 import org.jetbrains.research.kex.InheritanceInfo
@@ -14,7 +14,7 @@ import org.jetbrains.research.kfg.ir.Class as KfgClass
 
 val Type.kexType get() = KexType.fromType(this)
 val KfgClass.kexType get() = KexType.fromClass(this)
-val KfgClass.type get() = this.cm.type.getRefType(this.fullname)
+val KfgClass.type get() = this.cm.type.getRefType(this.fullName)
 
 fun mergeTypes(tf: TypeFactory, vararg types: KexType): KexType = mergeTypes(tf, types.toList())
 
@@ -25,10 +25,10 @@ fun mergeTypes(tf: TypeFactory, types: Collection<KexType>): KexType {
     return when {
         uniqueTypes.all { it is KexPointer } -> {
             var result = tf.objectType.kexType
-            val classes = uniqueTypes.map { it as KexClass }.map { tf.getRefType(it.`class`) as ClassType }
+            val classes = uniqueTypes.map { it as KexClass }.map { tf.getRefType(it.klass) as ClassType }
             for (i in 0..classes.lastIndex) {
-                val isAncestor = classes.fold(true) { acc, `class` ->
-                    acc && classes[i].`class`.isAncestorOf(`class`.`class`)
+                val isAncestor = classes.fold(true) { acc, klass ->
+                    acc && classes[i].klass.isAncestorOf(klass.klass)
                 }
 
                 if (isAncestor) {
@@ -82,7 +82,7 @@ abstract class KexType {
                 else -> unreachable { log.error("Unknown real type: $type") }
             }
             is Reference -> when (type) {
-                is ClassType -> KexClass(type.`class`.fullname)
+                is ClassType -> KexClass(type.klass.fullName)
                 is ArrayType -> KexArray(fromType(type.component))
                 is NullType -> KexNull()
                 else -> unreachable { log.error("Unknown reference type: $type") }
@@ -91,7 +91,7 @@ abstract class KexType {
             else -> unreachable { log.error("Unknown type: $type") }
         }
 
-        fun fromClass(klass: KfgClass) = KexClass(klass.fullname)
+        fun fromClass(klass: KfgClass) = KexClass(klass.fullName)
     }
 
     abstract val name: String

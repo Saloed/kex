@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.state.memory
 
-import com.abdullin.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.state.PredicateState
 
 object MemoryVersionReplacer {

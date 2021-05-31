@@ -2,11 +2,11 @@
 
 package org.jetbrains.research.kex.state.memory
 
-import com.abdullin.kthelper.algorithm.GraphView
-import com.abdullin.kthelper.algorithm.Viewable
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.defaultHashCode
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.algorithm.GraphView
+import org.jetbrains.research.kthelper.algorithm.Viewable
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.config.kexConfig
 
 internal sealed class MemoryVersionSource : Viewable {

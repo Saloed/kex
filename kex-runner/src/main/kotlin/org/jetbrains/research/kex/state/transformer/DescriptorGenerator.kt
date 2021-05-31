@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.generator.ConstantDescriptor
 import org.jetbrains.research.kex.generator.Descriptor
@@ -34,7 +34,7 @@ class DescriptorGenerator(override val method: Method,
     override var thisTerm: Term? = null
     override val argTerms = sortedMapOf<Int, Term>()
 
-    override val javaClass = loader.loadClass(type.getRefType(method.`class`))
+    override val javaClass = loader.loadClass(type.getRefType(method.klass))
     override val javaMethod = when {
         method.isConstructor -> javaClass.getConstructor(method, loader)
         else -> javaClass.getMethod(method, loader)

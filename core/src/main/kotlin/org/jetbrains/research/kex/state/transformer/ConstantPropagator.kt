@@ -1,8 +1,5 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.*
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.InequalityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
@@ -10,6 +7,8 @@ import org.jetbrains.research.kex.state.predicate.state
 import org.jetbrains.research.kex.state.term.*
 import org.jetbrains.research.kfg.ir.value.instruction.BinaryOpcode
 import org.jetbrains.research.kfg.ir.value.instruction.CmpOpcode
+import org.jetbrains.research.kthelper.*
+import org.jetbrains.research.kthelper.logging.log
 import kotlin.math.abs
 
 object ConstantPropagator : Transformer<ConstantPropagator> {
@@ -106,7 +105,7 @@ object ConstantPropagator : Transformer<ConstantPropagator> {
     private fun getConstantValue(term: Term): Number? = when (term) {
         is ConstBoolTerm -> term.value.toInt()
         is ConstByteTerm -> term.value
-        is ConstCharTerm -> term.value.toShort()
+        is ConstCharTerm -> term.value.code
         is ConstDoubleTerm -> term.value
         is ConstFloatTerm -> term.value
         is ConstIntTerm -> term.value

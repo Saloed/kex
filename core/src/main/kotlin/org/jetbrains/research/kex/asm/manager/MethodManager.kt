@@ -31,8 +31,8 @@ object MethodManager {
         }
 
         fun isIgnored(method: Method) = when {
-            ignorePackages.any { it.isParent(method.`class`.`package`) } -> true
-            ignoreClasses.any { method.cm[it] == method.`class` } -> true
+            ignorePackages.any { it.isParent(method.klass.pkg) } -> true
+            ignoreClasses.any { method.cm[it] == method.klass } -> true
             ignoreMethods.contains(method) -> true
             else -> false
         }
@@ -48,7 +48,7 @@ object MethodManager {
             isIgnored(method) -> InlineStatus.NO_INLINE
             method.isStatic -> InlineStatus.INLINE
             method.isConstructor -> InlineStatus.INLINE
-            !method.isFinal && !method.`class`.isFinal -> InlineStatus.MAY_INLINE
+            !method.isFinal && !method.klass.isFinal -> InlineStatus.MAY_INLINE
             method.flatten().all { it !is ReturnInst } -> InlineStatus.NO_INLINE
             else -> InlineStatus.INLINE
         }
@@ -58,7 +58,7 @@ object MethodManager {
             val calledMethod = call.method
             val mappings = hashMapOf<Term, Term>()
             if (!call.isStatic) {
-                val `this` = term { `this`(calledMethod.`class`.kexType) }
+                val `this` = term { `this`(calledMethod.klass.kexType) }
                 mappings[`this`] = call.owner
             }
             if (predicate.hasLhv) {

@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.model
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import com.microsoft.z3.enumerations.Z3_lbool
@@ -333,7 +333,7 @@ class FixpointModelConverter(
         }
         val typeChecks = fields.map {
             val typeCheck = converterContext.tmpVariable(KexBool())
-            converterContext.stateBuilder += state { typeCheck equality owner.instanceOf(it.`class`, version, scope) }
+            converterContext.stateBuilder += state { typeCheck equality owner.instanceOf(it.klass, version, scope) }
             typeCheck
         }
         val allTypesAssumption = basic {
@@ -342,7 +342,7 @@ class FixpointModelConverter(
         // todo: maybe add default type choice
         val resultFiledLoad = converterContext.tmpVariable(fieldType)
         val axioms = fields.zip(typeChecks).map { (field, typeCheck) ->
-            val tmpVar = converterContext.tmpVariable(field.`class`.kexType)
+            val tmpVar = converterContext.tmpVariable(field.klass.kexType)
             basic {
                 path { typeCheck equality const(true) }
                 state { tmpVar equality owner }

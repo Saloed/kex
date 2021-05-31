@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.generator
 
-import com.abdullin.kthelper.collection.queueOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.collection.queueOf
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.annotations.AnnotationManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
@@ -230,7 +230,7 @@ class CallStackGenerator(val context: ExecutionContext, val psa: PredicateStateA
         val mapper = descriptor.mapper
         val fieldAccessList = this.fieldAccesses
         val intersection = descriptor.fields.values.filter {
-            fieldAccessList.find { field -> it.name == field.name && it.klass == field.`class` } != null
+            fieldAccessList.find { field -> it.name == field.name && it.klass == field.klass } != null
         }
         if (intersection.isEmpty()) return null
 

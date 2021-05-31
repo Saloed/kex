@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.refinements.analyzer.calls
 
-import com.abdullin.kthelper.collection.dequeOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.refinements.PathConditions
@@ -139,18 +139,18 @@ class CallInliner(
     companion object {
         private fun isObjectConstructor(method: Method): Boolean {
             if (!method.isConstructor) return false
-            return isJavaInlineable(method.`class`) || isKotlinInlineable(method.`class`)
+            return isJavaInlineable(method.klass) || isKotlinInlineable(method.klass)
         }
 
         private fun isKotlinInlineable(cls: Class): Boolean {
-            if (cls.`package` != KOTLIN_PACKAGE) return false
+            if (cls.pkg != KOTLIN_PACKAGE) return false
             if (cls.name == "Any") return true
             if (cls.name.endsWith("Exception")) return true
             return false
         }
 
         private fun isJavaInlineable(cls: Class): Boolean {
-            if (cls.`package` != JAVA_PACKAGE) return false
+            if (cls.pkg != JAVA_PACKAGE) return false
             if (cls.name == "Object") return true
             if (cls.name.endsWith("Exception")) return true
             return false

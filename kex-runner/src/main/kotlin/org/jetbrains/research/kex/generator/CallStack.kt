@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.generator
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method
@@ -13,7 +13,7 @@ interface ApiCall {
 data class PrimaryValue<T>(val value: T) : ApiCall
 
 data class DefaultConstructorCall(val klass: Class) : ApiCall {
-    override fun toString() = "${klass.fullname}()"
+    override fun toString() = "${klass.fullName}()"
 }
 
 data class ConstructorCall(val klass: Class, val constructor: Method, val args: List<CallStack>) : ApiCall {
@@ -37,7 +37,7 @@ data class UnknownCall(val klass: Class, val target: Descriptor) : ApiCall {
 }
 
 data class StaticFieldSetter(val klass: Class, val field: Field, val value: CallStack) : ApiCall {
-    override fun toString() = "${klass.fullname}.${field.name} = $value"
+    override fun toString() = "${klass.fullName}.${field.name} = $value"
 }
 
 data class FieldSetter(val klass: Class, val owner: CallStack, val field: Field, val value: CallStack) : ApiCall

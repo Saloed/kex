@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.assert.ktassert
-import com.abdullin.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.assert.ktassert
+import org.jetbrains.research.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis

@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex
 
-import com.abdullin.kthelper.logging.debug
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.debug
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.asm.analysis.Failure
 import org.jetbrains.research.kex.asm.analysis.MethodChecker
 import org.jetbrains.research.kex.asm.analysis.RandomChecker

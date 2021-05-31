@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.sources
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.refinements.Refinement
 import org.jetbrains.research.kex.refinements.RefinementSource
 import org.jetbrains.research.kex.refinements.RefinementSources

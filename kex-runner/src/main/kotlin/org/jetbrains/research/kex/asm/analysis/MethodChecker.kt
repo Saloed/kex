@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.asm.analysis
 
-import com.abdullin.kthelper.algorithm.DominatorTreeBuilder
-import com.abdullin.kthelper.logging.debug
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.algorithm.DominatorTreeBuilder
+import org.jetbrains.research.kthelper.logging.debug
+import org.jetbrains.research.kthelper.logging.log
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.ExecutionContext
@@ -38,7 +38,7 @@ class KexRunnerException(val inner: Exception, val model: ReanimatedModel) : Exc
 
 @Serializable
 data class Failure(
-        @Contextual val `class`: Class,
+        @Contextual val klass: Class,
         @Contextual val method: Method,
         val message: String,
         val state: PredicateState
@@ -60,7 +60,7 @@ class MethodChecker(
         }
         val errorDump = Files.createTempFile(failDirPath, "ps-", ".json").toFile()
         log.error("Failing saved to file ${errorDump.path}")
-        errorDump.writeText(KexSerializer(cm).toJson(Failure(method.`class`, method, message, state)))
+        errorDump.writeText(KexSerializer(cm).toJson(Failure(method.klass, method, message, state)))
     }
 
     override fun cleanup() {}
@@ -68,7 +68,7 @@ class MethodChecker(
     override fun visit(method: Method) {
         super.visit(method)
 
-        if (method.`class`.isSynthetic) return
+        if (method.klass.isSynthetic) return
         if (method.isAbstract || method.isStaticInitializer) return
         if (!method.isImpactable) return
 

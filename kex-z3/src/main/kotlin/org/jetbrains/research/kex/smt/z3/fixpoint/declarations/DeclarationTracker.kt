@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.declarations
 
-import com.abdullin.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.defaultHashCode
 import com.microsoft.z3.Expr
 import com.microsoft.z3.Sort
 import org.jetbrains.research.kex.state.memory.MemoryDescriptor

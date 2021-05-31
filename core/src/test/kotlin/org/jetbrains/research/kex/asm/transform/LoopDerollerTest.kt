@@ -32,16 +32,16 @@ class LoopDerollerTest : KexTest() {
 
     @Test
     fun simpleLoopTest() {
-        val `class` = cm["$packageName/LoopTests"]
-        for (method in `class`.allMethods) {
+        val klass = cm["$packageName/LoopTests"]
+        for (method in klass.allMethods) {
             checkLoops(method)
         }
     }
 
     @Test
     fun icfpcLoopTest() {
-        val `class` = cm["$packageName/Icfpc2018Test"]
-        for (method in `class`.allMethods) {
+        val klass = cm["$packageName/Icfpc2018Test"]
+        for (method in klass.allMethods) {
             checkLoops(method)
         }
     }

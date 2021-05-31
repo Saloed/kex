@@ -1,8 +1,5 @@
 package org.jetbrains.research.kex.generator
 
-import com.abdullin.kthelper.`try`
-import com.abdullin.kthelper.assert.asserted
-import com.abdullin.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.util.eq
 import org.jetbrains.research.kex.util.loadClass
@@ -11,6 +8,10 @@ import org.jetbrains.research.kfg.ClassManager
 import org.jetbrains.research.kfg.ir.Field
 import org.jetbrains.research.kfg.ir.Method
 import org.jetbrains.research.kfg.visitor.ClassVisitor
+import org.jetbrains.research.kthelper.`try`
+import org.jetbrains.research.kthelper.assert.asserted
+import org.jetbrains.research.kthelper.logging.log
+import java.lang.Class
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KType
 import kotlin.reflect.full.memberProperties
@@ -38,26 +39,26 @@ class SetterDetector(val ctx: ExecutionContext) : ClassVisitor {
 
     override fun cleanup() {}
 
-    override fun visit(`class`: KfgClass) {
+    override fun visit(klass: KfgClass) {
         `try` {
-            val klass = ctx.loader.loadKClass(`class`)
-            for (property in klass.memberProperties.filterIsInstance<KMutableProperty<*>>()) {
-                for (method in `class`.methods) {
+            val kClass = ctx.loader.loadKClass(klass)
+            for (property in kClass.memberProperties.filterIsInstance<KMutableProperty<*>>()) {
+                for (method in klass.methods) {
                     if (property.setter eq method) {
                         log.info("Method $method is kotlin setter for $property")
-                        val field = `class`.getField(property.name, property.returnType.kfgType)
+                        val field = klass.getField(property.name, property.returnType.kfgType)
                         settersInner[field] = method
                     }
                 }
             }
         }
 
-        log.debug("$`class` is not from kotlin")
-        super.visit(`class`)
+        log.debug("$klass is not from kotlin")
+        super.visit(klass)
     }
 
     override fun visitMethod(method: Method) {
-        val klass = ctx.loader.loadClass(method.`class`)
+        val klass = ctx.loader.loadClass(method.klass)
         val fieldInstances = klass.declaredFields.filter { method.name == "set${it.name.capitalize()}" }
         if (fieldInstances.isEmpty()) return
         require(fieldInstances.size == 1)

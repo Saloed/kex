@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.collection.dequeOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.asm.manager.MethodManager
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.ktype.KexPointer
@@ -144,8 +144,8 @@ class MethodFunctionalInliner(
         if (first.type == second.type) return true
         val firstType = first.type.getKfgType(psa.types) as? ClassType ?: return false
         val secondType = second.type.getKfgType(psa.types) as? ClassType ?: return false
-        return firstType.`class`.isInheritorOf(secondType.`class`)
-                || secondType.`class`.isInheritorOf(firstType.`class`) // fixme: type casts needed
+        return firstType.klass.isInheritorOf(secondType.klass)
+                || secondType.klass.isInheritorOf(firstType.klass) // fixme: type casts needed
     }
 
     data class TermMapping(val mappedTerm: Term, val predicate: (Term) -> Boolean)

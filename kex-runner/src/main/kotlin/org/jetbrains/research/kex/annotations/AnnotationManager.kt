@@ -1,9 +1,9 @@
 package org.jetbrains.research.kex.annotations
 
-import com.abdullin.kthelper.`try`
-import com.abdullin.kthelper.assert.ktassert
-import com.abdullin.kthelper.logging.log
-import com.abdullin.kthelper.recast
+import org.jetbrains.research.kthelper.`try`
+import org.jetbrains.research.kthelper.assert.ktassert
+import org.jetbrains.research.kthelper.logging.log
+import org.jetbrains.research.kthelper.recast
 import org.apache.commons.lang.StringEscapeUtils.unescapeJava
 import org.jetbrains.research.kex.config.kexConfig
 import org.reflections.Reflections
@@ -63,8 +63,8 @@ object AnnotationManager {
                 val lastDot = value.lastIndexOf('.')
                 val className = value.substring(0 until lastDot)
                 val fieldName = value.substring(lastDot + 1)
-                val `class` = Class.forName(className)
-                val field = `class`.getDeclaredField(fieldName)
+                val klass = Class.forName(className)
+                val field = klass.getDeclaredField(fieldName)
                 return field[null] as Number?
             }
             if (char == '0') {

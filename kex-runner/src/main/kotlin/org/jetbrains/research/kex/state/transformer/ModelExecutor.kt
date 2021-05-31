@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.state.transformer
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
-import com.abdullin.kthelper.tryOrNull
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
+import org.jetbrains.research.kthelper.tryOrNull
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.random.GenerationException
 import org.jetbrains.research.kex.smt.ObjectReanimator
@@ -33,7 +33,7 @@ class ModelExecutor(override val method: Method,
     override var thisTerm: Term? = null
     override val argTerms = sortedMapOf<Int, Term>()
 
-    override val javaClass = loader.loadClass(type.getRefType(method.`class`))
+    override val javaClass = loader.loadClass(type.getRefType(method.klass))
     override val javaMethod = when {
         method.isConstructor -> javaClass.getConstructor(method, loader)
         else -> javaClass.getMethod(method, loader)
@@ -80,13 +80,13 @@ fun generateInputByModel(ctx: ExecutionContext,
     val instance = reanimated.instance ?: when {
         method.isStatic -> null
         else -> tryOrNull {
-            val klass = loader.loadClass(ctx.types.getRefType(method.`class`))
+            val klass = loader.loadClass(ctx.types.getRefType(method.klass))
             ctx.random.next(klass)
         }
     }
 
     if (instance == null && !method.isStatic) {
-        throw GenerationException("Unable to create or generate instance of class ${method.`class`}")
+        throw GenerationException("Unable to create or generate instance of class ${method.klass}")
     }
     return instance to reanimated.arguments.toTypedArray()
 }

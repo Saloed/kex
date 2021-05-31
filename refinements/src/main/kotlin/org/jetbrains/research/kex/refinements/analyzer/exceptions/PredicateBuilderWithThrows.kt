@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.exceptions
 
-import com.abdullin.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.defaultHashCode
 import org.jetbrains.research.kex.asm.state.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateType

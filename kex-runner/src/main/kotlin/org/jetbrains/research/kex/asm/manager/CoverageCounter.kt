@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.asm.manager
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.asm.transform.isUnreachable
 import org.jetbrains.research.kex.asm.transform.originalBlock
 import org.jetbrains.research.kex.trace.TraceManager
@@ -18,7 +18,7 @@ val Method.isImpactable: Boolean
             this.isAbstract -> return false
             this.isStatic && this.argTypes.isEmpty() -> return false
             this.argTypes.isEmpty() -> {
-                val thisVal = this.cm.value.getThis(this.`class`)
+                val thisVal = this.cm.value.getThis(this.klass)
                 for (inst in this.flatten()) {
                     when (inst) {
                         is FieldLoadInst -> if (inst.hasOwner && inst.owner == thisVal) return true
@@ -53,10 +53,10 @@ class CoverageCounter<T>(override val cm: ClassManager, val tm: TraceManager<T>)
 
     override fun cleanup() {}
 
-    override fun visit(`class`: Class) {
-        if (`class`.isSynthetic) return
+    override fun visit(klass: Class) {
+        if (klass.isSynthetic) return
 
-        for (method in `class`.allMethods) {
+        for (method in klass.allMethods) {
             if (method.isAbstract || method.isStaticInitializer) continue
             if (!method.isImpactable) continue
 

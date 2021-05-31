@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.generator
 
-import com.abdullin.kthelper.`try`
-import com.abdullin.kthelper.logging.debug
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.`try`
+import org.jetbrains.research.kthelper.logging.debug
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.annotations.AnnotationManager
 import org.jetbrains.research.kex.asm.analysis.KexCheckerException

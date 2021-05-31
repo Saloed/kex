@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.method
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.MethodRefinements
 import org.jetbrains.research.kex.asm.state.PredicateStateAnalysis
 import org.jetbrains.research.kex.asm.state.PredicateStateBuilder
@@ -80,10 +80,10 @@ class RecursiveMethodAnalyzer(cm: ClassManager, psa: PredicateStateAnalysis, mr:
         }
         val returnTerm = term { `return`(method) }
         val owner = when {
-            method.isStatic -> term { `class`(method.`class`) }
-            else -> term { value(method.`class`.kexType, "owner") }
+            method.isStatic -> term { klass(method.klass) }
+            else -> term { value(method.klass.kexType, "owner") }
         }
-        val instruction = cm.instruction.getCall(CallOpcode.Special(), StringName("recursion_root_call"), method, method.`class`, emptyArray())
+        val instruction = cm.instruction.getCall(CallOpcode.Special(), StringName("recursion_root_call"), method, method.klass, emptyArray())
         val methodCall = term { tf.getCall(method, instruction, owner, arguments) }
         returnTerm.call(methodCall)
     } as CallPredicate

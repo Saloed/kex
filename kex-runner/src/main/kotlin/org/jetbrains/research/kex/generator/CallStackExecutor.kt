@@ -33,7 +33,7 @@ class CallStackExecutor(val ctx: ExecutionContext) {
                     constructor.newInstance(*args)
                 }
                 is MethodCall -> {
-                    val reflection = ctx.loader.loadClass(call.method.`class`)
+                    val reflection = ctx.loader.loadClass(call.method.klass)
                     val javaMethod = reflection.getMethod(call.method, ctx.loader)
                     javaMethod.isAccessible = true
                     val args = call.args.map { execute(it) }.toTypedArray()
@@ -53,7 +53,7 @@ class CallStackExecutor(val ctx: ExecutionContext) {
                 }
                 is FieldSetter -> {
                     val field = call.field
-                    val reflection = ctx.loader.loadClass(field.`class`)
+                    val reflection = ctx.loader.loadClass(field.klass)
                     val fieldReflection = reflection.getField(field.name)
                     val value = execute(call.value)
                     when {

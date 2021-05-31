@@ -23,25 +23,25 @@ class BasicGenerationTest : KexRunnerTest() {
 
     @Test
     fun testBasic() {
-        val `class` = cm["$packageName/generation/BasicGenerationTests"]
-        runPipelineOn(`class`)
+        val klass = cm["$packageName/generation/BasicGenerationTests"]
+        runPipelineOn(klass)
     }
 
     @Test
     fun testBasicJava() {
-        val `class` = cm["$packageName/generation/BasicJavaObjectGeneration"]
-        runPipelineOn(`class`)
+        val klass = cm["$packageName/generation/BasicJavaObjectGeneration"]
+        runPipelineOn(klass)
     }
 
     @Test
     fun testObjectGeneration() {
-        val `class` = cm["$packageName/generation/ObjectGenerationTests"]
-        runPipelineOn(`class`)
+        val klass = cm["$packageName/generation/ObjectGenerationTests"]
+        runPipelineOn(klass)
     }
 
     @Test
     fun testAbstractClassGeneration() {
-        val `class` = cm["$packageName/generation/AbstractClassTests"]
-        runPipelineOn(`class`)
+        val klass = cm["$packageName/generation/AbstractClassTests"]
+        runPipelineOn(klass)
     }
 }

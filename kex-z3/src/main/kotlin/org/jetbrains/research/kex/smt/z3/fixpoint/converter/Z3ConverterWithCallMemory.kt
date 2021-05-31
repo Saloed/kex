@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint.converter
 
-import com.abdullin.kthelper.collection.dequeOf
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.smt.z3.*
 import org.jetbrains.research.kex.state.CallApproximationState

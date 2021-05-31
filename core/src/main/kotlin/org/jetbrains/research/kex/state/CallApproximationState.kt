@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.state
 
-import com.abdullin.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.defaultHashCode
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
@@ -28,7 +28,7 @@ class CallApproximationState(
     }
 
     override val size: Int by lazy(LazyThreadSafetyMode.NONE) {
-        preconditions.sumBy { it.size } + postconditions.sumBy { it.size } + defaultPostcondition.size + callState.size
+        preconditions.sumOf { it.size } + postconditions.sumOf { it.size } + defaultPostcondition.size + callState.size
     }
 
     override fun print() = buildString {

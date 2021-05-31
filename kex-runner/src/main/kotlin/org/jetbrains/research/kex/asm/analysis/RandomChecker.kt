@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.asm.analysis
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.config.kexConfig
 import org.jetbrains.research.kex.trace.TraceManager
@@ -22,7 +22,7 @@ class RandomChecker(val ctx: ExecutionContext, val tm: TraceManager<Trace>) : Me
     override fun visit(method: Method) {
         super.visit(method)
         if (!runner) return
-        if (method.`class`.isSynthetic) return
+        if (method.klass.isSynthetic) return
         if (method.isAbstract || method.isConstructor || method.isStaticInitializer) return
 
         val randomRunner = RandomObjectTracingRunner(method, ctx.loader, ctx.random)

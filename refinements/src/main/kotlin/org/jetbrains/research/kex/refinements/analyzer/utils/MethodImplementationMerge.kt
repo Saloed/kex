@@ -17,7 +17,7 @@ open class MethodImplementationMerge(val method: Method) {
     open val baseGenerator: VariableGenerator = VariableGenerator("inheritance")
     val pathGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("path") }
     val tmpGenerator: VariableGenerator by lazy { baseGenerator.createNestedGenerator("tmp") }
-    open val owner: Term by lazy { term { `this`(method.`class`.kexType) } }
+    open val owner: Term by lazy { term { `this`(method.klass.kexType) } }
 
     open fun mapUnmappedTerm(method: Method, term: Term): Term? = if (term is ArgumentTerm) term else null
     open fun createInstanceOf(term: Term, type: KexType) = term { TermFactory.getInstanceOf(type, term) }
@@ -26,7 +26,7 @@ open class MethodImplementationMerge(val method: Method) {
             implementations: List<Pair<PredicateStateWithPath, Method>>
     ): PredicateStateWithPath {
         val result = pathGenerator.generatorFor("result").createVar(KexBool())
-        val types = implementations.map { it.second }.map { it.`class`.kexType }
+        val types = implementations.map { it.second }.map { it.klass.kexType }
         val (typeBindings, typeMapping) = typeChecks(types, tmpGenerator.createNestedGenerator("type"))
         val states = implementations.mapIndexed { index, ref ->
             val myType = types[index]

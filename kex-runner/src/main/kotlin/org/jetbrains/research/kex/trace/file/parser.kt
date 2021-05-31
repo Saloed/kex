@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.trace.file
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parser
@@ -119,11 +119,11 @@ class ActionParser(val cm: ClassManager) : Grammar<Action>() {
             -openBracket and args and -closeBracket and
             -colonAndSpace and
             typeName) use {
-        val `class` = cm[t1.dropLast(1).fold("") { acc, curr -> "$acc/$curr" }.drop(1)]
+        val klass = cm[t1.dropLast(1).fold("") { acc, curr -> "$acc/$curr" }.drop(1)]
         val methodName = t1.takeLast(1).firstOrNull() ?: throw UnknownNameException(t1.toString())
         val args = t2.toTypedArray()
         val rettype = t3
-        `class`.getMethod(methodName, MethodDesc(args, rettype))
+        klass.getMethod(methodName, MethodDesc(args, rettype))
     }
 
     private val kfgValueParser by valueName use { KfgValue(this) }
@@ -148,7 +148,7 @@ class ActionParser(val cm: ClassManager) : Grammar<Action>() {
     }
     private val objectValueParser: Parser<ActionValue> by (typeName and -at and num and -openCurlyBrace
             and objectFields and -closeCurlyBrace) use {
-        val type = (t1 as? ClassType)?.`class` ?: throw UnknownTypeException(t1.toString())
+        val type = (t1 as? ClassType)?.klass ?: throw UnknownTypeException(t1.toString())
         val identifier = t2.text.toInt()
         val fields = t3
         ObjectValue(type, identifier, fields)

@@ -11,8 +11,8 @@ import org.jetbrains.research.kfg.ir.Class
 @Serializable
 class ConstClassTerm(
         override val type: KexType,
-        @Contextual val `class`: Class) : Term() {
-    override val name = "$`class`.class"
+        @Contextual val klass: Class) : Term() {
+    override val name = "$klass.class"
     override val subterms by lazy { listOf<Term>() }
 
     override fun <T: Transformer<T>> accept(t: Transformer<T>) = this

@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements
 
-import com.abdullin.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.state.CallApproximationState
 import org.jetbrains.research.kex.state.PredicateState
 import org.jetbrains.research.kex.state.PredicateStateWithPath

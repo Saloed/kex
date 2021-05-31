@@ -36,17 +36,17 @@ class ConstructorDeepInliner(psa: PredicateStateAnalysis) : MethodDeepInliner(ps
 
     private fun isObjectConstructor(method: Method): Boolean {
         if (!method.isConstructor) return false
-        return isJavaInlineable(method.`class`) || isKotlinInlineable(method.`class`)
+        return isJavaInlineable(method.klass) || isKotlinInlineable(method.klass)
     }
 
     private fun isKotlinInlineable(cls: Class): Boolean {
-        if (cls.`package` != KOTLIN_PACKAGE) return false
+        if (cls.pkg != KOTLIN_PACKAGE) return false
         if (cls.name == "Any") return true
         return false
     }
 
     private fun isJavaInlineable(cls: Class): Boolean {
-        if (cls.`package` != JAVA_PACKAGE) return false
+        if (cls.pkg != JAVA_PACKAGE) return false
         if (cls.name == "Object") return true
         if (cls.name.endsWith("Exception")) return true
         return false

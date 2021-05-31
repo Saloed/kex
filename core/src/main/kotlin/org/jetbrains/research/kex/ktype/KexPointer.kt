@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.ktype
 
-import com.abdullin.kthelper.defaultHashCode
+import org.jetbrains.research.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kfg.ir.Class
@@ -22,18 +22,18 @@ sealed class KexPointer : KexType() {
 
 @InheritorOf("KexType")
 @Serializable
-class KexClass(val `class`: String, override val memspace: Int = defaultMemspace) : KexPointer() {
+class KexClass(val klass: String, override val memspace: Int = defaultMemspace) : KexPointer() {
     override val name: String
-        get() = `class`
+        get() = klass
 
-    fun kfgClass(types: TypeFactory) = types.cm[`class`]
+    fun kfgClass(types: TypeFactory) = types.cm[klass]
 
-    override fun getKfgType(types: TypeFactory): Type = types.getRefType(`class`)
-    fun getKfgClass(types: TypeFactory): Class = types.cm[`class`]
+    override fun getKfgType(types: TypeFactory): Type = types.getRefType(klass)
+    fun getKfgClass(types: TypeFactory): Class = types.cm[klass]
 
-    override fun withMemspace(memspace: Int) = KexClass(`class`, memspace)
+    override fun withMemspace(memspace: Int) = KexClass(klass, memspace)
 
-    override fun hashCode() = defaultHashCode(`class`)
+    override fun hashCode() = defaultHashCode(klass)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -41,7 +41,7 @@ class KexClass(val `class`: String, override val memspace: Int = defaultMemspace
 
         other as KexClass
 
-        return `class` == other.`class` && memspace == other.memspace
+        return klass == other.klass && memspace == other.memspace
     }
 }
 

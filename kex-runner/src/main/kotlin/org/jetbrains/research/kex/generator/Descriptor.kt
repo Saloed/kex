@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.generator
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ExecutionContext
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kex.state.PredicateState
@@ -59,8 +59,8 @@ sealed class ConstantDescriptor : Descriptor() {
     }
 
     data class Class(val value: KfgClass) : ConstantDescriptor() {
-        override val type = KexClass(value.fullname)
-        override val term get() = term { `class`(value) }
+        override val type = KexClass(value.fullName)
+        override val term get() = term { klass(value) }
     }
 }
 
@@ -87,7 +87,7 @@ data class FieldDescriptor(
         }
     }
 
-    override fun toString() = "${klass.fullname}.$name = $value"
+    override fun toString() = "${klass.fullName}.$name = $value"
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -116,7 +116,7 @@ data class ObjectDescriptor(
         private val fieldsInner: MutableMap<String, FieldDescriptor> = mutableMapOf()
 ) : Descriptor() {
     override val term = term { generate(klass.kexType) }
-    override val type = KexClass(klass.fullname)
+    override val type = KexClass(klass.fullName)
     val name = term.name
     val fields get() = fieldsInner.toMap()
 

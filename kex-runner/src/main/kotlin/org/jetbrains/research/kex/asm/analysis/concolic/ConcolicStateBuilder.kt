@@ -1,8 +1,8 @@
 package org.jetbrains.research.kex.asm.analysis.concolic
 
-import com.abdullin.kthelper.collection.buildList
-import com.abdullin.kthelper.collection.listOf
-import com.abdullin.kthelper.collection.stackOf
+import org.jetbrains.research.kthelper.collection.buildList
+import org.jetbrains.research.kthelper.collection.listOf
+import org.jetbrains.research.kthelper.collection.stackOf
 import org.jetbrains.research.kex.asm.state.InvalidInstructionError
 import org.jetbrains.research.kex.ktype.kexType
 import org.jetbrains.research.kex.state.StateBuilder
@@ -168,7 +168,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
             state(inst.location) {
                 val args = inst.args.map { mkValue(it) }
                 val callee = when {
-                    inst.isStatic -> `class`(inst.method.`class`)
+                    inst.isStatic -> klass(inst.method.klass)
                     else -> mkValue(inst.callee)
                 }
                 val callTerm = callee.call(inst.method, inst, args)
@@ -212,7 +212,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
         state(inst.location) {
             val lhv = mkNewValue(inst)
             val owner = when {
-                inst.isStatic -> `class`(inst.field.`class`)
+                inst.isStatic -> klass(inst.field.klass)
                 else -> mkValue(inst.owner)
             }
             val field = owner.field(inst.type.kexType, inst.field)
@@ -225,7 +225,7 @@ class ConcolicStateBuilder(val cm: ClassManager) {
     fun buildFieldStoreInst(inst: FieldStoreInst): List<Predicate> = listOf {
         state(inst.location) {
             val owner = when {
-                inst.isStatic -> `class`(inst.field.`class`)
+                inst.isStatic -> klass(inst.field.klass)
                 else -> mkValue(inst.owner)
             }
             val value = mkValue(inst.value)

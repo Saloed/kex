@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.utilities
 
-import com.abdullin.kthelper.collection.firstOrElse
+import org.jetbrains.research.kthelper.collection.firstOrElse
 import com.microsoft.z3.*
 import com.microsoft.z3.enumerations.Z3_decl_kind
 import org.apache.commons.cli.DefaultParser

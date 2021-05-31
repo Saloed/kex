@@ -1,7 +1,7 @@
 package org.jetbrains.research.kex.state.term
 
-import com.abdullin.kthelper.assert.unreachable
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.assert.unreachable
+import org.jetbrains.research.kthelper.logging.log
 import org.jetbrains.research.kex.ktype.*
 import org.jetbrains.research.kfg.ir.Class
 import org.jetbrains.research.kfg.ir.Field
@@ -66,11 +66,11 @@ object TermFactory {
     fun getString(value: String) = ConstStringTerm(KexClass(TypeFactory.stringClass), value)
     fun getString(const: StringConstant) = getString(const.value)
     fun getNull() = NullTerm()
-    fun getClass(`class`: Class) = getClass(KexClass(`class`.fullname), `class`)
-    fun getClass(type: KexType, `class`: Class) = ConstClassTerm(type, `class`)
+    fun getClass(klass: Class) = getClass(KexClass(klass.fullName), klass)
+    fun getClass(type: KexType, klass: Class) = ConstClassTerm(type, klass)
 
     fun getClass(const: ClassConstant) = ConstClassTerm(const.type.kexType,
-            (const.type as? ClassType)?.`class` ?: unreachable { log.debug("Non-ref type of class constant") })
+            (const.type as? ClassType)?.klass ?: unreachable { log.debug("Non-ref type of class constant") })
 
     fun getUnaryTerm(operand: Term, opcode: UnaryOpcode) = when (opcode) {
         UnaryOpcode.NEG -> getNegTerm(operand)
@@ -116,7 +116,7 @@ object TermFactory {
             getCall(method.returnType.kexType, objectRef, method, instruction, arguments)
 
     fun getCall(type: KexType, method: Method, instruction: Instruction, arguments: List<Term>) =
-            CallTerm(type, getClass(method.`class`), method, instruction, arguments)
+            CallTerm(type, getClass(method.klass), method, instruction, arguments)
 
     fun getCall(type: KexType, objectRef: Term, method: Method, instruction: Instruction, arguments: List<Term>) =
             CallTerm(type, objectRef, method, instruction, arguments)
@@ -177,7 +177,7 @@ abstract class TermBuilder {
     fun const(str: String) = tf.getString(str)
     fun <T : Number> const(number: T) = tf.getConstant(number)
     fun const(@Suppress("UNUSED_PARAMETER") nothing: Nothing?) = tf.getNull()
-    fun `class`(klass: Class) = tf.getClass(klass)
+    fun klass(klass: Class) = tf.getClass(klass)
 
     fun Term.apply(opcode: UnaryOpcode) = tf.getUnaryTerm(this, opcode)
     operator fun Term.not() = tf.getUnaryTerm(this, UnaryOpcode.NEG)
@@ -266,7 +266,7 @@ abstract class TermBuilder {
     fun Term.field(type: KexReference, name: String, ownerClass: KexClass) = tf.getField(type, this, const(name), ownerClass)
     fun Term.field(type: KexType, name: Term, ownerClass: KexClass) = tf.getField(KexReference(type), this, name, ownerClass)
     fun Term.field(type: KexType, name: String, ownerClass: KexClass) = tf.getField(KexReference(type), this, const(name), ownerClass)
-    fun Term.field(type: KexType, field: Field) = tf.getField(KexReference(type), this, const(field.name), field.`class`.kexType)
+    fun Term.field(type: KexType, field: Field) = tf.getField(KexReference(type), this, const(field.name), field.klass.kexType)
 
     infix fun Term.primitiveAs(type: KexType) = tf.getPrimitiveCast(type, this)
     infix fun Term.`is`(type: KexType) = tf.getInstanceOf(type, this)

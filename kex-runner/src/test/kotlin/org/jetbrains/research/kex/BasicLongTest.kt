@@ -6,8 +6,8 @@ class BasicLongTest : KexRunnerTest() {
 
     @Test
     fun testIcfpc2018() {
-        val `class` = cm["$packageName/Icfpc2018Test"]
-        testClassReachability(`class`)
+        val klass = cm["$packageName/Icfpc2018Test"]
+        testClassReachability(klass)
     }
 
 }

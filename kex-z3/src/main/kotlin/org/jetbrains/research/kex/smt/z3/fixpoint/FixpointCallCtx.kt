@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.smt.z3.fixpoint
 
-import com.abdullin.kthelper.logging.log
+import org.jetbrains.research.kthelper.logging.log
 import com.microsoft.z3.*
 import org.jetbrains.research.kex.smt.z3.Bool_
 import org.jetbrains.research.kex.smt.z3.Z3Context

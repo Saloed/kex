@@ -1,6 +1,6 @@
 package org.jetbrains.research.kex.refinements.analyzer.exceptions
 
-import com.abdullin.kthelper.collection.dequeOf
+import org.jetbrains.research.kthelper.collection.dequeOf
 import org.jetbrains.research.kex.refinements.RefinementCriteria
 import org.jetbrains.research.kex.refinements.RefinementSource
 import org.jetbrains.research.kex.refinements.RefinementSources

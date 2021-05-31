@@ -24,8 +24,8 @@ class PredicateStateBuilderTest : KexTest() {
 
     @Test
     fun testSimplePSA() {
-        for (`class` in cm.concreteClasses) {
-            for (method in `class`.allMethods) {
+        for (klass in cm.concreteClasses) {
+            for (method in klass.allMethods) {
                 if (method.isAbstract) continue
 
                 val psa = performPSA(method)
