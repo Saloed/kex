@@ -4,6 +4,7 @@ import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.util.StructuredViewable
 import org.jetbrains.research.kthelper.defaultHashCode
 
 @InheritorOf("State")
@@ -17,6 +18,12 @@ class NegationState(@Required val predicateState: PredicateState) : PredicateSta
         appendLine("(NOT")
         appendLine(predicateState.print())
         append(")")
+    }
+
+    override val graphItem: StructuredViewable.Item by lazy {
+        StructuredViewable.Item.Node("not", StructuredViewable.ItemKind.OPERATION).apply {
+            addEdge(predicateState.graphItem)
+        }
     }
 
     override fun map(transform: (Predicate) -> Predicate) = NegationState(predicateState.map(transform))

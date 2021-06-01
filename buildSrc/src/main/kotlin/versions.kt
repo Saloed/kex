@@ -1,4 +1,4 @@
-const val `kotlin-version` = "1.5.0"
+const val `kotlin-version` = "1.5.10"
 const val `serialization-version` = "1.2.0"
 const val `coroutines-version` = "1.5.0-RC"
 const val `kt-helper-version` = "0.0.10"

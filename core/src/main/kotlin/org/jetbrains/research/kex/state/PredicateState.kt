@@ -10,6 +10,7 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.predicate.state
+import org.jetbrains.research.kex.util.StructuredViewable
 import org.jetbrains.research.kfg.ir.Location
 
 interface TypeInfo {
@@ -92,13 +93,14 @@ class StateBuilder() : PredicateBuilder() {
         else -> fail { log.error("Unknown predicate type $type") }
     }
 
-    inline fun predicate(type: PredicateType, location: Location, body: PredicateBuilder.() -> Predicate) = when (type) {
-        is PredicateType.Assume -> assume(location, body)
-        is PredicateType.Require -> require(location, body)
-        is PredicateType.State -> state(location, body)
-        is PredicateType.Path -> path(location, body)
-        else -> fail { log.error("Unknown predicate type $type") }
-    }
+    inline fun predicate(type: PredicateType, location: Location, body: PredicateBuilder.() -> Predicate) =
+        when (type) {
+            is PredicateType.Assume -> assume(location, body)
+            is PredicateType.Require -> require(location, body)
+            is PredicateType.State -> state(location, body)
+            is PredicateType.Path -> path(location, body)
+            else -> fail { log.error("Unknown predicate type $type") }
+        }
 }
 
 inline fun basic(body: StateBuilder.() -> Unit): PredicateState {
@@ -134,12 +136,12 @@ operator fun PredicateState.not() = NegationState(this)
 
 @BaseType("State")
 @Serializable
-abstract class PredicateState : TypeInfo {
+abstract class PredicateState : TypeInfo, StructuredViewable {
     companion object {
         val states = run {
             val loader = Thread.currentThread().contextClassLoader
             val resource = loader.getResourceAsStream("PredicateState.json")
-                    ?: unreachable { log.error("No info about PS inheritors") }
+                ?: unreachable { log.error("No info about PS inheritors") }
             val inheritanceInfo = InheritanceInfo.fromJson(resource.bufferedReader().readText())
             resource.close()
 
@@ -262,13 +264,23 @@ abstract class PredicateState : TypeInfo {
 }
 
 @Serializable
-data class PredicateStateWithPath(val state: PredicateState, val path: PredicateState) {
+data class PredicateStateWithPath(val state: PredicateState, val path: PredicateState) : StructuredViewable {
     fun negate() = PredicateStateWithPath(state, path.not())
     fun toPredicateState(): PredicateState = ChainState(state, path)
-    fun accept(transform: (PredicateState) -> PredicateState) = PredicateStateWithPath(transform(state), transform(path))
+    fun accept(transform: (PredicateState) -> PredicateState) =
+        PredicateStateWithPath(transform(state), transform(path))
 
     val size: Int
         get() = state.size + path.size
+
+    override val graphItem: StructuredViewable.Item by lazy {
+        val pathGroup = StructuredViewable.Item.ItemGroup("path", path.graphItem)
+        val stateGroup = StructuredViewable.Item.ItemGroup("state", state.graphItem)
+        StructuredViewable.Item.Node("state with path", StructuredViewable.ItemKind.OPERATION).apply {
+            addEdge(pathGroup)
+            addEdge(stateGroup)
+        }
+    }
 
     override fun toString() = buildString {
         append(state.print())

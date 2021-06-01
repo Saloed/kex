@@ -87,6 +87,8 @@ class PredicateStateDiff(val left: PredicateState, val right: PredicateState) : 
     override fun performSimplify(): PredicateState = throw IllegalStateException("Diff PS is Just for printing")
     override fun checkEvaluationToTrue(): Boolean = throw IllegalStateException("Diff PS is Just for printing")
     override fun checkEvaluationToFalse(): Boolean = throw IllegalStateException("Diff PS is Just for printing")
+    override val graphItem: StructuredViewable.Item
+        get() = TODO("Not yet implemented")
 }
 
 private class ChoiceSelector(val choiceIdx: Int) : DiffSelector<PredicateState> {

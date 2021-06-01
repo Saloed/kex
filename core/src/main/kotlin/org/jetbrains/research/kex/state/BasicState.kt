@@ -1,12 +1,13 @@
 package org.jetbrains.research.kex.state
 
-import org.jetbrains.research.kthelper.defaultHashCode
 import kotlinx.serialization.Required
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.ConstantPredicate
 import org.jetbrains.research.kex.state.predicate.EqualityPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.util.StructuredViewable
+import org.jetbrains.research.kthelper.defaultHashCode
 
 @InheritorOf("State")
 @Serializable
@@ -20,6 +21,11 @@ class BasicState(@Required val predicates: List<Predicate> = listOf()) : Predica
         if (predicates.isNotEmpty()) appendLine()
         predicates.forEach { appendLine("  $it") }
         append(")")
+    }
+
+    override val graphItem by lazy {
+        val label = print().replace("\n", "\\l") + "\\l"
+        StructuredViewable.Item.Node(label)
     }
 
     override fun map(transform: (Predicate) -> Predicate) = BasicState(predicates.map(transform))

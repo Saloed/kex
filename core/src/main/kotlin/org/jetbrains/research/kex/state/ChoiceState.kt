@@ -4,6 +4,7 @@ import org.jetbrains.research.kthelper.defaultHashCode
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.Predicate
+import org.jetbrains.research.kex.util.StructuredViewable
 
 @InheritorOf("State")
 @Serializable
@@ -16,10 +17,17 @@ class ChoiceState(val choices: List<PredicateState>) : PredicateState(), Iterabl
         append(" END)")
     }
 
+    override val graphItem: StructuredViewable.Item by lazy {
+        StructuredViewable.Item.Node("choice", StructuredViewable.ItemKind.OPERATION).apply {
+            choices.forEach { addEdge(it.graphItem) }
+        }
+    }
+
     override fun fmap(transform: (PredicateState) -> PredicateState): PredicateState = ChoiceState(choices.map { transform(it) })
     override fun reverse() = ChoiceState(choices.map { it.reverse() })
 
     override fun hashCode() = defaultHashCode(*choices.toTypedArray())
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other?.javaClass != this.javaClass) return false
