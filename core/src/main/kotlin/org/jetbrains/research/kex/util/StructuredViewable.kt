@@ -4,6 +4,7 @@ import info.leadinglight.jdot.ClusterGraph
 import info.leadinglight.jdot.Edge
 import info.leadinglight.jdot.enums.Color
 import info.leadinglight.jdot.enums.Shape
+import info.leadinglight.jdot.enums.Style
 import info.leadinglight.jdot.impl.AbstractGraph
 import info.leadinglight.jdot.impl.Attrs
 import info.leadinglight.jdot.impl.Util
@@ -29,9 +30,9 @@ interface StructuredViewable {
             is Item.ItemGroup -> graphItem as Item.ItemGroup
         }
         val graph = mkGraph(JGraph(name), rootItem)
+        buildItemGroup(graph, graph, rootItem, null)
         addEdges(graph, rootItem)
         graph.setBgColor(Color.X11.transparent)
-        println(graph.toDot())
         val file = graph.dot2file("svg")
         val newFile = "${file.removeSuffix("out")}svg"
         val resultingFile = File(newFile).toPath()
@@ -39,32 +40,59 @@ interface StructuredViewable {
         return resultingFile
     }
 
-    private fun addItem(graph: AbstractGraph, item: Item) {
+    private fun buildItems(graph: AbstractGraph, item: Item, stopOn: Item?) {
         when (item) {
-            is Item.Node -> {
-                val node = JNode(item.id()).setLabel(item.label).setFontSize(12.0)
-                when (item.kind) {
-                    ItemKind.NODE -> node.setShape(Shape.box)
-                    ItemKind.OPERATION -> node.setShape(Shape.circle)
-                }
-                graph.addNode(node)
-            }
+            is Item.Node -> buildItemNode(item, graph, stopOn)
+            is Item.ItemGroup -> buildItemGroup(
+                graph,
+                mkGraph(ClusterGraph(item.id()), item).also { graph.addGraph(it) },
+                item,
+                stopOn
+            )
+            is Item.ItemList -> buildSuccessorsIfNotStop(graph, item, stopOn)
+        }
+    }
+
+    fun buildItemNode(item: Item.Node, graph: AbstractGraph, stopOn: Item?) {
+        val node = JNode(item.id())
+        if (item.kind != ItemKind.STUB) {
+            node.setLabel(item.label).setFontSize(12.0)
+        }
+        when (item.kind) {
+            ItemKind.NODE -> node.setShape(Shape.box)
+            ItemKind.OPERATION -> node.setShape(Shape.circle)
+            ItemKind.STUB -> node.setLabel("").setShape(Shape.none).setHeight(0.1).setWidth(0.1)
+        }
+        graph.addNode(node)
+        buildSuccessorsIfNotStop(graph, item, stopOn)
+    }
+
+    private fun buildSuccessorsIfNotStop(graph: AbstractGraph, item: Item, stopOn: Item?) {
+        if (item == stopOn) return
+        when (item) {
             is Item.ItemGroup -> {
-                val subGraph = mkGraph(ClusterGraph(item.id()), item)
-                graph.addGraph(subGraph)
             }
             is Item.ItemList -> item.items.forEach {
-                addItem(graph, it)
+                buildItems(graph, it, stopOn)
             }
+            is Item.Node -> item.successors().forEach { buildItems(graph, it, stopOn) }
+        }
+    }
+
+    private fun buildItemGroup(graph: AbstractGraph, subGraph: AbstractGraph, item: Item.ItemGroup, stopOn: Item?) {
+        val newStop = item.terminateItem ?: stopOn
+        buildItems(subGraph, item.item, newStop)
+        val terminateItem = item.terminateItem ?: return
+        when (terminateItem) {
+            is Item.ItemGroup -> {
+            }
+            is Item.ItemList -> buildItems(graph, terminateItem, stopOn)
+            is Item.Node -> terminateItem.successors().forEach { buildItems(graph, it, stopOn) }
         }
     }
 
     private fun <T : AbstractGraph> mkGraph(graph: T, root: Item.ItemGroup): T {
-        val allNodes = root.item.flatItems()
-        for (node in allNodes) {
-            addItem(graph, node)
-        }
-        graph.attrs.set(Attrs.Key.color, Color.X11.black)
+        graph.attrs.set(Attrs.Key.color, Color.X11.blue)
         graph.attrs.set(Attrs.Key.label, root.label)
         return graph
     }
@@ -97,10 +125,8 @@ interface StructuredViewable {
     }
 
     sealed class Item {
-        abstract fun flatItems(): List<Item>
         abstract fun edges(): List<ItemEdge>
-        class ItemGroup(val label: String, val item: Item) : Item() {
-            override fun flatItems(): List<Item> = listOf(this)
+        class ItemGroup(val label: String, val item: Item, val terminateItem: Item? = null) : Item() {
             override fun edges(): List<ItemEdge> = item.edges()
         }
 
@@ -109,12 +135,10 @@ interface StructuredViewable {
             fun successors() = edges.map { it.to }
             fun addEdge(item: Item) = edges.add(ItemEdge(this, item, ""))
             fun addEdge(item: Item, label: String) = edges.add(ItemEdge(this, item, label))
-            override fun flatItems(): List<Item> = listOf(this) + successors().flatMap { it.flatItems() }
             override fun edges(): List<ItemEdge> = edges + successors().flatMap { it.edges() }
         }
 
         class ItemList(val items: List<Item>) : Item() {
-            override fun flatItems() = items + items.flatMap { it.flatItems() }
             override fun edges(): List<ItemEdge> = items.flatMap { it.edges() }
         }
 
@@ -141,7 +165,7 @@ interface StructuredViewable {
     }
 
     enum class ItemKind {
-        NODE, OPERATION
+        NODE, OPERATION, STUB
     }
 
     data class ItemEdge(val from: Item, val to: Item, val label: String)

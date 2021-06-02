@@ -10,7 +10,6 @@ import org.jetbrains.research.kex.state.predicate.Predicate
 import org.jetbrains.research.kex.state.predicate.PredicateBuilder
 import org.jetbrains.research.kex.state.predicate.PredicateType
 import org.jetbrains.research.kex.state.predicate.state
-import org.jetbrains.research.kex.util.StructuredViewable
 import org.jetbrains.research.kfg.ir.Location
 
 interface TypeInfo {
@@ -136,7 +135,7 @@ operator fun PredicateState.not() = NegationState(this)
 
 @BaseType("State")
 @Serializable
-abstract class PredicateState : TypeInfo, StructuredViewable {
+abstract class PredicateState : TypeInfo {
     companion object {
         val states = run {
             val loader = Thread.currentThread().contextClassLoader
@@ -264,7 +263,7 @@ abstract class PredicateState : TypeInfo, StructuredViewable {
 }
 
 @Serializable
-data class PredicateStateWithPath(val state: PredicateState, val path: PredicateState) : StructuredViewable {
+data class PredicateStateWithPath(val state: PredicateState, val path: PredicateState) {
     fun negate() = PredicateStateWithPath(state, path.not())
     fun toPredicateState(): PredicateState = ChainState(state, path)
     fun accept(transform: (PredicateState) -> PredicateState) =
@@ -272,15 +271,6 @@ data class PredicateStateWithPath(val state: PredicateState, val path: Predicate
 
     val size: Int
         get() = state.size + path.size
-
-    override val graphItem: StructuredViewable.Item by lazy {
-        val pathGroup = StructuredViewable.Item.ItemGroup("path", path.graphItem)
-        val stateGroup = StructuredViewable.Item.ItemGroup("state", state.graphItem)
-        StructuredViewable.Item.Node("state with path", StructuredViewable.ItemKind.OPERATION).apply {
-            addEdge(pathGroup)
-            addEdge(stateGroup)
-        }
-    }
 
     override fun toString() = buildString {
         append(state.print())

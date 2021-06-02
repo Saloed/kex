@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.CallPredicate
 import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.util.StructuredViewable
 
 @InheritorOf("State")
 @Serializable
@@ -37,24 +36,6 @@ class CallApproximationState(
         append(preconditions.zip(postconditions).joinToString { (cond, ps) -> " <CASE> $cond <THEN> $ps" })
         append(" <DEFAULT> $callState <THEN> $defaultPostcondition")
         append(" END)")
-    }
-
-    override val graphItem by lazy {
-        val preconditionGraph = preconditions.asSingleGraphItem("preconditions")
-        val postconditionGraph =  postconditions.asSingleGraphItem("postconditions")
-        val callGraph = StructuredViewable.Item.ItemGroup("call", callState.graphItem)
-        val defaultGraph = StructuredViewable.Item.ItemGroup("default", defaultPostcondition.graphItem)
-        StructuredViewable.Item.Node("call approx", StructuredViewable.ItemKind.OPERATION).apply {
-            addEdge(preconditionGraph)
-            addEdge(callGraph)
-            addEdge(postconditionGraph)
-            addEdge(defaultGraph)
-        }
-    }
-
-    private fun List<PredicateStateWithPath>.asSingleGraphItem(label: String): StructuredViewable.Item {
-        val node = StructuredViewable.Item.ItemList(map { it.graphItem })
-        return StructuredViewable.Item.ItemGroup(label, node)
     }
 
     override fun fmap(transform: (PredicateState) -> PredicateState): PredicateState = CallApproximationState(

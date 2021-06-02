@@ -3,7 +3,6 @@ package org.jetbrains.research.kex.state
 import kotlinx.serialization.Serializable
 import org.jetbrains.research.kex.InheritorOf
 import org.jetbrains.research.kex.state.predicate.Predicate
-import org.jetbrains.research.kex.util.StructuredViewable
 import org.jetbrains.research.kthelper.defaultHashCode
 
 @InheritorOf("State")
@@ -15,13 +14,6 @@ class ChainState(val base: PredicateState, val curr: PredicateState) : Predicate
         append(base.print())
         append(" -> ")
         append(curr.print())
-    }
-
-    override val graphItem by lazy {
-        StructuredViewable.Item.Node("chain", StructuredViewable.ItemKind.OPERATION).apply {
-            addEdge(base.graphItem, "base")
-            addEdge(curr.graphItem, "curr")
-        }
     }
 
     override fun fmap(transform: (PredicateState) -> PredicateState) = ChainState(transform(base), transform(curr))
