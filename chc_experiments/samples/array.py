@@ -1,14 +1,13 @@
-from chcexperiment import *
+from chc_experiments.chcexperiment import *
 
 
-class ArrayExperiment(CHCExperiment):
+class Array(object):
     name = 'array'
     vars = {
         'arg0': 'Int',
         'arg1': '(Array Int Int)',
         'ret': '(Array Int Int)',
         'call_result': '(Array Int Int)',
-        'call_ex_status': 'Bool',
         'is_error': 'Bool',
     }
 
@@ -16,6 +15,7 @@ class ArrayExperiment(CHCExperiment):
     recursion_arg_types = ['Int', '(Array Int Int)', '(Array Int Int)']
     result_args = ['arg0', 'arg1']
     result_arg_types = ['Int', '(Array Int Int)']
+    result_status = 0
 
     def state(self):
         return f'''
@@ -26,14 +26,12 @@ class ArrayExperiment(CHCExperiment):
 (= {EXCEPTIONAL} (and (not {NORMAL_NO_RECURSION})  is_error ))
 
 (or 
-(and {NORMAL_NO_RECURSION} (= ret arg1) (= ex_status false))
+(and {NORMAL_NO_RECURSION} (= ret arg1) (= {EX_STATUS} {self.ex_status_value(0)}))
 (and 
-    {self.recursion_predicate_root_app(
+    {self.recursion_predicate_transition(
             '(+ 3 arg0)',
             '(store arg1 arg0 (+ arg0 5))',
             'call_result',
-            depth='(+ depth 1)',
-            ex_status='call_ex_status'
         )}
     (or 
     
@@ -49,11 +47,11 @@ class ArrayExperiment(CHCExperiment):
                       )
              )
          ) 
-         (= ex_status call_ex_status) 
+         (= {EX_STATUS} {CALL_EX_STATUS}) 
     )
     (and 
         {EXCEPTIONAL}
-         (= ex_status true)
+         (= {EX_STATUS} {self.ex_status_value(1)})
     )   
     )
 )

@@ -1,33 +1,33 @@
 from multiprocessing import Pool, Lock
-
-from array import ArrayExperiment
-from chc_experiments.chcexperiment import CHCExperiment
-from single_int_arg import SingleIntArgExperiment
-from two_int_args import TwoIntArgsExperiment
+from itertools import cycle
+from cases import *
 
 experiments = [
-    SingleIntArgExperiment('100'),
-    SingleIntArgExperiment('300'),
-    TwoIntArgsExperiment('100'),
-    TwoIntArgsExperiment('200'),
-    ArrayExperiment('40'),
-    ArrayExperiment('50'),
-    # SingleIntArgExperiment('100', solver=HoiceSolver())
+    ExStatusSingleIntArg('100'),
+    ExStatusSingleIntArg('200'),
+    ExStatusTwoIntArgs('100'),
+    # ExStatusTwoIntArgs('200'),
+    ExStatusArray('40'),
+    ExIdSingleIntArg('100'),
+    ExIdSingleIntArg('200'),
+    ExIdTwoIntArgs('100'),
+    # ExIdTwoIntArgs('200'),
+    ExIdArray('40'),
 ]
 
 stats_lock = Lock()
 
 
-def run_experiment(experiment: CHCExperiment):
+def run_experiment(experiment):
     experiment_name, elapsed_time = experiment.run()
     with stats_lock:
-        with open('stats.txt', 'w+') as stats:
+        with open('stats.txt', 'a') as stats:
             stats.write(f'{experiment_name} -- {elapsed_time}\n')
 
 
 def run():
     with Pool(6) as pool:
-        pool.map(run_experiment, experiments, chunksize=1)
+        list(pool.imap_unordered(run_experiment, cycle(experiments), chunksize=1))
 
 
 if __name__ == '__main__':
