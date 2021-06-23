@@ -26,9 +26,9 @@ def main():
             'std': float(np.std(times)),
             'all': times
         }
-        for name, times in all_groups
+        for name, times in all_groups.items()
     ]
-    with open('stats1.json', 'w') as f:
+    with open('stats.json', 'w') as f:
         json.dump(stats, f)
 
 
